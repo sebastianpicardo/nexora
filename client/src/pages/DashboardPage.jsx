@@ -78,33 +78,6 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="page-stack">
-      <section className="page-hero">
-        <div className="hero-copy">
-          <div className="eyebrow"><SparkIcon /> Auditoría continua</div>
-          <h2>Compras de {organization?.name || "tu organización"}</h2>
-          <p>
-            Señales claras sobre documentos, precios normalizados y excepciones que necesitan
-            atención humana.
-          </p>
-          <div className="hero-actions">
-            {canOperate ? (
-              <button type="button" className="button primary" onClick={() => onNavigate("documents")}>
-                Cargar documento
-              </button>
-            ) : null}
-            <button type="button" className="button ghost" onClick={retry}>
-              Actualizar datos
-            </button>
-          </div>
-        </div>
-        <div className="hero-orbit" aria-hidden="true">
-          <span className="orbit-ring" />
-          <span className="orbit-core">N</span>
-          <span className="orbit-dot dot-a" />
-          <span className="orbit-dot dot-b" />
-        </div>
-      </section>
-
       {!summary || !hasActivity ? (
         <WelcomeBanner />
       ) : null}

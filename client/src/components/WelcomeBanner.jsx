@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SparkIcon } from "../components/Icons";
 import { useAuth } from "../context/AuthContext";
+
+const heroGradient =
+  "linear-gradient(135deg, #1e3a5f 0%, #2c5aa0 25%, #1e3a5f 50%, #2c5aa0 75%, #1e3a5f 100%)";
 
 export default function WelcomeBanner({ autoPlay = true }) {
   const { organization, billing } = useAuth();
@@ -10,6 +13,7 @@ export default function WelcomeBanner({ autoPlay = true }) {
      ------------------------------------------------- */
   const [flashOpen, setFlashOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [progress, setProgress] = useState(0);
 
   /* -------------------------------------------------
      Pasos del flujo de auditoría (3 etapas sincronizadas)
@@ -37,6 +41,16 @@ export default function WelcomeBanner({ autoPlay = true }) {
         "Alerta inmediata: ¡Alza detectada! Ahorro estimado de $145.000 CLP en esta factura antes de pagarla.",
     },
   ];
+
+  /* -------------------------------------------------
+     Efecto de progreso del demo flash (30s)
+     ------------------------------------------------- */
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProgress((p) => (p >= 100 ? 0 : p + 10));
+    }, 300);
+    return () => clearInterval(id);
+  }, []);
 
   /* -------------------------------------------------
      Datos: Tarjetas de planes (Free, Pro, Enterprise)
@@ -157,7 +171,7 @@ export default function WelcomeBanner({ autoPlay = true }) {
               {steps.map((step) => (
                 <div
                   key={step.id}
-                  className="flex items-start gap-4 bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-emerald-500/20"
+                  className="flex items-start gap-4 bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-emerald-500/20 opacity-0 transition-opacity duration-300"
                 >
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-500/20 border border-emerald-400/50"
@@ -187,6 +201,16 @@ export default function WelcomeBanner({ autoPlay = true }) {
             <div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
             >
+              <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes fadeInUp {
+                  from { opacity: 0; transform: translateY(10px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes progress {
+                  from { width: 0%; }
+                  to { width: 100%; }
+                }
+              ` }}/>
               <div
                 className="bg-white/80 backdrop-blur-sm rounded-2xl p-8 w-full max-w-lg max-h-[80vh] overflow-y-auto"
               >
@@ -206,10 +230,35 @@ export default function WelcomeBanner({ autoPlay = true }) {
                 </p>
 
                 <div className="space-y-4">
+                  {/* Barra de progreso */}
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
+                    <div
+                      className="h-full bg-emerald-600 animate-progress"
+                      style={{ width: `${progress}%` }}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={progress}
+                    />
+                  </div>
+
                   {steps.map((step) => (
-                    <p key={step.id} className="text-sm">
-                      <strong>{step.title}</strong>: {step.description}
-                    </p>
+                    <div
+                      key={step.id}
+                      className="flex items-start gap-2 animate-fade-in-up"
+                      style={{
+                        transitionDelay: `${(step.id - 1) * 150}ms`,
+                      }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-500/20 border border-emerald-400/50 flex-shrink-0"
+                      >
+                        {step.icon}
+                      </div>
+                      <div>
+                        <strong className="text-sm">{step.title}</strong>
+                        <p className="text-xs text-gray-400">{step.description}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
 
