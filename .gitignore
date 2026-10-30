@@ -23,6 +23,7 @@ supabase/.temp/
 # Node / cliente
 client/node_modules/
 client/dist/
+dist/
 node_modules/
 npm-debug.log*
 
