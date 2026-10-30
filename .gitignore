@@ -1,0 +1,38 @@
+# Entorno
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Datos locales
+uploads/
+*.db
+*.sqlite3
+
+# Supabase CLI
+supabase/.temp/
+
+# Node / cliente
+client/node_modules/
+client/dist/
+node_modules/
+npm-debug.log*
+
+# Editores / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secretos y credenciales
+*.pem
+*.key
+service-account*.json
