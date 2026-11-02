@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckIcon, SparkIcon } from "./Icons";
 import { useAuth } from "../context/AuthContext";
+
+const DEMO_STEP_MS = 3000;
 
 const STEPS = [
   {
@@ -62,26 +64,49 @@ const PLANS = [
   },
 ];
 
-export default function WelcomeBanner() {
+export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" }) {
   const { organization } = useAuth();
   const [demoOpen, setDemoOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [closing, setClosing] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [videoFailed, setVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
+  const closeTimer = useRef(null);
+
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    closeTimer.current = setTimeout(() => {
+      setDemoOpen(false);
+      setClosing(false);
+    }, 220);
+  }, [closing]);
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   useEffect(() => {
     if (!demoOpen) return undefined;
-    setProgress(0);
+    setActiveStep(0);
+    setVideoFailed(false);
     const id = setInterval(() => {
-      setProgress((current) => {
-        if (current >= 100) {
-          clearInterval(id);
-          return 100;
-        }
-        return current + 5;
-      });
-    }, 250);
+      setActiveStep((current) => (current + 1) % STEPS.length);
+    }, DEMO_STEP_MS);
     return () => clearInterval(id);
   }, [demoOpen]);
+
+  useEffect(() => {
+    if (!demoOpen) return undefined;
+    const handleKey = (event) => {
+      if (event.key === "Escape") requestClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [demoOpen, requestClose]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -90,6 +115,7 @@ export default function WelcomeBanner() {
   }, [notice]);
 
   const name = organization?.name ? `, ${organization.name}` : "";
+  const currentStep = STEPS[activeStep];
 
   return (
     <section className="welcome">
@@ -184,51 +210,118 @@ export default function WelcomeBanner() {
 
       {demoOpen ? (
         <div
-          className="welcome-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Demo flash de NEXORA"
-          onClick={() => setDemoOpen(false)}
+          className={`welcome-modal ${closing ? "is-closing" : ""}`}
+          role="presentation"
+          onClick={requestClose}
         >
-          <div className="welcome-modal-card" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="welcome-demo-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nexora-demo-title"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button
               type="button"
-              className="welcome-modal-close"
-              onClick={() => setDemoOpen(false)}
-              aria-label="Cerrar"
+              className="welcome-demo-close"
+              onClick={requestClose}
+              aria-label="Cerrar demo"
             >
               ✕
             </button>
-            <h3>Demo flash · NEXORA</h3>
-            <p className="welcome-modal-sub">Simulador del flujo de auditoría continua</p>
 
-            <div
-              className="welcome-progress"
-              role="progressbar"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={progress}
-            >
-              <span style={{ width: `${progress}%` }} />
+            <div className="welcome-demo-media">
+              {videoFailed ? (
+                <div className="welcome-demo-fallback">
+                  <span className="welcome-demo-fallback-icon" aria-hidden="true">
+                    {currentStep.icon}
+                  </span>
+                  <p>
+                    Vista previa no disponible. Agrega <code>{videoSrc}</code> para ver la demo en
+                    video.
+                  </p>
+                </div>
+              ) : (
+                <video
+                  className="welcome-demo-video"
+                  src={videoSrc}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onError={() => setVideoFailed(true)}
+                  aria-label="Demostración visual de NEXORA"
+                />
+              )}
+
+              <div className="welcome-demo-overlay">
+                <span className="welcome-demo-live">
+                  <i />
+                  Demo en vivo
+                </span>
+                <span className="welcome-demo-counter">
+                  Paso {activeStep + 1} de {STEPS.length}
+                </span>
+              </div>
             </div>
 
-            <ol className="welcome-steps welcome-steps-demo">
-              {STEPS.map((step) => (
-                <li key={step.id} className="welcome-step">
-                  <span className="welcome-step-icon" aria-hidden="true">
-                    {step.icon}
-                  </span>
-                  <div>
-                    <strong>{step.title}</strong>
-                    <p>{step.description}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <div className="welcome-demo-body">
+              <h3 id="nexora-demo-title">Demo flash · NEXORA</h3>
+              <p className="welcome-demo-sub">
+                El flujo de auditoría se reproduce automáticamente cada {DEMO_STEP_MS / 1000}{" "}
+                segundos.
+              </p>
 
-            <button type="button" className="button primary full" onClick={() => setDemoOpen(false)}>
-              Cerrar demo
-            </button>
+              <div
+                className="welcome-demo-progress"
+                role="progressbar"
+                aria-label="Progreso de la demo"
+                aria-valuemin={1}
+                aria-valuemax={STEPS.length}
+                aria-valuenow={activeStep + 1}
+              >
+                {STEPS.map((step, index) => (
+                  <span
+                    key={step.id}
+                    className={`welcome-demo-segment ${index <= activeStep ? "filled" : ""} ${
+                      index === activeStep ? "current" : ""
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <ol className="welcome-demo-steps">
+                {STEPS.map((step, index) => {
+                  const state =
+                    index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                  return (
+                    <li
+                      key={step.id}
+                      className={`welcome-demo-step ${state}`}
+                      aria-current={index === activeStep ? "step" : undefined}
+                    >
+                      <span className="welcome-demo-step-icon" aria-hidden="true">
+                        {step.icon}
+                      </span>
+                      <div>
+                        <strong>{step.title}</strong>
+                        <p>{step.description}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              <div className="welcome-demo-actions">
+                <button type="button" className="button ghost" onClick={requestClose}>
+                  Saltar introducción
+                </button>
+                <button type="button" className="button primary" onClick={requestClose}>
+                  Cerrar demo
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
