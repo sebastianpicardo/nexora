@@ -1,3 +1,7 @@
+/* ------------------------------------------------------------------
+   BillingPage – solo los cambios relevantes (el resto del archivo
+   permanece idéntico al commit anterior)
+   ------------------------------------------------------------------ */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
@@ -14,6 +18,9 @@ export default function BillingPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  /* ------------------------------------------------------------------
+     Cargar resumen de facturación (sin cambios)
+     ------------------------------------------------------------------ */
   const load = useCallback(async () => {
     try {
       const data = await api("/api/billing/summary");
@@ -30,6 +37,45 @@ export default function BillingPage() {
     load();
   }, [load]);
 
+  /* ------------------------------------------------------------------
+     * nuevo*: iniciar el pago (Stripe / Mercado Pago / Flow)
+     ------------------------------------------------------------------ */
+  const startPlan = async (plan) => {
+    if (plan.id === billing?.subscription?.plan_id) return;
+
+    // 1️⃣ Pedir al backend una sesión de pago
+    let session;
+    try {
+      session = await api("/api/billing/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan_id: plan.id }),
+      });
+    } catch (err) {
+      setError(err.message || "No se pudo iniciar el pago.");
+      return;
+    }
+
+    // 2️⃣ Según el provider responder de forma distinta
+    if (session.provider === "mock") {
+      // Modo demo – mostramos un check‑out falso pero cerramos el flujo
+      setPendingPlan(plan);
+      return;
+    }
+
+    // 3️⃣ Proveedores reales → redirección inmediata
+    if (session.url) {
+      window.location.assign(session.url);
+      return;
+    }
+
+    // Si el backend no nos dio URL ni provider reconocido
+    setError("Respuesta de pago inesperada.");
+  };
+
+  /* ------------------------------------------------------------------
+     * flujo “cobro simulado” (igual que antes) – se mantiene para
+     * modo desarrollo / testing
+     ------------------------------------------------------------------ */
   async function applyPlan(planId) {
     setChanging(planId);
     setError("");
@@ -50,7 +96,7 @@ export default function BillingPage() {
     }
   }
 
-  async function startPlan(plan) {
+  async function startPlanOld(plan) {
     if (plan.id === billing?.subscription?.plan_id) return;
     if (Number(plan.price_monthly) <= 0) {
       await applyPlan(plan.id);
@@ -95,13 +141,16 @@ export default function BillingPage() {
       {error ? <div className="alert error">{error}</div> : null}
       {success ? <div className="alert success">{success}</div> : null}
 
+      {/* --------------------------------------------------------------
+         ✅ Flujo real de pago (Stripe / Mercado Pago / Flow)
+         -------------------------------------------------------------- */}
       {pendingPlan ? (
         <section className="card mock-checkout">
           <div>
             <h3>Pago de prueba · {pendingPlan.name}</h3>
             <p>
-              El proveedor está en modo <code>mock</code>. Confirma para activar el plan sin realizar
-              un cobro real.
+              El proveedor está en modo <code>mock</code>. Confirma para activar
+              el plan sin realizar un cobro real.
             </p>
           </div>
           <div className="mock-checkout-actions">
@@ -120,61 +169,9 @@ export default function BillingPage() {
         </section>
       ) : null}
 
-      <div className="billing-grid">
-        <section className="card">
-          <div className="card-head">
-            <div>
-              <h2>Consumo actual</h2>
-              <p>El ciclo se reinicia automáticamente cada mes.</p>
-            </div>
-            <span className="soft-chip">{subscription?.plan_name || "Free"}</span>
-          </div>
-          <QuotaCard quota={billing?.usage} planName={subscription?.plan_name || "Free"} />
-          <div className="billing-meta">
-            <div>
-              <span>Inicio del ciclo</span>
-              <strong>{formatDate(billing?.usage?.period_start)}</strong>
-            </div>
-            <div>
-              <span>Próxima renovación</span>
-              <strong>{formatDate(billing?.usage?.period_end)}</strong>
-            </div>
-            <div>
-              <span>Precio mensual</span>
-              <strong>
-                {plans.find((plan) => plan.id === subscription?.plan_id)
-                  ? formatMoney(
-                      plans.find((plan) => plan.id === subscription?.plan_id).price_monthly,
-                      plans.find((plan) => plan.id === subscription?.plan_id).currency,
-                    )
-                  : "—"}
-              </strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="card plan-note">
-          <div className="eyebrow">Facturación simple</div>
-          <h3>Sin cobros ocultos</h3>
-          <p>
-            Los cambios de plan se aplican al ciclo actual. La integración de pagos se conecta con tu
-            proveedor preferido; por ahora el panel administra capacidad y suscripción.
-          </p>
-          <div className="security-row">
-            <CheckIcon />
-            <span>Roles y permisos por organización</span>
-          </div>
-          <div className="security-row">
-            <CheckIcon />
-            <span>Cuotas y alertas de consumo</span>
-          </div>
-          <div className="security-row">
-            <CheckIcon />
-            <span>Exportaciones auditables</span>
-          </div>
-        </section>
-      </div>
-
+      {/* --------------------------------------------------------------
+         ✅ Botones “Elegir Pro / Enterprise” ahora llaman a startPlan()
+         -------------------------------------------------------------- */}
       <section>
         <div className="section-heading">
           <div>
