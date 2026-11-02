@@ -296,7 +296,8 @@ export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" })
                             motionSafe
                               ? { opacity: 0, y: -12, scale: 0.96 }
                               : { opacity: 0 }
-                          }
+}
+// Render force update 2026
                           transition={{ duration: motionSafe ? 0.28 : 0, ease: "easeOut" }}
                         >
                           <span className="welcome-demo-fallback-icon" aria-hidden="true">
