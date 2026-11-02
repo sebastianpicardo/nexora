@@ -3716,12 +3716,6 @@ a {
   background: rgba(2, 6, 12, 0.72);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  animation: welcomeFade 0.2s ease;
-  transition: opacity 0.22s ease;
-}
-
-.welcome-modal.is-closing {
-  opacity: 0;
 }
 
 .welcome-demo-card {
@@ -3736,13 +3730,7 @@ a {
   border-radius: 22px;
   background: #0b1220;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
-  animation: welcomeRise 0.28s ease;
-  transition: transform 0.22s ease, opacity 0.22s ease;
-}
-
-.welcome-modal.is-closing .welcome-demo-card {
-  opacity: 0;
-  transform: translateY(10px) scale(0.98);
+  will-change: transform, opacity;
 }
 
 .welcome-demo-close {
@@ -3790,36 +3778,110 @@ a {
   object-fit: cover;
 }
 
+.welcome-demo-media-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 3px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.welcome-demo-media-progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand), #38bdf8);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+}
+
 .welcome-demo-fallback {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 12px;
-  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 30px 22px 62px;
   text-align: center;
 }
 
+.welcome-demo-fallback-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 30ch;
+}
+
+.welcome-demo-fallback-hero strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.welcome-demo-fallback-hero > span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .welcome-demo-fallback-icon {
-  font-size: 58px;
+  font-size: 52px;
   line-height: 1;
   animation: demoFloat 3s ease-in-out infinite;
 }
 
-.welcome-demo-fallback p {
+.welcome-demo-mini-grid {
+  width: 100%;
+  max-width: 300px;
   margin: 0 auto;
-  max-width: 32ch;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.55;
 }
 
-.welcome-demo-fallback code {
-  padding: 1px 6px;
-  border-radius: 6px;
+.welcome-demo-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+}
+
+.welcome-demo-mini span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.welcome-demo-mini small {
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.welcome-demo-mini.active {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.18);
+}
+
+.welcome-demo-fallback-note {
+  margin: 0 auto;
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+.welcome-demo-fallback-note code {
+  padding: 1px 5px;
+  border-radius: 5px;
   background: rgba(148, 163, 184, 0.16);
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 10px;
   word-break: break-all;
 }
 
@@ -3922,25 +3984,16 @@ a {
   border: 1px solid transparent;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
-  opacity: 0.55;
   transition:
-    opacity 0.3s ease,
     border-color 0.3s ease,
     background 0.3s ease,
-    transform 0.3s ease,
     box-shadow 0.3s ease;
 }
 
-.welcome-demo-step.done {
-  opacity: 0.78;
-}
-
 .welcome-demo-step.active {
-  opacity: 1;
   border-color: rgba(16, 185, 129, 0.5);
   background: rgba(16, 185, 129, 0.1);
   box-shadow: 0 10px 30px rgba(16, 185, 129, 0.12);
-  transform: translateX(4px);
 }
 
 .welcome-demo-step-icon {
@@ -4029,10 +4082,23 @@ a {
   }
 
   .welcome-demo-media {
-    min-height: 220px;
+    min-height: 260px;
     border-right: none;
     border-bottom: 1px solid var(--line);
     border-radius: 22px 22px 0 0;
+  }
+
+  .welcome-demo-fallback {
+    gap: 10px;
+    padding: 24px 16px 60px;
+  }
+
+  .welcome-demo-fallback-icon {
+    font-size: 42px;
+  }
+
+  .welcome-demo-mini-grid {
+    max-width: 100%;
   }
 
   .welcome-demo-body {

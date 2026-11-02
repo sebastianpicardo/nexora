@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { CheckIcon, SparkIcon } from "./Icons";
 import { useAuth } from "../context/AuthContext";
 
@@ -67,46 +68,67 @@ const PLANS = [
 export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" }) {
   const { organization } = useAuth();
   const [demoOpen, setDemoOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [videoFailed, setVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
-  const closeTimer = useRef(null);
+  const reduceMotion = useReducedMotion();
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const restoreFocusRef = useRef(null);
 
-  const requestClose = useCallback(() => {
-    if (closing) return;
-    setClosing(true);
-    closeTimer.current = setTimeout(() => {
-      setDemoOpen(false);
-      setClosing(false);
-    }, 220);
-  }, [closing]);
+  const motionSafe = !reduceMotion;
 
-  useEffect(() => () => clearTimeout(closeTimer.current), []);
-
-  useEffect(() => {
-    if (!demoOpen) return undefined;
+  const openDemo = useCallback(() => {
+    restoreFocusRef.current = document.activeElement;
     setActiveStep(0);
     setVideoFailed(false);
-    const id = setInterval(() => {
-      setActiveStep((current) => (current + 1) % STEPS.length);
-    }, DEMO_STEP_MS);
-    return () => clearInterval(id);
-  }, [demoOpen]);
+    setDemoOpen(true);
+  }, []);
+
+  const requestClose = useCallback(() => setDemoOpen(false), []);
 
   useEffect(() => {
     if (!demoOpen) return undefined;
-    const handleKey = (event) => {
-      if (event.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", handleKey);
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 60);
+
+    const handleKey = (event) => {
+      if (event.key === "Escape") {
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const nodes = dialogRef.current.querySelectorAll("button:not([disabled])");
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKey);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", handleKey);
       document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus?.();
     };
   }, [demoOpen, requestClose]);
+
+  useEffect(() => {
+    if (!demoOpen) return undefined;
+    const id = window.setInterval(() => {
+      setActiveStep((current) => (current + 1) % STEPS.length);
+    }, DEMO_STEP_MS);
+    return () => window.clearInterval(id);
+  }, [demoOpen]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -141,7 +163,7 @@ export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" })
             >
               Cargar documento
             </button>
-            <button type="button" className="button ghost" onClick={() => setDemoOpen(true)}>
+            <button type="button" className="button ghost" onClick={openDemo}>
               Ver tutorial interactivo
             </button>
           </div>
@@ -168,7 +190,7 @@ export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" })
               </li>
             ))}
           </ol>
-          <button type="button" className="button ghost full" onClick={() => setDemoOpen(true)}>
+          <button type="button" className="button ghost full" onClick={openDemo}>
             ▶ Ver demo flash
           </button>
         </div>
@@ -208,123 +230,217 @@ export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" })
         ))}
       </div>
 
-      {demoOpen ? (
-        <div
-          className={`welcome-modal ${closing ? "is-closing" : ""}`}
-          role="presentation"
-          onClick={requestClose}
-        >
-          <div
-            className="welcome-demo-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="nexora-demo-title"
-            onClick={(event) => event.stopPropagation()}
+      <AnimatePresence>
+        {demoOpen ? (
+          <motion.div
+            key="nexora-demo"
+            className="welcome-modal"
+            role="presentation"
+            onClick={requestClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: motionSafe ? 0.22 : 0, ease: "easeOut" }}
           >
-            <button
-              type="button"
-              className="welcome-demo-close"
-              onClick={requestClose}
-              aria-label="Cerrar demo"
+            <motion.div
+              ref={dialogRef}
+              className="welcome-demo-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="nexora-demo-title"
+              aria-describedby="nexora-demo-sub"
+              onClick={(event) => event.stopPropagation()}
+              initial={motionSafe ? { opacity: 0, y: 26, scale: 0.97 } : false}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={
+                motionSafe
+                  ? { opacity: 0, y: 18, scale: 0.98 }
+                  : { opacity: 0 }
+              }
+              transition={
+                motionSafe
+                  ? { type: "spring", stiffness: 280, damping: 26, mass: 0.9 }
+                  : { duration: 0 }
+              }
             >
-              ✕
-            </button>
-
-            <div className="welcome-demo-media">
-              {videoFailed ? (
-                <div className="welcome-demo-fallback">
-                  <span className="welcome-demo-fallback-icon" aria-hidden="true">
-                    {currentStep.icon}
-                  </span>
-                  <p>
-                    Vista previa no disponible. Agrega <code>{videoSrc}</code> para ver la demo en
-                    video.
-                  </p>
-                </div>
-              ) : (
-                <video
-                  className="welcome-demo-video"
-                  src={videoSrc}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="metadata"
-                  onError={() => setVideoFailed(true)}
-                  aria-label="Demostración visual de NEXORA"
-                />
-              )}
-
-              <div className="welcome-demo-overlay">
-                <span className="welcome-demo-live">
-                  <i />
-                  Demo en vivo
-                </span>
-                <span className="welcome-demo-counter">
-                  Paso {activeStep + 1} de {STEPS.length}
-                </span>
-              </div>
-            </div>
-
-            <div className="welcome-demo-body">
-              <h3 id="nexora-demo-title">Demo flash · NEXORA</h3>
-              <p className="welcome-demo-sub">
-                El flujo de auditoría se reproduce automáticamente cada {DEMO_STEP_MS / 1000}{" "}
-                segundos.
-              </p>
-
-              <div
-                className="welcome-demo-progress"
-                role="progressbar"
-                aria-label="Progreso de la demo"
-                aria-valuemin={1}
-                aria-valuemax={STEPS.length}
-                aria-valuenow={activeStep + 1}
+              <motion.button
+                ref={closeButtonRef}
+                type="button"
+                className="welcome-demo-close"
+                onClick={requestClose}
+                aria-label="Cerrar demo"
+                whileHover={motionSafe ? { scale: 1.08, rotate: 90 } : undefined}
+                whileTap={motionSafe ? { scale: 0.92 } : undefined}
+                transition={{ type: "spring", stiffness: 420, damping: 24 }}
               >
-                {STEPS.map((step, index) => (
-                  <span
-                    key={step.id}
-                    className={`welcome-demo-segment ${index <= activeStep ? "filled" : ""} ${
-                      index === activeStep ? "current" : ""
-                    }`}
+                ✕
+              </motion.button>
+
+              <div className="welcome-demo-media">
+                {videoFailed ? (
+                  <motion.div
+                    key="fallback"
+                    className="welcome-demo-fallback"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: motionSafe ? 0.3 : 0 }}
+                  >
+                    <div className="welcome-demo-fallback-stage flex flex-1 items-center justify-center">
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                          key={currentStep.id}
+                          className="welcome-demo-fallback-hero"
+                          initial={motionSafe ? { opacity: 0, y: 12, scale: 0.96 } : false}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={
+                            motionSafe
+                              ? { opacity: 0, y: -12, scale: 0.96 }
+                              : { opacity: 0 }
+                          }
+                          transition={{ duration: motionSafe ? 0.28 : 0, ease: "easeOut" }}
+                        >
+                          <span className="welcome-demo-fallback-icon" aria-hidden="true">
+                            {currentStep.icon}
+                          </span>
+                          <strong>{currentStep.title}</strong>
+                          <span>{currentStep.description}</span>
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="welcome-demo-mini-grid grid grid-cols-3 gap-2">
+                      {STEPS.map((step, index) => {
+                        const state =
+                          index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                        return (
+                          <motion.div
+                            key={step.id}
+                            className={`welcome-demo-mini ${state}`}
+                            animate={{
+                              opacity: state === "pending" ? 0.45 : 1,
+                              y: motionSafe && state === "active" ? -4 : 0,
+                              scale: motionSafe && state === "active" ? 1.03 : 1,
+                            }}
+                            transition={{ duration: motionSafe ? 0.35 : 0, ease: "easeOut" }}
+                          >
+                            <span aria-hidden="true">{step.icon}</span>
+                            <small>{step.title}</small>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="welcome-demo-fallback-note">
+                      Animación de respaldo · agrega <code>{videoSrc}</code> para el video real.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <video
+                    className="welcome-demo-video"
+                    src={videoSrc}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onError={() => setVideoFailed(true)}
+                    aria-label="Demostración visual de NEXORA"
                   />
-                ))}
+                )}
+
+                <div className="welcome-demo-media-progress" aria-hidden="true">
+                  <motion.span
+                    initial={false}
+                    animate={{ width: `${((activeStep + 1) / STEPS.length) * 100}%` }}
+                    transition={{ duration: motionSafe ? 0.55 : 0, ease: "easeInOut" }}
+                  />
+                </div>
+
+                <div className="welcome-demo-overlay">
+                  <span className="welcome-demo-live">
+                    <i />
+                    Demo en vivo
+                  </span>
+                  <span className="welcome-demo-counter">
+                    Paso {activeStep + 1} de {STEPS.length}
+                  </span>
+                </div>
               </div>
 
-              <ol className="welcome-demo-steps">
-                {STEPS.map((step, index) => {
-                  const state =
-                    index === activeStep ? "active" : index < activeStep ? "done" : "pending";
-                  return (
-                    <li
+              <div className="welcome-demo-body">
+                <h3 id="nexora-demo-title">Demo flash · NEXORA</h3>
+                <p id="nexora-demo-sub" className="welcome-demo-sub">
+                  El flujo de auditoría se reproduce automáticamente cada {DEMO_STEP_MS / 1000}{" "}
+                  segundos.
+                </p>
+
+                <p className="sr-only" aria-live="polite">
+                  Paso {activeStep + 1} de {STEPS.length}: {currentStep.title}
+                </p>
+
+                <div
+                  className="welcome-demo-progress"
+                  role="progressbar"
+                  aria-label="Progreso de la demo"
+                  aria-valuemin={1}
+                  aria-valuemax={STEPS.length}
+                  aria-valuenow={activeStep + 1}
+                >
+                  {STEPS.map((step, index) => (
+                    <motion.span
                       key={step.id}
-                      className={`welcome-demo-step ${state}`}
-                      aria-current={index === activeStep ? "step" : undefined}
-                    >
-                      <span className="welcome-demo-step-icon" aria-hidden="true">
-                        {step.icon}
-                      </span>
-                      <div>
-                        <strong>{step.title}</strong>
-                        <p>{step.description}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
+                      className={`welcome-demo-segment ${index <= activeStep ? "filled" : ""} ${
+                        index === activeStep ? "current" : ""
+                      }`}
+                      animate={{
+                        opacity: index <= activeStep ? 1 : 0.4,
+                        scaleY: index === activeStep && motionSafe ? 1.4 : 1,
+                      }}
+                      transition={{ duration: motionSafe ? 0.3 : 0 }}
+                    />
+                  ))}
+                </div>
 
-              <div className="welcome-demo-actions">
-                <button type="button" className="button ghost" onClick={requestClose}>
-                  Saltar introducción
-                </button>
-                <button type="button" className="button primary" onClick={requestClose}>
-                  Cerrar demo
-                </button>
+                <ol className="welcome-demo-steps">
+                  {STEPS.map((step, index) => {
+                    const state =
+                      index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                    return (
+                      <motion.li
+                        key={step.id}
+                        className={`welcome-demo-step ${state}`}
+                        aria-current={index === activeStep ? "step" : undefined}
+                        animate={{
+                          opacity: index === activeStep ? 1 : index < activeStep ? 0.78 : 0.5,
+                          x: motionSafe && index === activeStep ? 4 : 0,
+                        }}
+                        transition={{ duration: motionSafe ? 0.35 : 0, ease: "easeOut" }}
+                      >
+                        <span className="welcome-demo-step-icon" aria-hidden="true">
+                          {step.icon}
+                        </span>
+                        <div>
+                          <strong>{step.title}</strong>
+                          <p>{step.description}</p>
+                        </div>
+                      </motion.li>
+                    );
+                  })}
+                </ol>
+
+                <div className="welcome-demo-actions">
+                  <button type="button" className="button ghost" onClick={requestClose}>
+                    Saltar introducción
+                  </button>
+                  <button type="button" className="button primary" onClick={requestClose}>
+                    Cerrar demo
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </section>
   );
 }
