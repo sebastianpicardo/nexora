@@ -50,6 +50,35 @@ export function AuthProvider({ children }) {
     else setBilling(null);
   }, [user, refreshBilling]);
 
+  const applySession = useCallback((data) => {
+    setUser(data.user);
+    setOrganization(data.organization);
+    setError("");
+    return data.user;
+  }, []);
+
+  const login = useCallback(
+    async ({ email, password, recaptchaToken }) => {
+      const data = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password, recaptcha_token: recaptchaToken }),
+      });
+      return applySession(data);
+    },
+    [applySession],
+  );
+
+  const register = useCallback(
+    async ({ name, email, password, recaptchaToken }) => {
+      const data = await api("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password, recaptcha_token: recaptchaToken }),
+      });
+      return applySession(data);
+    },
+    [applySession],
+  );
+
   const loginWithGoogle = useCallback(() => {
     window.location.assign(googleLoginUrl());
   }, []);
@@ -77,6 +106,8 @@ export function AuthProvider({ children }) {
     isSuperAdmin: role === "super_admin",
     canManage: ["owner", "admin", "super_admin"].includes(role),
     canOperate: ["owner", "admin", "super_admin", "analyst", "user"].includes(role),
+    login,
+    register,
     loginWithGoogle,
     logout,
     refresh,

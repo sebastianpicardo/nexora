@@ -10,6 +10,7 @@ export default function BillingPage() {
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [changing, setChanging] = useState("");
+  const [pendingPlan, setPendingPlan] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -29,8 +30,7 @@ export default function BillingPage() {
     load();
   }, [load]);
 
-  async function changePlan(planId) {
-    if (planId === billing?.subscription?.plan_id) return;
+  async function applyPlan(planId) {
     setChanging(planId);
     setError("");
     setSuccess("");
@@ -40,10 +40,37 @@ export default function BillingPage() {
         body: JSON.stringify({ plan_id: planId }),
       });
       setBilling(data);
+      setPendingPlan(null);
       await refreshBilling();
       setSuccess(`Plan actualizado a ${data.subscription.plan_name}.`);
     } catch (err) {
       setError(err.message || "No se pudo cambiar de plan.");
+    } finally {
+      setChanging("");
+    }
+  }
+
+  async function startPlan(plan) {
+    if (plan.id === billing?.subscription?.plan_id) return;
+    if (Number(plan.price_monthly) <= 0) {
+      await applyPlan(plan.id);
+      return;
+    }
+    setChanging(plan.id);
+    setError("");
+    setSuccess("");
+    try {
+      const session = await api("/api/billing/checkout", {
+        method: "POST",
+        body: JSON.stringify({ plan_id: plan.id }),
+      });
+      if (session.provider === "mock") {
+        setPendingPlan(plan);
+      } else {
+        window.location.assign(session.checkout_url);
+      }
+    } catch (err) {
+      setError(err.message || "No se pudo iniciar el pago.");
     } finally {
       setChanging("");
     }
@@ -67,6 +94,31 @@ export default function BillingPage() {
 
       {error ? <div className="alert error">{error}</div> : null}
       {success ? <div className="alert success">{success}</div> : null}
+
+      {pendingPlan ? (
+        <section className="card mock-checkout">
+          <div>
+            <h3>Pago de prueba · {pendingPlan.name}</h3>
+            <p>
+              El proveedor está en modo <code>mock</code>. Confirma para activar el plan sin realizar
+              un cobro real.
+            </p>
+          </div>
+          <div className="mock-checkout-actions">
+            <button type="button" className="button ghost" onClick={() => setPendingPlan(null)}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={Boolean(changing)}
+              onClick={() => applyPlan(pendingPlan.id)}
+            >
+              Confirmar pago
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <div className="billing-grid">
         <section className="card">
@@ -160,7 +212,7 @@ export default function BillingPage() {
                   type="button"
                   className={`button ${current ? "ghost" : "primary"} full`}
                   disabled={current || changing === plan.id}
-                  onClick={() => changePlan(plan.id)}
+                  onClick={() => startPlan(plan)}
                 >
                   {current ? "Plan activo" : changing === plan.id ? "Actualizando…" : `Elegir ${plan.name}`}
                 </button>

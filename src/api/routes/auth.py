@@ -9,8 +9,13 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from src.api.deps import CurrentUser
 from src.core.config import settings
 from src.core.security import cookie_max_age, create_access_token
-from src.schemas.auth import MeResponse, OrganizationOut, UserOut
-from src.services.auth_service import upsert_google_user
+from src.schemas.auth import LoginRequest, MeResponse, OrganizationOut, RegisterRequest, UserOut
+from src.services.auth_service import (
+    authenticate_with_password,
+    register_with_password,
+    upsert_google_user,
+)
+from src.services.recaptcha_service import verify_recaptcha
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -72,6 +77,61 @@ def _set_session_cookie(response: Response, user: dict) -> None:
         samesite=settings.cookie_samesite,
         path="/",
     )
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or None
+    return request.client.host if request.client else None
+
+
+@router.get("/config")
+async def auth_config() -> dict:
+    """Configuración pública que el cliente necesita para autenticarse."""
+    return {
+        "google_enabled": bool(settings.google_client_id and settings.google_client_secret),
+        "recaptcha_enabled": settings.recaptcha_enabled,
+        "recaptcha_site_key": settings.recaptcha_site_key,
+        "payment_provider": settings.payment_provider,
+    }
+
+
+@router.post("/register", response_model=MeResponse, status_code=status.HTTP_201_CREATED)
+async def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
+) -> MeResponse:
+    await verify_recaptcha(
+        payload.recaptcha_token,
+        remote_ip=_client_ip(request),
+        expected_action="register",
+    )
+    user = await register_with_password(
+        email=payload.email,
+        password=payload.password,
+        name=payload.name,
+        organization_name=payload.organization_name,
+    )
+    _set_session_cookie(response, user)
+    return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
+
+
+@router.post("/login", response_model=MeResponse)
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+) -> MeResponse:
+    await verify_recaptcha(
+        payload.recaptcha_token,
+        remote_ip=_client_ip(request),
+        expected_action="login",
+    )
+    user = await authenticate_with_password(email=payload.email, password=payload.password)
+    _set_session_cookie(response, user)
+    return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
 @router.get("/google")

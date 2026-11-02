@@ -49,3 +49,24 @@ class ChangePlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     plan_id: str = Field(min_length=1, max_length=40)
+
+
+class CheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: str = Field(min_length=1, max_length=40)
+
+
+class CheckoutOut(BaseModel):
+    provider: str
+    session_id: str
+    checkout_url: str
+    plan_id: str
+    amount: float
+    currency: str
+
+
+class WebhookAck(BaseModel):
+    success: bool = True
+    received: bool = True
+    duplicate: bool = False

@@ -1,5 +1,8 @@
+import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { CheckIcon } from "../components/Icons";
+import PricingTable from "../components/PricingTable";
+import { getRecaptchaToken } from "../lib/recaptcha";
 
 function GoogleMark() {
   return (
@@ -30,13 +33,87 @@ const FEATURES = [
   "Bandeja de excepciones con evidencia y revisión humana.",
 ];
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
+const STRENGTH_LABELS = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"];
+
+function passwordChecks(password) {
+  return [
+    password.length >= 8,
+    /[A-Z]/.test(password),
+    /[a-z]/.test(password),
+    /\d/.test(password),
+  ];
+}
+
 export default function LoginPage({ error }) {
-  const { loginWithGoogle } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+
   const params = new URLSearchParams(window.location.search);
   const authError = params.get("auth") === "error";
-  const message = authError
+  const authMessage = authError
     ? "No pudimos completar el inicio de sesión con Google. Intenta nuevamente."
-    : error;
+    : "";
+  const feedback = message || authMessage || error;
+
+  const checks = useMemo(() => passwordChecks(form.password), [form.password]);
+  const strength = checks.filter(Boolean).length;
+
+  function update(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function switchMode(next) {
+    setMode(next);
+    setMessage("");
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setMessage("");
+
+    const email = form.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setMessage("Ingresa un email válido.");
+      return;
+    }
+    if (mode === "register") {
+      if (form.name.trim().length < 2) {
+        setMessage("Ingresa tu nombre completo.");
+        return;
+      }
+      if (strength < checks.length) {
+        setMessage("La contraseña necesita 8 caracteres, una mayúscula, una minúscula y un número.");
+        return;
+      }
+    } else if (!form.password) {
+      setMessage("Ingresa tu contraseña.");
+      return;
+    }
+
+    setPending(true);
+    try {
+      const recaptchaToken = await getRecaptchaToken(mode);
+      if (mode === "login") {
+        await login({ email, password: form.password, recaptchaToken });
+      } else {
+        await register({
+          name: form.name.trim(),
+          email,
+          password: form.password,
+          recaptchaToken,
+        });
+      }
+    } catch (err) {
+      setMessage(err.message || "No pudimos completar la operación.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="login-page">
@@ -71,33 +148,158 @@ export default function LoginPage({ error }) {
 
       <section className="login-panel">
         <div className="login-card">
-          <div className="login-card-head">
-            <h2>Accede a tu panel</h2>
-            <p>Usa tu cuenta corporativa de Google para continuar.</p>
+          <div className="auth-tabs" role="tablist" aria-label="Acceso">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "login"}
+              className={`auth-tab ${mode === "login" ? "active" : ""}`}
+              onClick={() => switchMode("login")}
+            >
+              Iniciar sesión
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "register"}
+              className={`auth-tab ${mode === "register" ? "active" : ""}`}
+              onClick={() => switchMode("register")}
+            >
+              Crear cuenta
+            </button>
           </div>
 
-          {message ? <div className="alert error">{message}</div> : null}
+          <div className="login-card-head">
+            <h2>{mode === "login" ? "Accede a tu panel" : "Crea tu espacio de trabajo"}</h2>
+            <p>
+              {mode === "login"
+                ? "Ingresa con tu email o usa tu cuenta corporativa de Google."
+                : "Registra tu organización en menos de un minuto."}
+            </p>
+          </div>
 
-          <button type="button" className="google-button" onClick={loginWithGoogle}>
-            <GoogleMark />
-            Continuar con Google
-          </button>
+          {feedback ? (
+            <div className="alert error" role="alert">
+              {feedback}
+            </div>
+          ) : null}
+
+          <form className="auth-form" onSubmit={handleSubmit} noValidate>
+            {mode === "register" ? (
+              <label className="auth-field">
+                <span>Nombre completo</span>
+                <input
+                  id="auth-name"
+                  type="text"
+                  aria-label="Nombre completo"
+                  autoComplete="name"
+                  placeholder="Ana Pérez"
+                  value={form.name}
+                  onChange={(event) => update("name", event.target.value)}
+                  disabled={pending}
+                  required
+                />
+              </label>
+            ) : null}
+
+            <label className="auth-field">
+              <span>Email corporativo</span>
+              <input
+                type="email"
+                inputMode="email"
+                aria-label="Email corporativo"
+                autoComplete="email"
+                placeholder="tu@empresa.com"
+                value={form.email}
+                onChange={(event) => update("email", event.target.value)}
+                disabled={pending}
+                required
+              />
+            </label>
+
+            <label className="auth-field">
+              <span>Contraseña</span>
+              <div className="auth-password">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  aria-label="Contraseña"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  placeholder={mode === "login" ? "Tu contraseña" : "Mínimo 8 caracteres"}
+                  value={form.password}
+                  onChange={(event) => update("password", event.target.value)}
+                  disabled={pending}
+                  required
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+            </label>
+
+            {mode === "register" ? (
+              <div className="pw-meter" aria-live="polite">
+                <div className="pw-meter-track">
+                  <span className={`pw-meter-bar level-${strength}`} />
+                </div>
+                <div className="pw-meter-label">
+                  <span>Seguridad: {STRENGTH_LABELS[strength]}</span>
+                  <span className="pw-hints">
+                    {checks[0] ? "8+" : "8+"} · {checks[1] ? "A-Z" : "A-Z"} ·{" "}
+                    {checks[2] ? "a-z" : "a-z"} · {checks[3] ? "0-9" : "0-9"}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <button type="submit" className="button primary full auth-submit" disabled={pending}>
+              {pending
+                ? mode === "login"
+                  ? "Ingresando…"
+                  : "Creando cuenta…"
+                : mode === "login"
+                  ? "Ingresar con email"
+                  : "Crear cuenta gratis"}
+            </button>
+          </form>
 
           <div className="login-divider">
             <span />
-            <small>Acceso seguro</small>
+            <small>o continúa con</small>
             <span />
           </div>
+
+          <button type="button" className="google-button" onClick={loginWithGoogle} disabled={pending}>
+            <GoogleMark />
+            Continuar con Google
+          </button>
 
           <p className="login-note">
             Al ingresar aceptas que los documentos que subas sean procesados para extraer ítems,
             precios y unidades. Los datos quedan aislados por organización.
           </p>
         </div>
+
         <p className="login-footnote">
-          ¿Necesitas acceso para tu equipo? Los roles se administran desde Supabase por el owner de
-          la organización.
+          ¿Necesitas acceso para tu equipo? Los roles se administran desde el panel de equipo por el
+          owner de la organización.
         </p>
+      </section>
+
+      <section className="login-pricing">
+        <PricingTable
+          actionLabel="Crear cuenta con"
+          title="Empieza gratis y escala cuando lo necesites"
+          subtitle="Todos los planes incluyen auditoría de precios, histórico y exportaciones."
+          onSelect={() => {
+            switchMode("register");
+            document.getElementById("auth-name")?.focus();
+          }}
+        />
       </section>
     </div>
   );

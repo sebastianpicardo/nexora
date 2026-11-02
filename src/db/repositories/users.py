@@ -53,6 +53,20 @@ async def get_user_by_email(conn: AsyncConnection, email: str) -> dict | None:
         return await cur.fetchone()
 
 
+async def get_user_auth_by_email(conn: AsyncConnection, email: str) -> dict | None:
+    """Datos mínimos para autenticar con contraseña (incluye el hash)."""
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT id, org_id, email, password_hash, active, role
+            FROM users
+            WHERE lower(email) = lower(%s)
+            """,
+            (email.strip(),),
+        )
+        return await cur.fetchone()
+
+
 async def get_user_by_google_id(conn: AsyncConnection, google_id: str) -> dict | None:
     async with conn.cursor() as cur:
         await cur.execute(f"{USER_SELECT} WHERE u.google_id = %s", (google_id,))
@@ -80,9 +94,11 @@ async def create_user_with_org(
     conn: AsyncConnection,
     *,
     email: str,
-    google_id: str,
+    google_id: str | None = None,
+    password_hash: str | None = None,
     name: str,
     avatar_url: str,
+    organization_name: str | None = None,
     price_spike_threshold_pct: float | None = None,
     min_confidence: float | None = None,
     default_currency: str | None = None,
@@ -96,15 +112,16 @@ async def create_user_with_org(
             await cur.execute(
                 """
                 INSERT INTO users (
-                    org_id, email, google_id, name, avatar_url, role, active, last_login_at
+                    org_id, email, google_id, password_hash, name, avatar_url, role, active, last_login_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, TRUE, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, now())
                 RETURNING id
                 """,
                 (
                     invitation["org_id"],
                     email,
                     google_id,
+                    password_hash,
                     display_name,
                     avatar_url or "",
                     invitation["role"],
@@ -128,7 +145,7 @@ async def create_user_with_org(
             raise RuntimeError("No se pudo recuperar el usuario invitado")
         return user
 
-    org_name = display_name
+    org_name = (organization_name or display_name).strip() or display_name
     slug = f"{_slugify(org_name)}-{secrets.token_hex(3)}"
 
     async with conn.cursor() as cur:
@@ -157,11 +174,13 @@ async def create_user_with_org(
 
         await cur.execute(
             """
-            INSERT INTO users (org_id, email, google_id, name, avatar_url, role, active, last_login_at)
-            VALUES (%s, %s, %s, %s, %s, 'owner', TRUE, now())
+            INSERT INTO users (
+                org_id, email, google_id, password_hash, name, avatar_url, role, active, last_login_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, 'owner', TRUE, now())
             RETURNING id
             """,
-            (org_id, email, google_id, display_name, avatar_url or ""),
+            (org_id, email, google_id, password_hash, display_name, avatar_url or ""),
         )
         user_row = await cur.fetchone()
         assert user_row is not None
@@ -198,6 +217,14 @@ async def update_google_profile(
 async def touch_last_login(conn: AsyncConnection, user_id: UUID | str) -> None:
     async with conn.cursor() as cur:
         await cur.execute("UPDATE users SET last_login_at = now() WHERE id = %s", (str(user_id),))
+
+
+async def set_password_hash(conn: AsyncConnection, user_id: UUID | str, password_hash: str) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (password_hash, str(user_id)),
+        )
 
 
 async def set_user_role(conn: AsyncConnection, user_id: UUID | str, role: str) -> None:

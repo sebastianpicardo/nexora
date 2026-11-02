@@ -1,6 +1,7 @@
 """Repositorios por agregado. Todas las consultas de negocio exigen org_id."""
 
 from src.db.repositories.billing import (
+    apply_subscription_payment,
     change_plan,
     count_period_documents,
     ensure_subscription,
@@ -10,6 +11,7 @@ from src.db.repositories.billing import (
     get_subscription,
     list_organization_overviews,
     list_plans,
+    record_payment_event,
 )
 from src.db.repositories.documents import (
     claim_document_by_id,
@@ -58,10 +60,12 @@ from src.db.repositories.users import (
     count_active_admins,
     create_user_with_org,
     get_member,
+    get_user_auth_by_email,
     get_user_by_email,
     get_user_by_google_id,
     get_user_with_org,
     list_users,
+    set_password_hash,
     set_user_role,
     touch_last_login,
     update_google_profile,
@@ -71,6 +75,7 @@ from src.db.repositories.users import (
 from src.db.seeding import ensure_default_plans
 
 __all__ = [
+    "apply_subscription_payment",
     "change_plan",
     "claim_document_by_id",
     "claim_next_queued",
@@ -99,6 +104,7 @@ __all__ = [
     "get_price_history",
     "get_subscription",
     "get_supplier",
+    "get_user_auth_by_email",
     "get_user_by_email",
     "get_user_by_google_id",
     "get_user_with_org",
@@ -118,7 +124,9 @@ __all__ = [
     "reset_document_children",
     "reset_document_for_reprocess",
     "resolve_exception",
+    "record_payment_event",
     "revoke_invitation",
+    "set_password_hash",
     "set_user_role",
     "touch_last_login",
     "update_document_status",

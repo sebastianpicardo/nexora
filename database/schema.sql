@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
     org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     google_id TEXT UNIQUE,
+    password_hash TEXT,
     name TEXT NOT NULL DEFAULT '',
     avatar_url TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT 'owner'
@@ -309,11 +310,15 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     current_period_start DATE NOT NULL DEFAULT date_trunc('month', current_date)::date,
     current_period_end DATE NOT NULL DEFAULT (date_trunc('month', current_date) + interval '1 month')::date,
     trial_ends_at TIMESTAMPTZ,
+    payment_provider TEXT,
+    customer_id TEXT,
+    external_subscription_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS subscriptions_plan_idx ON subscriptions (plan_id);
+CREATE INDEX IF NOT EXISTS subscriptions_customer_idx ON subscriptions (customer_id);
 
 INSERT INTO subscriptions (org_id, plan_id, status, current_period_start, current_period_end)
 SELECT
@@ -325,6 +330,19 @@ SELECT
 FROM organizations o
 WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.org_id = o.id)
 ON CONFLICT (org_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS payment_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    event_type TEXT NOT NULL DEFAULT '',
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (provider, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS payment_events_created_idx ON payment_events (created_at DESC);
 
 CREATE TABLE IF NOT EXISTS team_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

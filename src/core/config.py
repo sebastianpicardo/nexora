@@ -68,6 +68,20 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
     super_admin_emails: str = ""
 
+    recaptcha_site_key: str = ""
+    recaptcha_secret_key: str = ""
+    recaptcha_min_score: float = Field(default=0.5, ge=0, le=1)
+    recaptcha_verify_url: str = "https://www.google.com/recaptcha/api/siteverify"
+
+    payment_provider: str = "mock"
+    payment_webhook_secret: str = ""
+    payment_success_url: str = ""
+    payment_cancel_url: str = ""
+    stripe_secret_key: str = ""
+    mercadopago_access_token: str = ""
+    flow_api_key: str = ""
+    flow_secret_key: str = ""
+
     llm_provider: str = "openai"
     llm_model: str = "gpt-4.1-mini"
     openai_api_key: str = ""
@@ -154,6 +168,18 @@ class Settings(BaseSettings):
     @property
     def super_admin_emails_set(self) -> set[str]:
         return {email.strip().lower() for email in self.super_admin_emails.split(",") if email.strip()}
+
+    @property
+    def recaptcha_enabled(self) -> bool:
+        return bool(self.recaptcha_secret_key.strip())
+
+    @property
+    def payment_checkout_success_url(self) -> str:
+        return self.payment_success_url.strip() or f"{self.frontend_origin}/?checkout=success"
+
+    @property
+    def payment_checkout_cancel_url(self) -> str:
+        return self.payment_cancel_url.strip() or f"{self.frontend_origin}/?checkout=cancel"
 
     @property
     def max_upload_bytes(self) -> int:

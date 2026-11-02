@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import uuid
+from datetime import date
 from uuid import UUID
 
 from psycopg import AsyncConnection
@@ -168,6 +170,100 @@ async def change_plan(conn: AsyncConnection, org_id: UUID | str, plan_id: str) -
             RETURNING id
             """,
             (plan_id, str(org_id)),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return await get_billing(conn, org_id)
+
+
+async def record_payment_event(
+    conn: AsyncConnection,
+    *,
+    provider: str,
+    event_id: str,
+    event_type: str,
+    payload: dict,
+) -> bool:
+    """Registra un evento de pago de forma idempotente. Devuelve True si es nuevo."""
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            INSERT INTO payment_events (provider, event_id, event_type, payload)
+            VALUES (%s, %s, %s, %s::jsonb)
+            ON CONFLICT (provider, event_id) DO NOTHING
+            RETURNING id
+            """,
+            (provider, event_id, event_type, json.dumps(payload, default=str)),
+        )
+        row = await cur.fetchone()
+    return row is not None
+
+
+async def apply_subscription_payment(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID | str,
+    plan_id: str,
+    status: str = "active",
+    provider: str | None = None,
+    customer_id: str | None = None,
+    external_subscription_id: str | None = None,
+    period_end: date | None = None,
+) -> dict | None:
+    plan = await get_plan(conn, plan_id)
+    if plan is None:
+        return None
+
+    normalized_status = status if status in {"trialing", "active", "past_due", "canceled"} else "active"
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            INSERT INTO subscriptions (
+                org_id,
+                plan_id,
+                status,
+                payment_provider,
+                customer_id,
+                external_subscription_id,
+                current_period_start,
+                current_period_end
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                date_trunc('month', current_date)::date,
+                COALESCE(%s::date, (date_trunc('month', current_date) + interval '1 month')::date)
+            )
+            ON CONFLICT (org_id) DO UPDATE SET
+                plan_id = EXCLUDED.plan_id,
+                status = EXCLUDED.status,
+                payment_provider = COALESCE(EXCLUDED.payment_provider, subscriptions.payment_provider),
+                customer_id = COALESCE(EXCLUDED.customer_id, subscriptions.customer_id),
+                external_subscription_id = COALESCE(
+                    EXCLUDED.external_subscription_id, subscriptions.external_subscription_id
+                ),
+                current_period_start = date_trunc('month', current_date)::date,
+                current_period_end = COALESCE(
+                    EXCLUDED.current_period_end,
+                    (date_trunc('month', current_date) + interval '1 month')::date
+                ),
+                updated_at = now()
+            RETURNING id
+            """,
+            (
+                str(org_id),
+                plan_id,
+                normalized_status,
+                provider,
+                customer_id,
+                external_subscription_id,
+                period_end,
+            ),
         )
         row = await cur.fetchone()
     if row is None:
