@@ -65,10 +65,11 @@ const PLANS = [
   },
 ];
 
-export default function WelcomeBanner() {
+export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" }) {
   const { organization } = useAuth();
   const [demoOpen, setDemoOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  const [videoFailed, setVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const reduceMotion = useReducedMotion();
   const dialogRef = useRef(null);
@@ -80,6 +81,7 @@ export default function WelcomeBanner() {
   const openDemo = useCallback(() => {
     restoreFocusRef.current = document.activeElement;
     setActiveStep(0);
+    setVideoFailed(false);
     setDemoOpen(true);
   }, []);
 
@@ -275,7 +277,76 @@ export default function WelcomeBanner() {
               </motion.button>
 
               <div className="welcome-demo-media">
-                
+                {videoFailed ? (
+                  <motion.div
+                    key="fallback"
+                    className="welcome-demo-fallback"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: motionSafe ? 0.3 : 0 }}
+                  >
+                    <div className="welcome-demo-fallback-stage flex flex-1 items-center justify-center">
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                          key={currentStep.id}
+                          className="welcome-demo-fallback-hero"
+                          initial={motionSafe ? { opacity: 0, y: 12, scale: 0.96 } : false}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={
+                            motionSafe
+                              ? { opacity: 0, y: -12, scale: 0.96 }
+                              : { opacity: 0 }
+                          }
+                          transition={{ duration: motionSafe ? 0.28 : 0, ease: "easeOut" }}
+                        >
+                          <span className="welcome-demo-fallback-icon" aria-hidden="true">
+                            {currentStep.icon}
+                          </span>
+                          <strong>{currentStep.title}</strong>
+                          <span>{currentStep.description}</span>
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="welcome-demo-mini-grid grid grid-cols-3 gap-2">
+                      {STEPS.map((step, index) => {
+                        const state =
+                          index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                        return (
+                          <motion.div
+                            key={step.id}
+                            className={`welcome-demo-mini ${state}`}
+                            animate={{
+                              opacity: state === "pending" ? 0.45 : 1,
+                              y: motionSafe && state === "active" ? -4 : 0,
+                              scale: motionSafe && state === "active" ? 1.03 : 1,
+                            }}
+                            transition={{ duration: motionSafe ? 0.35 : 0, ease: "easeOut" }}
+                          >
+                            <span aria-hidden="true">{step.icon}</span>
+                            <small>{step.title}</small>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="welcome-demo-fallback-note">
+                      Animación de respaldo · agrega <code>{videoSrc}</code> para el video real.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <video
+                    className="welcome-demo-video"
+                    src={videoSrc}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onError={() => setVideoFailed(true)}
+                    aria-label="Demostración visual de NEXORA"
+                  />
+                )}
 
                 <div className="welcome-demo-media-progress" aria-hidden="true">
                   <motion.span
