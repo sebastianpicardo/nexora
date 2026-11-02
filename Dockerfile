@@ -3,7 +3,7 @@ FROM node:24-alpine AS client-build
 WORKDIR /app/client
 
 COPY client/package.json client/package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY client/ ./
 RUN npm run build

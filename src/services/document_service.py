@@ -6,7 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.core.config import settings
-from src.core.errors import NexoraError
+from src.core.errors import NexoraError, LLMError
 from src.db import repositories
 from src.db.pool import get_pool
 from src.parsers.normalization.dates import parse_flexible_date
@@ -51,9 +51,14 @@ async def _process_claimed_document(doc: dict) -> None:
             },
             upload_date=upload_date,
         )
-    except Exception as exc:
+except Exception as exc:
         logger.exception("Error procesando documento %s", document_id)
-        message = str(exc) if isinstance(exc, NexoraError) else f"Error inesperado: {exc}"
+        # Determinar mensaje amigable segun el tipo de error
+        if isinstance(exc, LLMError):
+            # Error de IA: mensaje que indica al usuario que intente de nuevo más tarde
+            message = "Error de inteligencia artificial. Se intentará volver a procesar el documento automáticamente."
+        else:
+            message = str(exc) if isinstance(exc, NexoraError) else f"Error inesperado: {exc}"
         async with get_pool().connection() as conn:
             await repositories.mark_failed(
                 conn,
@@ -74,7 +79,7 @@ async def _process_claimed_document(doc: dict) -> None:
                     "error": message[:1000],
                 },
             )
-        return
+            return
 
     try:
         async with get_pool().connection() as conn:

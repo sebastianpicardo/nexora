@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from google import genai
@@ -13,6 +14,9 @@ from src.parsers.llm.prompts import SYSTEM_PROMPT
 from src.parsers.schemas import ExtractedDocument
 
 logger = logging.getLogger(__name__)
+
+MAX_GEMINI_RETRIES = 3
+GEMINI_BACKOFF_BASE = 2  # segundos
 
 
 class GeminiProvider(LLMProvider):
@@ -41,15 +45,36 @@ class GeminiProvider(LLMProvider):
             max_output_tokens=8192,
         )
 
-        try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model,
-                contents=parts,
-                config=config,
-            )
-        except Exception as exc:
-            logger.exception("Gemini extraction failed")
-            raise LLMError(f"Error llamando a Gemini: {exc}") from exc
+        last_exception: Exception | None = None
+        for attempt in range(MAX_GEMINI_RETRIES):
+            try:
+                response = await self.client.aio.models.generate_content(
+                    model=self.model,
+                    contents=parts,
+                    config=config,
+                )
+            except Exception as exc:
+                last_exception = exc
+                err_str = str(exc).lower()
+                if "503" in err_str or "unavailable" in err_str or "resource exhausted" in err_str or "try again" in err_str:
+                    wait_time = GEMINI_BACKOFF_BASE ** attempt
+                    logger.warning(
+                        f"Gemini 503 / transitorio (intento {attempt + 1}/{MAX_GEMINI_RETRIES}); reintento en {wait_time}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    # error no transitorio, lanzar inmediatamente
+                    raise LLMError(f"Error llamando a Gemini: {exc}") from exc
+
+            # éxito: salir del bucle de reintentos
+            break
+
+        if last_exception is not None:
+            # agotados los reintentos
+            raise LLMError(
+                f"Error llamando a Gemini después de {MAX_GEMINI_RETRIES} intentos: {last_exception}"
+            ) from last_exception
 
         if not response.text:
             raise LLMError("Gemini no devolvió contenido.")
