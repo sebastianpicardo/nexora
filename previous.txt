@@ -1,0 +1,446 @@
+﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { CheckIcon, SparkIcon } from "./Icons";
+import { useAuth } from "../context/AuthContext";
+
+const DEMO_STEP_MS = 3000;
+
+const STEPS = [
+  {
+    id: 1,
+    icon: "­ƒôä",
+    title: "Entrada",
+    description: "Arrastra y suelta tu factura PDF o Excel de proveedores.",
+  },
+  {
+    id: 2,
+    icon: "ÔÜí",
+    title: "Procesamiento IA",
+    description:
+      "Normalizaci├│n autom├ítica de SKUs y cruce de precios unitarios en tiempo real.",
+  },
+  {
+    id: 3,
+    icon: "­ƒÆ░",
+    title: "Resultado / Ahorro",
+    description:
+      "Alerta inmediata de alzas y ahorro estimado antes de pagar la factura.",
+  },
+];
+
+const PLANS = [
+  {
+    id: "free",
+    name: "Free",
+    price: "US$ 0",
+    limit: "25 documentos / mes",
+    features: ["Auditor├¡a b├ísica", "Dashboard mensual"],
+    popular: false,
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "US$ 49",
+    limit: "500 documentos / mes",
+    features: [
+      "Equipo con roles",
+      "Alertas de cuota",
+      "Exportaciones PDF y Excel",
+      "Historial de 6 meses",
+    ],
+    popular: true,
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    price: "US$ 199",
+    limit: "Documentos ilimitados",
+    features: [
+      "Panel multi-tenant",
+      "Auditor├¡a avanzada",
+      "Exportaciones masivas",
+      "Gesti├│n centralizada",
+    ],
+    popular: false,
+  },
+];
+
+export default function WelcomeBanner({ videoSrc = "/assets/demo-preview.mp4" }) {
+  const { organization } = useAuth();
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [notice, setNotice] = useState("");
+  const reduceMotion = useReducedMotion();
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const restoreFocusRef = useRef(null);
+
+  const motionSafe = !reduceMotion;
+
+  const openDemo = useCallback(() => {
+    restoreFocusRef.current = document.activeElement;
+    setActiveStep(0);
+    setVideoFailed(false);
+    setDemoOpen(true);
+  }, []);
+
+  const requestClose = useCallback(() => setDemoOpen(false), []);
+
+  useEffect(() => {
+    if (!demoOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 60);
+
+    const handleKey = (event) => {
+      if (event.key === "Escape") {
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const nodes = dialogRef.current.querySelectorAll("button:not([disabled])");
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [demoOpen, requestClose]);
+
+  useEffect(() => {
+    if (!demoOpen) return undefined;
+    const id = window.setInterval(() => {
+      setActiveStep((current) => (current + 1) % STEPS.length);
+    }, DEMO_STEP_MS);
+    return () => window.clearInterval(id);
+  }, [demoOpen]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const id = setTimeout(() => setNotice(""), 4500);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  const name = organization?.name ? `, ${organization.name}` : "";
+  const currentStep = STEPS[activeStep];
+
+  return (
+    <section className="welcome">
+      <div className="welcome-hero">
+        <div className="welcome-copy">
+          <span className="welcome-badge">
+            <SparkIcon />
+            Auditor├¡a continua v2.0
+          </span>
+
+          <h1>Bienvenido/a a NEXORA{name}</h1>
+
+          <p className="welcome-lead">
+            Evita pagar de m├ís en facturas y cotizaciones. Nuestra IA detecta alzas de precios
+            ocultas y normaliza SKUs en CLP autom├íticamente antes de que pagues.
+          </p>
+
+          <div className="welcome-actions">
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => setNotice("Abre la secci├│n Documentos para cargar tu primera factura.")}
+            >
+              Cargar documento
+            </button>
+            <button type="button" className="button ghost" onClick={openDemo}>
+              Ver tutorial interactivo
+            </button>
+          </div>
+
+          {notice ? (
+            <p className="welcome-notice" role="status">
+              {notice}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="welcome-journey">
+          <h2>El viaje del ahorro</h2>
+          <ol className="welcome-steps">
+            {STEPS.map((step) => (
+              <li key={step.id} className="welcome-step">
+                <span className="welcome-step-icon" aria-hidden="true">
+                  {step.icon}
+                </span>
+                <div>
+                  <strong>{step.title}</strong>
+                  <p>{step.description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <button type="button" className="button ghost full" onClick={openDemo}>
+            ÔûÂ Ver demo flash
+          </button>
+        </div>
+      </div>
+
+      <div className="welcome-plans-head">
+        <h2>Planes</h2>
+        <p>Empieza gratis y escala cuando tu operaci├│n lo necesite.</p>
+      </div>
+
+      <div className="welcome-plans">
+        {PLANS.map((plan) => (
+          <article key={plan.id} className={`welcome-plan ${plan.popular ? "featured" : ""}`}>
+            {plan.popular ? <span className="welcome-plan-flag">M├ís popular</span> : null}
+            <h3>{plan.name}</h3>
+            <div className="welcome-plan-price">
+              {plan.price}
+              <small>/ mes</small>
+            </div>
+            <p className="welcome-plan-limit">{plan.limit}</p>
+            <ul>
+              {plan.features.map((feature) => (
+                <li key={feature}>
+                  <CheckIcon />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="button full"
+              onClick={() => setNotice(`Plan ${plan.name} seleccionado. Gesti├│nalo desde Facturaci├│n.`)}
+            >
+              Elegir {plan.name}
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {demoOpen ? (
+          <motion.div
+            key="nexora-demo"
+            className="welcome-modal"
+            role="presentation"
+            onClick={requestClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: motionSafe ? 0.22 : 0, ease: "easeOut" }}
+          >
+            <motion.div
+              ref={dialogRef}
+              className="welcome-demo-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="nexora-demo-title"
+              aria-describedby="nexora-demo-sub"
+              onClick={(event) => event.stopPropagation()}
+              initial={motionSafe ? { opacity: 0, y: 26, scale: 0.97 } : false}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={
+                motionSafe
+                  ? { opacity: 0, y: 18, scale: 0.98 }
+                  : { opacity: 0 }
+              }
+              transition={
+                motionSafe
+                  ? { type: "spring", stiffness: 280, damping: 26, mass: 0.9 }
+                  : { duration: 0 }
+              }
+            >
+              <motion.button
+                ref={closeButtonRef}
+                type="button"
+                className="welcome-demo-close"
+                onClick={requestClose}
+                aria-label="Cerrar demo"
+                whileHover={motionSafe ? { scale: 1.08, rotate: 90 } : undefined}
+                whileTap={motionSafe ? { scale: 0.92 } : undefined}
+                transition={{ type: "spring", stiffness: 420, damping: 24 }}
+              >
+                Ô£ò
+              </motion.button>
+
+              <div className="welcome-demo-media">
+                {videoFailed ? (
+                  <motion.div
+                    key="fallback"
+                    className="welcome-demo-fallback"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: motionSafe ? 0.3 : 0 }}
+                  >
+                    <div className="welcome-demo-fallback-stage flex flex-1 items-center justify-center">
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                          key={currentStep.id}
+                          className="welcome-demo-fallback-hero"
+                          initial={motionSafe ? { opacity: 0, y: 12, scale: 0.96 } : false}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={
+                            motionSafe
+                              ? { opacity: 0, y: -12, scale: 0.96 }
+                              : { opacity: 0 }
+                          }
+                          transition={{ duration: motionSafe ? 0.28 : 0, ease: "easeOut" }}
+                        >
+                          <span className="welcome-demo-fallback-icon" aria-hidden="true">
+                            {currentStep.icon}
+                          </span>
+                          <strong>{currentStep.title}</strong>
+                          <span>{currentStep.description}</span>
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="welcome-demo-mini-grid grid grid-cols-3 gap-2">
+                      {STEPS.map((step, index) => {
+                        const state =
+                          index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                        return (
+                          <motion.div
+                            key={step.id}
+                            className={`welcome-demo-mini ${state}`}
+                            animate={{
+                              opacity: state === "pending" ? 0.45 : 1,
+                              y: motionSafe && state === "active" ? -4 : 0,
+                              scale: motionSafe && state === "active" ? 1.03 : 1,
+                            }}
+                            transition={{ duration: motionSafe ? 0.35 : 0, ease: "easeOut" }}
+                          >
+                            <span aria-hidden="true">{step.icon}</span>
+                            <small>{step.title}</small>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="welcome-demo-fallback-note">
+                      Animaci├│n de respaldo ┬À agrega <code>{videoSrc}</code> para el video real.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <video
+                    className="welcome-demo-video"
+                    src={videoSrc}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onError={() => setVideoFailed(true)}
+                    aria-label="Demostraci├│n visual de NEXORA"
+                  />
+                )}
+
+                <div className="welcome-demo-media-progress" aria-hidden="true">
+                  <motion.span
+                    initial={false}
+                    animate={{ width: `${((activeStep + 1) / STEPS.length) * 100}%` }}
+                    transition={{ duration: motionSafe ? 0.55 : 0, ease: "easeInOut" }}
+                  />
+                </div>
+
+                <div className="welcome-demo-overlay">
+                  <span className="welcome-demo-live">
+                    <i />
+                    Demo en vivo
+                  </span>
+                  <span className="welcome-demo-counter">
+                    Paso {activeStep + 1} de {STEPS.length}
+                  </span>
+                </div>
+              </div>
+
+              <div className="welcome-demo-body">
+                <h3 id="nexora-demo-title">Demo flash ┬À NEXORA</h3>
+                <p id="nexora-demo-sub" className="welcome-demo-sub">
+                  El flujo de auditor├¡a se reproduce autom├íticamente cada {DEMO_STEP_MS / 1000}{" "}
+                  segundos.
+                </p>
+
+                <p className="sr-only" aria-live="polite">
+                  Paso {activeStep + 1} de {STEPS.length}: {currentStep.title}
+                </p>
+
+                <div
+                  className="welcome-demo-progress"
+                  role="progressbar"
+                  aria-label="Progreso de la demo"
+                  aria-valuemin={1}
+                  aria-valuemax={STEPS.length}
+                  aria-valuenow={activeStep + 1}
+                >
+                  {STEPS.map((step, index) => (
+                    <motion.span
+                      key={step.id}
+                      className={`welcome-demo-segment ${index <= activeStep ? "filled" : ""} ${
+                        index === activeStep ? "current" : ""
+                      }`}
+                      animate={{
+                        opacity: index <= activeStep ? 1 : 0.4,
+                        scaleY: index === activeStep && motionSafe ? 1.4 : 1,
+                      }}
+                      transition={{ duration: motionSafe ? 0.3 : 0 }}
+                    />
+                  ))}
+                </div>
+
+                <ol className="welcome-demo-steps">
+                  {STEPS.map((step, index) => {
+                    const state =
+                      index === activeStep ? "active" : index < activeStep ? "done" : "pending";
+                    return (
+                      <motion.li
+                        key={step.id}
+                        className={`welcome-demo-step ${state}`}
+                        aria-current={index === activeStep ? "step" : undefined}
+                        animate={{
+                          opacity: index === activeStep ? 1 : index < activeStep ? 0.78 : 0.5,
+                          x: motionSafe && index === activeStep ? 4 : 0,
+                        }}
+                        transition={{ duration: motionSafe ? 0.35 : 0, ease: "easeOut" }}
+                      >
+                        <span className="welcome-demo-step-icon" aria-hidden="true">
+                          {step.icon}
+                        </span>
+                        <div>
+                          <strong>{step.title}</strong>
+                          <p>{step.description}</p>
+                        </div>
+                      </motion.li>
+                    );
+                  })}
+                </ol>
+
+                <div className="welcome-demo-actions">
+                  <button type="button" className="button ghost" onClick={requestClose}>
+                    Saltar introducci├│n
+                  </button>
+                  <button type="button" className="button primary" onClick={requestClose}>
+                    Cerrar demo
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </section>
+  );
+}
