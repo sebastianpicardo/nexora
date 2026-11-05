@@ -372,3 +372,49 @@ No Expongas `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `JWT_SECRET` ni `GOOG
 - Las notificaciones de cuota y el resumen semanal guardan preferencias, pero el envío de correos aún no está implementado.
 - El almacenamiento local no es persistente en plataformas efímeras; en producción usa Supabase Storage.
 - El plan de Render debe permitir workers si se quiere procesamiento separado del web.
+
+## Puesta en marcha local
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+# completa DATABASE_URL, SESSION_SECRET y al menos un proveedor LLM
+py -m scripts.init_db
+npm --prefix client install
+npm --prefix client run dev   # frontend en http://localhost:5173
+uvicorn src.main:app --reload --port 8000
+```
+
+El frontend canónico vive en `client/` y se sirve compilado desde FastAPI en producción. El directorio `client/client/` es una copia histórica y no se usa en el build.
+
+## Migraciones
+
+Ejecuta en orden sobre una base existente:
+
+1. `database/schema.sql`
+2. `database/migrations/002_saas.sql`
+3. `database/migrations/003_auth_payments.sql`
+4. `database/migrations/004_email_audit_invoices.sql`
+
+La migración 004 añade `users.email_verified`, `auth_tokens` (con `consumed_at`), `audit_events` e `invoices`, junto con índices y RLS.
+
+## Variables de entorno relevantes
+
+- `RATE_LIMIT_PER_MINUTE` (por defecto `120`): límite por IP y minuto en `/api`. Los webhooks de pago están exentos. El limitador es en memoria, adecuado para una sola instancia.
+- `SENTRY_DSN` y `SENTRY_TRACES_SAMPLE_RATE`: observabilidad opcional. Sin DSN, Sentry no se inicializa.
+- `SMTP_*`: correo transaccional para verificación de email y recuperación de contraseña. Sin `SMTP_HOST`, el envío se omite y el token se registra solo en desarrollo.
+- `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET`: pasarela y firma de webhooks.
+
+## Calidad
+
+```powershell
+npm --prefix client run build
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+```
+
+## Páginas legales
+
+`client/public/terms.html`, `client/public/privacy.html` y `client/public/cookies.html` se sirven como archivos estáticos y están enlazadas desde el login y el registro.

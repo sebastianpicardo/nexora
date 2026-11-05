@@ -35,6 +35,38 @@ export async function api(path, options = {}) {
   return data;
 }
 
+async function raw(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    credentials: "include",
+    ...options,
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json") ? await response.json() : null;
+    const error = new Error(errorMessage(data, response.status));
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return response.blob();
+}
+
+api.raw = raw;
+
+export async function downloadFile(path, filename, options = {}) {
+  const blob = await raw(path, options);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return blob;
+}
+
 export function googleLoginUrl() {
   return `${API_URL}/api/auth/google`;
 }

@@ -73,12 +73,28 @@ class Settings(BaseSettings):
     recaptcha_min_score: float = Field(default=0.5, ge=0, le=1)
     recaptcha_verify_url: str = "https://www.google.com/recaptcha/api/siteverify"
 
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@nexora.app"
+    smtp_from_name: str = "NEXORA"
+    smtp_tls: bool = True
+    smtp_ssl: bool = False
+
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0, le=1)
+
+    rate_limit_per_minute: int = Field(default=120, ge=1)
+
     payment_provider: str = "mock"
     payment_webhook_secret: str = ""
     payment_success_url: str = ""
     payment_cancel_url: str = ""
     stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
     mercadopago_access_token: str = ""
+    mercadopago_webhook_secret: str = ""
     flow_api_key: str = ""
     flow_secret_key: str = ""
 
@@ -172,6 +188,14 @@ class Settings(BaseSettings):
     @property
     def recaptcha_enabled(self) -> bool:
         return bool(self.recaptcha_secret_key.strip())
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.smtp_host.strip())
+
+    @property
+    def public_app_url(self) -> str:
+        return self.frontend_origin.rstrip("/")
 
     @property
     def payment_checkout_success_url(self) -> str:

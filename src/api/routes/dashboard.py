@@ -4,7 +4,7 @@ import calendar
 import uuid
 from datetime import date
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from src.api.deps import CurrentUser
 from src.db import repositories
@@ -22,8 +22,12 @@ def _int(value) -> int:
 
 
 @router.get("/summary", response_model=DashboardSummary)
-async def dashboard_summary(user: CurrentUser):
+async def dashboard_summary(
+    user: CurrentUser,
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+):
     org_id = user["org_id"]
+    chart_currency = (currency or user["default_currency"]).strip().upper()
     async with get_pool().connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -101,7 +105,7 @@ async def dashboard_summary(user: CurrentUser):
                 FROM months m
                 ORDER BY m.month
                 """,
-                (org_id, user["default_currency"], org_id, org_id),
+                (org_id, chart_currency, org_id, org_id),
             )
             monthly_rows = await cur.fetchall() or []
 

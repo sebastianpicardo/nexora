@@ -49,6 +49,14 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
     return hmac.compare_digest(candidate, expected)
 
 
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def sign_payload(secret: str, payload: bytes) -> str:
     """Firma HMAC-SHA256 de un payload crudo, usada para webhooks de pago."""
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
@@ -58,6 +66,27 @@ def verify_signature(secret: str, payload: bytes, signature: str | None) -> bool
     if not secret or not signature:
         return False
     return hmac.compare_digest(sign_payload(secret, payload), signature.strip())
+
+
+def verify_stripe_signature(secret: str, payload: bytes, header: str | None, tolerance_seconds: int = 300) -> bool:
+    """Valida el header Stripe-Signature (t=timestamp,v1=firma)."""
+    if not secret or not header:
+        return False
+    parts: dict[str, str] = {}
+    for item in header.split(","):
+        if "=" in item:
+            key, value = item.split("=", 1)
+            parts[key.strip()] = value.strip()
+    timestamp = parts.get("t")
+    provided = parts.get("v1")
+    if not timestamp or not provided or not timestamp.isdigit():
+        return False
+    now = int(datetime.now(UTC).timestamp())
+    if abs(now - int(timestamp)) > tolerance_seconds:
+        return False
+    signed = f"{timestamp}.".encode() + payload
+    expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, provided)
 
 
 def create_access_token(

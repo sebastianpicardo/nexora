@@ -46,6 +46,7 @@ class UserOut(BaseModel):
     timezone: str = "America/Santiago"
     notify_quota: bool = True
     notify_weekly: bool = True
+    email_verified: bool = True
     active: bool
     last_login_at: datetime | None = None
     created_at: datetime
@@ -108,6 +109,47 @@ class LoginRequest(BaseModel):
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
     recaptcha_token: str | None = Field(default=None, max_length=4096)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=5, max_length=255)
+    recaptcha_token: str | None = Field(default=None, max_length=4096)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=10, max_length=512)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return _validate_password_strength(value)
+
+
+class VerifyEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=10, max_length=512)
+
+
+class ResendVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=5, max_length=255)
 
     @field_validator("email")
     @classmethod

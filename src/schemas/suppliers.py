@@ -14,6 +14,14 @@ class SupplierCreate(BaseModel):
     email: str | None = Field(default=None, max_length=200)
 
 
+class SupplierUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    tax_id: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=200)
+
+
 class SupplierOut(BaseModel):
     id: UUID
     name: str

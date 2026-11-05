@@ -1,6 +1,15 @@
 import { formatDateTime, labelize } from "../lib/format";
+import { DownloadIcon } from "./Icons";
 
-export default function DocumentsTable({ documents, onReprocess, reprocessingId, compact = false }) {
+export default function DocumentsTable({
+  documents,
+  onReprocess,
+  reprocessingId,
+  onView,
+  onDownload,
+  onExport,
+  compact = false,
+}) {
   if (!documents?.length) {
     return (
       <div className="empty-state">
@@ -9,6 +18,8 @@ export default function DocumentsTable({ documents, onReprocess, reprocessingId,
       </div>
     );
   }
+
+  const showActions = Boolean(onView || onDownload || onExport || onReprocess) && !compact;
 
   return (
     <div className="table-wrap">
@@ -20,14 +31,25 @@ export default function DocumentsTable({ documents, onReprocess, reprocessingId,
             {!compact ? <th>Tipo</th> : null}
             <th>Fecha</th>
             <th>Estado</th>
-            {onReprocess ? <th className="right">Acción</th> : null}
+            {showActions ? <th className="right">Acciones</th> : null}
           </tr>
         </thead>
         <tbody>
           {documents.map((document) => (
             <tr key={document.id}>
               <td>
-                <div className="cell-title">{document.original_filename}</div>
+                {onView ? (
+                  <button
+                    type="button"
+                    className="cell-link"
+                    onClick={() => onView(document)}
+                    title="Ver detalle del documento"
+                  >
+                    {document.original_filename}
+                  </button>
+                ) : (
+                  <div className="cell-title">{document.original_filename}</div>
+                )}
                 {document.error_message ? (
                   <div className="cell-error">{document.error_message}</div>
                 ) : null}
@@ -38,20 +60,60 @@ export default function DocumentsTable({ documents, onReprocess, reprocessingId,
               <td>
                 <span className={`badge status-${document.status}`}>{labelize(document.status)}</span>
               </td>
-              {onReprocess ? (
+              {showActions ? (
                 <td className="right">
-                  {document.status === "failed" || document.status === "processed" ? (
-                    <button
-                      type="button"
-                      className="button ghost small"
-                      onClick={() => onReprocess(document)}
-                      disabled={reprocessingId === document.id}
-                    >
-                      {reprocessingId === document.id ? "Enviando…" : "Reprocesar"}
-                    </button>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
+                  <div className="table-actions">
+                    {onView ? (
+                      <button
+                        type="button"
+                        className="button ghost small"
+                        onClick={() => onView(document)}
+                      >
+                        Detalle
+                      </button>
+                    ) : null}
+                    {onDownload ? (
+                      <button
+                        type="button"
+                        className="button ghost icon-only"
+                        onClick={() => onDownload(document)}
+                        title="Descargar original"
+                      >
+                        <DownloadIcon />
+                      </button>
+                    ) : null}
+                    {onExport ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button ghost small"
+                          onClick={() => onExport(document, "xlsx")}
+                          title="Exportar procesado a Excel"
+                        >
+                          XLSX
+                        </button>
+                        <button
+                          type="button"
+                          className="button ghost small"
+                          onClick={() => onExport(document, "pdf")}
+                          title="Exportar procesado a PDF"
+                        >
+                          PDF
+                        </button>
+                      </>
+                    ) : null}
+                    {onReprocess &&
+                    (document.status === "failed" || document.status === "processed") ? (
+                      <button
+                        type="button"
+                        className="button ghost small"
+                        onClick={() => onReprocess(document)}
+                        disabled={reprocessingId === document.id}
+                      >
+                        {reprocessingId === document.id ? "Enviando…" : "Reprocesar"}
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               ) : null}
             </tr>

@@ -11,6 +11,12 @@ async def get_organization(conn: AsyncConnection, org_id: UUID | str) -> dict | 
         return await cur.fetchone()
 
 
+async def delete_organization(conn: AsyncConnection, org_id: UUID | str) -> bool:
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM organizations WHERE id = %s", (str(org_id),))
+        return cur.rowcount > 0
+
+
 async def update_organization(conn: AsyncConnection, org_id: UUID | str, fields: dict) -> dict | None:
     allowed = {
         "name",

@@ -44,3 +44,4 @@ service-account*.json
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.aider*

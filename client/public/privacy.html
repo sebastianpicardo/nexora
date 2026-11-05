@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Política de privacidad · NEXORA</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b12;
+        --surface: #0f172a;
+        --ink: #f8fafc;
+        --muted: #94a3b8;
+        --line: rgba(148, 163, 184, 0.2);
+        --brand: #10b981;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.12), transparent 32%), var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        line-height: 1.65;
+      }
+      main { max-width: 860px; margin: 0 auto; padding: 56px 24px 80px; }
+      .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+      .mark {
+        width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center;
+        background: linear-gradient(145deg, #10b981, #059669); color: #03120d; font-weight: 800; font-size: 18px;
+      }
+      .brand strong { letter-spacing: 0.18em; font-size: 14px; }
+      h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -0.03em; margin: 0 0 8px; }
+      .updated { color: var(--muted); font-size: 13px; margin-bottom: 36px; }
+      h2 { font-size: 19px; margin: 34px 0 10px; }
+      p, li { color: var(--muted); font-size: 14.5px; }
+      ul { padding-left: 20px; }
+      a { color: var(--brand); }
+      .back {
+        display: inline-flex; margin-top: 40px; padding: 10px 16px; border-radius: 10px;
+        border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+        text-decoration: none; font-weight: 700; font-size: 13px;
+      }
+      .notice {
+        margin-top: 28px; padding: 14px 16px; border-radius: 12px;
+        border: 1px solid rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.08);
+        color: var(--muted); font-size: 13px;
+      }
+      footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><div class="mark">N</div><strong>NEXORA</strong></div>
+      <h1>Política de privacidad</h1>
+      <div class="updated">Última actualización: 5 de noviembre de 2026</div>
+
+      <p>
+        NEXORA trata datos personales y documentos comerciales para entregar servicios de auditoría
+        de compras y precios a organizaciones B2B. Esta política describe qué datos recopilamos, cómo
+        los usamos y qué controles tienes disponibles.
+      </p>
+
+      <h2>1. Datos que recopilamos</h2>
+      <ul>
+        <li>Datos de cuenta: nombre, email, contraseña (hash), rol y preferencias.</li>
+        <li>Datos de organización: nombre, moneda, umbrales de auditoría y configuración.</li>
+        <li>Contenido cargado: documentos, extracciones, precios, proveedores y excepciones.</li>
+        <li>Datos técnicos: dirección IP, eventos de auditoría, registros de acceso y errores.</li>
+      </ul>
+
+      <h2>2. Finalidad del tratamiento</h2>
+      <p>
+        Usamos los datos para autenticar usuarios, procesar documentos, normalizar unidades y precios,
+        detectar anomalías, gestionar suscripciones, prevenir abusos y cumplir obligaciones legales.
+      </p>
+
+      <h2>3. Proveedores y transferencias</h2>
+      <p>
+        Podemos usar proveedores de infraestructura (por ejemplo Supabase), almacenamiento, envío de
+        correos, verificación de bots, analítica de errores y pasarelas de pago. Estos proveedores
+        tratan datos únicamente para prestar sus servicios. Los modelos de lenguaje se usan para
+        extraer información de los documentos que decides procesar.
+      </p>
+
+      <h2>4. Conservación y seguridad</h2>
+      <p>
+        Mantenemos los datos mientras tu organización tenga una cuenta activa o según lo exija la ley.
+        Aplicamos aislamiento por organización, cookies HttpOnly, control de roles, validación de
+        archivos y límites de tasa. La eliminación de la organización borra sus datos asociados.
+      </p>
+
+      <h2>5. Tus derechos</h2>
+      <p>
+        Puedes acceder, corregir, exportar y eliminar los datos de tu organización desde el panel de
+        Configuración. Para solicitudes adicionales escribe a
+        <a href="mailto:privacidad@nexora.app">privacidad@nexora.app</a>.
+      </p>
+
+      <h2>6. Cookies</h2>
+      <p>
+        Usamos una cookie de sesión estrictamente necesaria para mantener tu autenticación. Consulta
+        la <a href="/cookies.html">política de cookies</a> para más detalles.
+      </p>
+
+      <div class="notice">
+        Este documento es un modelo operativo y debe ser revisado por asesoría legal antes de su uso
+        comercial definitivo.
+      </div>
+
+      <a class="back" href="/">Volver a NEXORA</a>
+      <footer>© 2026 NEXORA. Todos los derechos reservados.</footer>
+    </main>
+  </body>
+</html>

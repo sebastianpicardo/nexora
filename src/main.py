@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
+from src.api.deps import RateLimitMiddleware
 from src.api.router import api_router
 from src.api.routes import health
 from src.core.config import PROJECT_ROOT, settings
@@ -18,7 +19,26 @@ from src.core.logging import get_logger, setup_logging
 from src.db import repositories
 from src.db.pool import close_pool, open_pool
 
+try:  # Sentry es opcional en desarrollo/test.
+    import sentry_sdk
+except ImportError:  # pragma: no cover - solo ocurre si falta la dependencia
+    sentry_sdk = None
+
 logger = get_logger(__name__)
+
+
+def _init_sentry() -> None:
+    dsn = settings.sentry_dsn.strip()
+    if not dsn or sentry_sdk is None:
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=settings.app_env,
+        release=f"nexora@{settings.app_version}",
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        send_default_pii=False,
+    )
+    logger.info("Sentry inicializado para %s", settings.app_env)
 
 
 class SPAStaticFiles(StaticFiles):
@@ -74,6 +94,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    _init_sentry()
     app = FastAPI(
         title=f"{settings.app_name} API",
         description="Analizador y auditor automatizado de compras y precios B2B.",
@@ -96,6 +117,7 @@ def create_app() -> FastAPI:
         expose_headers=["Content-Disposition"],
         max_age=600,
     )
+    app.add_middleware(RateLimitMiddleware)
 
     @app.exception_handler(NexoraError)
     async def nexora_error_handler(_request: Request, exc: NexoraError):

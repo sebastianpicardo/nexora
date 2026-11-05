@@ -1,13 +1,12 @@
 /* ------------------------------------------------------------------
-   BillingPage – solo los cambios relevantes (el resto del archivo
-   permanece idéntico al commit anterior)
+   BillingPage – facturación completa: planes, checkout, facturas, cancelación
    ------------------------------------------------------------------ */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, labelize } from "../lib/format";
 import QuotaCard from "../components/QuotaCard";
-import { CheckIcon, SparkIcon } from "../components/Icons";
+import { CheckIcon, SparkIcon, ArrowRightIcon, DownloadIcon, TrashIcon } from "../components/Icons";
 
 export default function BillingPage() {
   const { refreshBilling } = useAuth();
@@ -17,9 +16,13 @@ export default function BillingPage() {
   const [pendingPlan, setPendingPlan] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [showInvoices, setShowInvoices] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   /* ------------------------------------------------------------------
-     Cargar resumen de facturación (sin cambios)
+     Cargar resumen de facturación
      ------------------------------------------------------------------ */
   const load = useCallback(async () => {
     try {
@@ -37,13 +40,28 @@ export default function BillingPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (!checkout) return;
+    if (checkout === "success") {
+      setSuccess("Pago recibido. Estamos actualizando tu suscripción…");
+      refreshBilling();
+    } else if (checkout === "cancel") {
+      setError("El proceso de pago fue cancelado.");
+    }
+    params.delete("checkout");
+    params.delete("provider");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [refreshBilling]);
+
   /* ------------------------------------------------------------------
-     * nuevo*: iniciar el pago (Stripe / Mercado Pago / Flow)
+     Iniciar checkout (Stripe / Mercado Pago / Flow / mock)
      ------------------------------------------------------------------ */
   const startPlan = async (plan) => {
     if (plan.id === billing?.subscription?.plan_id) return;
 
-    // 1️⃣ Pedir al backend una sesión de pago
     let session;
     try {
       session = await api("/api/billing/checkout", {
@@ -55,26 +73,22 @@ export default function BillingPage() {
       return;
     }
 
-    // 2️⃣ Según el provider responder de forma distinta
     if (session.provider === "mock") {
-      // Modo demo – mostramos un check‑out falso pero cerramos el flujo
       setPendingPlan(plan);
       return;
     }
 
-    // 3️⃣ Proveedores reales → redirección inmediata
-    if (session.url) {
-      window.location.assign(session.url);
+    // Backend devuelve checkout_url (no url)
+    if (session.checkout_url) {
+      window.location.assign(session.checkout_url);
       return;
     }
 
-    // Si el backend no nos dio URL ni provider reconocido
     setError("Respuesta de pago inesperada.");
   };
 
   /* ------------------------------------------------------------------
-     * flujo “cobro simulado” (igual que antes) – se mantiene para
-     * modo desarrollo / testing
+     Aplicar plan (solo free / mock confirmed)
      ------------------------------------------------------------------ */
   async function applyPlan(planId) {
     setChanging(planId);
@@ -96,29 +110,55 @@ export default function BillingPage() {
     }
   }
 
-  async function startPlanOld(plan) {
-    if (plan.id === billing?.subscription?.plan_id) return;
-    if (Number(plan.price_monthly) <= 0) {
-      await applyPlan(plan.id);
-      return;
-    }
-    setChanging(plan.id);
+  /* ------------------------------------------------------------------
+     Cancelar suscripción
+     ------------------------------------------------------------------ */
+  async function cancelSubscription() {
     setError("");
     setSuccess("");
+    setChanging("cancel");
     try {
-      const session = await api("/api/billing/checkout", {
+      const data = await api("/api/billing/subscription/cancel", {
         method: "POST",
-        body: JSON.stringify({ plan_id: plan.id }),
       });
-      if (session.provider === "mock") {
-        setPendingPlan(plan);
-      } else {
-        window.location.assign(session.checkout_url);
-      }
+      setBilling(data);
+      await refreshBilling();
+      setSuccess("Suscripción cancelada. El plan gratuito se activará al fin del período.");
     } catch (err) {
-      setError(err.message || "No se pudo iniciar el pago.");
+      setError(err.message || "No se pudo cancelar la suscripción.");
     } finally {
       setChanging("");
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     Cargar facturas
+     ------------------------------------------------------------------ */
+  async function loadInvoices() {
+    setInvoicesLoading(true);
+    try {
+      const data = await api("/api/billing/invoices");
+      setInvoices(data.items || []);
+    } catch (err) {
+      setError(err.message || "No se pudieron cargar las facturas.");
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }
+
+  async function downloadInvoicePdf(invoiceId) {
+    try {
+      const blob = await api.raw("/api/billing/invoices/" + invoiceId + "/pdf", {
+        method: "GET",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `factura-${invoiceId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "No se pudo descargar la factura.");
     }
   }
 
@@ -142,7 +182,7 @@ export default function BillingPage() {
       {success ? <div className="alert success">{success}</div> : null}
 
       {/* --------------------------------------------------------------
-         ✅ Flujo real de pago (Stripe / Mercado Pago / Flow)
+         Flujo real de pago (Stripe / Mercado Pago / Flow / mock)
          -------------------------------------------------------------- */}
       {pendingPlan ? (
         <section className="card mock-checkout">
@@ -170,7 +210,7 @@ export default function BillingPage() {
       ) : null}
 
       {/* --------------------------------------------------------------
-         ✅ Botones “Elegir Pro / Enterprise” ahora llaman a startPlan()
+         Planes disponibles
          -------------------------------------------------------------- */}
       <section>
         <div className="section-heading">
@@ -218,6 +258,115 @@ export default function BillingPage() {
           })}
         </div>
       </section>
+
+      {/* --------------------------------------------------------------
+         Facturas / Recibos
+         -------------------------------------------------------------- */}
+      <section>
+        <div className="section-heading">
+          <div>
+            <h2>Facturas y recibos</h2>
+            <p>Historial de pagos y documentos fiscales.</p>
+          </div>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => { setShowInvoices(!showInvoices); if (!showInvoices) loadInvoices(); }}
+          >
+            {showInvoices ? "Ocultar" : "Ver facturas"}
+            <ArrowRightIcon />
+          </button>
+        </div>
+        {showInvoices && (
+          <div className="invoices-section">
+            {invoicesLoading ? (
+              <div className="empty-state">Cargando facturas…</div>
+            ) : invoices.length === 0 ? (
+              <div className="empty-state">No hay facturas aún.</div>
+            ) : (
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Proveedor</th>
+                      <th>Monto</th>
+                      <th>Moneda</th>
+                      <th>Estado</th>
+                      <th>Período</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td>{formatDate(inv.created_at)}</td>
+                        <td>{inv.provider}</td>
+                        <td>{formatMoney(inv.amount, inv.currency)}</td>
+                        <td>{inv.currency}</td>
+                        <td><span className={`badge role-${inv.status}`}>{labelize(inv.status)}</span></td>
+                        <td>
+                          {inv.period_start && inv.period_end
+                            ? `${formatDate(inv.period_start)} – ${formatDate(inv.period_end)}`
+                            : "—"}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="button ghost icon-only"
+                            onClick={() => downloadInvoicePdf(inv.id)}
+                            title="Descargar PDF"
+                          >
+                            <DownloadIcon />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* --------------------------------------------------------------
+         Cancelar suscripción (solo owner/admin, plan pago activo)
+         -------------------------------------------------------------- */}
+      {subscription && subscription.plan_id !== "free" && subscription.status === "active" && (
+        <section className="card danger-zone">
+          <div>
+            <h3>Cancelar suscripción</h3>
+            <p>
+              La suscripción se cancelará al final del período actual. No se realizarán más cobros.
+              El plan volverá a <strong>Free</strong> automáticamente.
+            </p>
+          </div>
+          {!cancelConfirm ? (
+            <button
+              type="button"
+              className="button danger"
+              onClick={() => setCancelConfirm(true)}
+            >
+              Cancelar suscripción
+            </button>
+          ) : (
+            <div className="mock-checkout-actions">
+              <button type="button" className="button ghost" onClick={() => setCancelConfirm(false)}>
+                Volver
+              </button>
+              <button
+                type="button"
+                className="button danger"
+                disabled={changing === "cancel"}
+                onClick={cancelSubscription}
+              >
+                {changing === "cancel" ? "Cancelando…" : "Confirmar cancelación"}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

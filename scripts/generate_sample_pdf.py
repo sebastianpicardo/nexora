@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-import os
-import sys
+from datetime import date
 from pathlib import Path
 
+from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -27,7 +26,7 @@ c.setFont("Helvetica-Bold", 16)
 c.drawString(margin, height - margin, "NEXORA – Cotización de prueba")
 c.setFont("Helvetica", 9)
 c.drawString(margin, height - margin - 12, f"Fecha: {date.today().isoformat()}")
-c.drawString(margin, height - margin - 24, f"Proveedor: Aceros del Pacífico SpA – RUT: 76.542.310-8")
+c.drawString(margin, height - margin - 24, "Proveedor: Aceros del Pacífico SpA – RUT: 76.542.310-8")
 
 c.setFillColor(HexColor("#2c3e50"))
 c.setFont("Helvetica-Bold", 8)

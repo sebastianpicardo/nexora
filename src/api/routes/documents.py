@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 from datetime import date
 from pathlib import Path
+from typing import Literal
 from uuid import UUID, uuid4
 
 import filetype
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from psycopg.errors import UniqueViolation
 
 from src.api.deps import CurrentUser, require_roles
@@ -21,6 +23,7 @@ from src.schemas.documents import (
     ReprocessResponse,
 )
 from src.services import document_service, storage_service
+from src.services.export_service import build_excel, build_pdf
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -195,6 +198,103 @@ async def get_document(document_id: UUID, user: CurrentUser):
     if row is None:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     return _document_out(row)
+
+
+@router.get("/{document_id}/file")
+async def download_original(document_id: UUID, user: CurrentUser):
+    async with get_pool().connection() as conn:
+        row = await repositories.get_document(conn, user["org_id"], document_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    try:
+        content = await storage_service.read_document(row["storage_path"])
+    except Exception as exc:
+        logger.exception("No se pudo leer el documento %s", document_id)
+        raise HTTPException(status_code=502, detail="No se pudo recuperar el archivo original") from exc
+    filename = Path(row.get("original_filename") or f"documento-{document_id}").name
+    return Response(
+        content=content,
+        media_type=row.get("mime_type") or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{document_id}/export")
+async def export_processed_document(
+    document_id: UUID,
+    user: CurrentUser,
+    fmt: Literal["xlsx", "pdf"] = Query(default="xlsx", alias="format"),
+):
+    async with get_pool().connection() as conn:
+        document = await repositories.get_document(conn, user["org_id"], document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+        result = await repositories.list_items(
+            conn,
+            user["org_id"],
+            document_id=document_id,
+            page=1,
+            page_size=5000,
+        )
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="document.export",
+            entity_type="document",
+            entity_id=str(document_id),
+            metadata={"format": fmt, "rows": len(result["items"])},
+        )
+
+    headers = [
+        "Fecha",
+        "Proveedor",
+        "SKU",
+        "Descripción",
+        "Unidad original",
+        "Cantidad",
+        "Precio original",
+        "Precio normalizado",
+        "Unidad base",
+        "Confianza",
+        "Estado",
+    ]
+    rows = [
+        [
+            str(row.get("price_date") or "")[:10],
+            row.get("supplier_name") or "Sin proveedor",
+            row.get("sku") or "",
+            row.get("original_description") or "",
+            row.get("original_unit") or "",
+            row.get("quantity") or "",
+            f"{row.get('currency') or ''} {float(row.get('original_unit_price') or 0):,.2f}".strip(),
+            f"{row.get('currency') or ''} {float(row.get('normalized_unit_price') or 0):,.2f}".strip(),
+            row.get("base_unit") or "",
+            f"{round(float(row.get('confidence') or 0) * 100)}%",
+            row.get("review_status") or "",
+        ]
+        for row in result["items"]
+    ]
+    subtitle = (
+        f"NEXORA · {document.get('original_filename') or document_id} · "
+        f"{len(rows)} ítems · Generado el {date.today().isoformat()}"
+    )
+    if fmt == "pdf":
+        content = build_pdf("Documento procesado", subtitle, headers, rows)
+        media_type = "application/pdf"
+        extension = "pdf"
+    else:
+        content = build_excel("Documento procesado", headers, rows)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        extension = "xlsx"
+
+    stem = Path(document.get("original_filename") or f"documento-{document_id}").stem or "documento"
+    filename = f"{stem}-procesado.{extension}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{document_id}/reprocess", response_model=ReprocessResponse)

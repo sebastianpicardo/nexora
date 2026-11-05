@@ -1,14 +1,25 @@
 """Repositorios por agregado. Todas las consultas de negocio exigen org_id."""
 
+from src.db.repositories.audit import list_audit_events, record_audit_event
+from src.db.repositories.auth_tokens import (
+    consume_auth_token,
+    create_auth_token,
+    get_auth_token,
+    invalidate_auth_tokens,
+)
 from src.db.repositories.billing import (
     apply_subscription_payment,
+    cancel_subscription,
     change_plan,
     count_period_documents,
+    create_invoice,
     ensure_subscription,
     get_billing,
+    get_invoice,
     get_plan,
     get_platform_stats,
     get_subscription,
+    list_invoices,
     list_organization_overviews,
     list_plans,
     record_payment_event,
@@ -41,11 +52,13 @@ from src.db.repositories.items import (
     list_items,
     update_item_fields,
 )
-from src.db.repositories.organizations import get_organization, update_organization
+from src.db.repositories.organizations import delete_organization, get_organization, update_organization
 from src.db.repositories.suppliers import (
+    delete_supplier,
     get_or_create_supplier,
     get_supplier,
     list_suppliers,
+    update_supplier,
 )
 from src.db.repositories.team import (
     create_invitation,
@@ -65,6 +78,7 @@ from src.db.repositories.users import (
     get_user_by_google_id,
     get_user_with_org,
     list_users,
+    set_email_verified,
     set_password_hash,
     set_user_role,
     touch_last_login,
@@ -76,7 +90,10 @@ from src.db.seeding import ensure_default_plans
 
 __all__ = [
     "apply_subscription_payment",
+    "cancel_subscription",
     "change_plan",
+    "consume_auth_token",
+    "create_auth_token",
     "claim_document_by_id",
     "claim_next_queued",
     "count_active_admins",
@@ -85,18 +102,23 @@ __all__ = [
     "create_document",
     "create_exception",
     "create_invitation",
+    "create_invoice",
     "create_user_with_org",
     "ensure_default_plans",
     "ensure_subscription",
     "expire_pending_invitations",
+    "get_auth_token",
     "get_billing",
     "get_document",
     "get_document_by_hash",
     "get_exception",
     "get_invitation_by_token",
+    "get_invoice",
     "get_item",
     "get_member",
     "get_or_create_supplier",
+    "delete_organization",
+    "delete_supplier",
     "get_organization",
     "get_pending_by_email",
     "get_platform_stats",
@@ -109,9 +131,12 @@ __all__ = [
     "get_user_by_google_id",
     "get_user_with_org",
     "insert_item",
+    "invalidate_auth_tokens",
+    "list_audit_events",
     "list_documents",
     "list_exceptions",
     "list_invitations",
+    "list_invoices",
     "list_items",
     "list_organization_overviews",
     "list_plans",
@@ -121,11 +146,13 @@ __all__ = [
     "mark_invitation_accepted",
     "mark_processed",
     "mark_processing",
+    "record_audit_event",
     "reset_document_children",
     "reset_document_for_reprocess",
     "resolve_exception",
     "record_payment_event",
     "revoke_invitation",
+    "set_email_verified",
     "set_password_hash",
     "set_user_role",
     "touch_last_login",
@@ -135,4 +162,5 @@ __all__ = [
     "update_member",
     "update_organization",
     "update_profile",
+    "update_supplier",
 ]

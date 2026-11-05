@@ -11,6 +11,8 @@ import TeamPage from "./pages/TeamPage";
 import BillingPage from "./pages/BillingPage";
 import ProfilePage from "./pages/ProfilePage";
 import SuperAdminPage from "./pages/SuperAdminPage";
+import SuppliersPage from "./pages/SuppliersPage";
+import SettingsPage from "./pages/SettingsPage";
 
 function Splash() {
   return (
@@ -48,7 +50,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === "admin" && !isSuperAdmin) setView("dashboard");
-    if (["team", "billing"].includes(view) && !canManage) setView("dashboard");
+    if (["team", "billing", "settings"].includes(view) && !canManage) setView("dashboard");
   }, [view, isSuperAdmin, canManage]);
 
   if (loading) return <Splash />;
@@ -64,10 +66,14 @@ export default function App() {
         <ItemsPage />
       ) : view === "exceptions" ? (
         <ExceptionsPage />
+      ) : view === "suppliers" ? (
+        <SuppliersPage />
       ) : view === "team" ? (
         <TeamPage />
       ) : view === "billing" ? (
         <BillingPage />
+      ) : view === "settings" ? (
+        <SettingsPage />
       ) : view === "profile" ? (
         <ProfilePage />
       ) : view === "admin" ? (

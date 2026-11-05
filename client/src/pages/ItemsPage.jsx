@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, labelize } from "../lib/format";
-import { DownloadIcon, SearchIcon } from "../components/Icons";
+import { ArrowLeftIcon, ArrowRightIcon, DownloadIcon, SearchIcon } from "../components/Icons";
 
 export default function ItemsPage() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
@@ -15,7 +17,7 @@ export default function ItemsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: "1", page_size: "100" });
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
       if (search.trim()) params.set("search", search.trim());
       if (reviewStatus) params.set("review_status", reviewStatus);
       const data = await api(`/api/items?${params.toString()}`);
@@ -27,7 +29,7 @@ export default function ItemsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, reviewStatus]);
+  }, [page, pageSize, search, reviewStatus]);
 
   useEffect(() => {
     load();
@@ -35,7 +37,18 @@ export default function ItemsPage() {
 
   function submitSearch(event) {
     event.preventDefault();
+    setPage(1);
     setSearch(searchInput);
+  }
+
+  function changeStatus(value) {
+    setPage(1);
+    setReviewStatus(value);
+  }
+
+  function changePageSize(value) {
+    setPageSize(Number(value));
+    setPage(1);
   }
 
   function exportItems(format) {
@@ -44,6 +57,8 @@ export default function ItemsPage() {
     if (reviewStatus) params.set("review_status", reviewStatus);
     window.open(`/api/exports/items?${params.toString()}`, "_blank", "noopener");
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="page-stack">
@@ -74,7 +89,7 @@ export default function ItemsPage() {
           <select
             className="filter-select"
             value={reviewStatus}
-            onChange={(event) => setReviewStatus(event.target.value)}
+            onChange={(event) => changeStatus(event.target.value)}
           >
             <option value="">Todos los estados</option>
             <option value="auto_approved">Auto-aprobados</option>
@@ -82,6 +97,14 @@ export default function ItemsPage() {
             <option value="approved">Aprobados</option>
             <option value="rejected">Rechazados</option>
           </select>
+          <label className="page-size">
+            <span>Por página</span>
+            <select value={pageSize} onChange={(event) => changePageSize(event.target.value)}>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
           <button type="button" className="button ghost" onClick={load}>
             Actualizar
           </button>
@@ -103,61 +126,84 @@ export default function ItemsPage() {
             <p>Procesa un documento o ajusta los filtros de búsqueda.</p>
           </div>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Proveedor</th>
-                  <th>Ítem</th>
-                  <th>Precio original</th>
-                  <th>Precio normalizado</th>
-                  <th>Confianza</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{formatDate(item.price_date)}</td>
-                    <td>{item.supplier_name || "Sin proveedor"}</td>
-                    <td>
-                      <div className="cell-title">{item.original_description}</div>
-                      <div className="cell-sub">
-                        {item.sku ? `SKU ${item.sku} · ` : ""}
-                        {item.normalized_description}
-                      </div>
-                    </td>
-                    <td>
-                      <div>{formatMoney(item.original_unit_price, item.currency)}</div>
-                      <div className="cell-sub">por {item.original_unit || "unidad"}</div>
-                    </td>
-                    <td>
-                      <div>{formatMoney(item.normalized_unit_price, item.currency)}</div>
-                      <div className="cell-sub">
-                        por {item.base_unit || "unidad"}
-                        {Number(item.unit_factor) !== 1
-                          ? ` · factor ${formatNumber(item.unit_factor, 4)}`
-                          : ""}
-                      </div>
-                    </td>
-                    <td>
-                      <span
-                        className={`confidence ${Number(item.confidence) < 0.75 ? "low" : "ok"}`}
-                      >
-                        {Math.round(Number(item.confidence) * 100)}%
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge status-${item.review_status}`}>
-                        {labelize(item.review_status)}
-                      </span>
-                    </td>
+          <>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Proveedor</th>
+                    <th>Ítem</th>
+                    <th>Precio original</th>
+                    <th>Precio normalizado</th>
+                    <th>Confianza</th>
+                    <th>Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{formatDate(item.price_date)}</td>
+                      <td>{item.supplier_name || "Sin proveedor"}</td>
+                      <td>
+                        <div className="cell-title">{item.original_description}</div>
+                        <div className="cell-sub">
+                          {item.sku ? `SKU ${item.sku} · ` : ""}
+                          {item.normalized_description}
+                        </div>
+                      </td>
+                      <td>
+                        <div>{formatMoney(item.original_unit_price, item.currency)}</div>
+                        <div className="cell-sub">por {item.original_unit || "unidad"}</div>
+                      </td>
+                      <td>
+                        <div>{formatMoney(item.normalized_unit_price, item.currency)}</div>
+                        <div className="cell-sub">
+                          por {item.base_unit || "unidad"}
+                          {Number(item.unit_factor) !== 1
+                            ? ` · factor ${formatNumber(item.unit_factor, 4)}`
+                            : ""}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`confidence ${Number(item.confidence) < 0.75 ? "low" : "ok"}`}
+                        >
+                          {Math.round(Number(item.confidence) * 100)}%
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge status-${item.review_status}`}>
+                          {labelize(item.review_status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pagination">
+              <button
+                type="button"
+                className="button ghost small"
+                disabled={page <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                <ArrowLeftIcon /> Anterior
+              </button>
+              <span>
+                Página {page} de {totalPages} · {total} ítems
+              </span>
+              <button
+                type="button"
+                className="button ghost small"
+                disabled={page >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                Siguiente <ArrowRightIcon />
+              </button>
+            </div>
+          </>
         )}
       </section>
     </div>

@@ -9,11 +9,27 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from src.api.deps import CurrentUser
 from src.core.config import settings
 from src.core.security import cookie_max_age, create_access_token
-from src.schemas.auth import LoginRequest, MeResponse, OrganizationOut, RegisterRequest, UserOut
+from src.db import repositories
+from src.db.pool import get_pool
+from src.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    MeResponse,
+    OrganizationOut,
+    RegisterRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    UserOut,
+    VerifyEmailRequest,
+)
 from src.services.auth_service import (
     authenticate_with_password,
     register_with_password,
+    request_password_reset,
+    resend_verification,
+    reset_password_with_token,
     upsert_google_user,
+    verify_email_with_token,
 )
 from src.services.recaptcha_service import verify_recaptcha
 
@@ -43,6 +59,7 @@ def _user_out(user: dict) -> UserOut:
         timezone=user.get("timezone", "America/Santiago"),
         notify_quota=user.get("notify_quota", True),
         notify_weekly=user.get("notify_weekly", True),
+        email_verified=user.get("email_verified", True),
         active=user["active"],
         last_login_at=user["last_login_at"],
         created_at=user["created_at"],
@@ -86,6 +103,22 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+async def _audit(user: dict, action: str, request: Request) -> None:
+    try:
+        async with get_pool().connection() as conn:
+            await repositories.record_audit_event(
+                conn,
+                org_id=user.get("org_id"),
+                user_id=user.get("id"),
+                action=action,
+                entity_type="auth",
+                entity_id=str(user.get("id") or ""),
+                ip_address=_client_ip(request),
+            )
+    except Exception:
+        logger.exception("No se pudo registrar el evento de auditoría %s", action)
+
+
 @router.get("/config")
 async def auth_config() -> dict:
     """Configuración pública que el cliente necesita para autenticarse."""
@@ -115,6 +148,7 @@ async def register(
         organization_name=payload.organization_name,
     )
     _set_session_cookie(response, user)
+    await _audit(user, "auth.register", request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -131,6 +165,7 @@ async def login(
     )
     user = await authenticate_with_password(email=payload.email, password=payload.password)
     _set_session_cookie(response, user)
+    await _audit(user, "auth.login", request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -176,3 +211,32 @@ async def logout():
         samesite=settings.cookie_samesite,
     )
     return response
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, request: Request) -> dict:
+    await verify_recaptcha(
+        payload.recaptcha_token,
+        remote_ip=_client_ip(request),
+        expected_action="forgot_password",
+    )
+    await request_password_reset(email=payload.email)
+    return {"success": True, "message": "Si el email existe, recibirás un enlace de recuperación."}
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest) -> dict:
+    await reset_password_with_token(token=payload.token, password=payload.password)
+    return {"success": True, "message": "Contraseña actualizada. Ya puedes iniciar sesión."}
+
+
+@router.post("/verify-email")
+async def verify_email(payload: VerifyEmailRequest) -> dict:
+    await verify_email_with_token(token=payload.token)
+    return {"success": True, "message": "Email verificado correctamente."}
+
+
+@router.post("/resend-verification")
+async def resend_verification_email(payload: ResendVerificationRequest) -> dict:
+    await resend_verification(email=payload.email)
+    return {"success": True, "message": "Si la cuenta existe y no está verificada, recibirás un correo."}

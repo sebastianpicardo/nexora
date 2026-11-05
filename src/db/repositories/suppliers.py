@@ -37,6 +37,43 @@ async def get_supplier(conn: AsyncConnection, org_id: UUID | str, supplier_id: U
         return await cur.fetchone()
 
 
+async def update_supplier(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID | str,
+    supplier_id: UUID | str,
+    name: str | None = None,
+    tax_id: str | None = None,
+    email: str | None = None,
+) -> dict | None:
+    clean_name = " ".join((name or "").split()) if name is not None else None
+    normalized = normalize_supplier_name(clean_name) if clean_name else None
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            UPDATE suppliers
+            SET name = COALESCE(%s, name),
+                normalized_name = COALESCE(%s, normalized_name),
+                tax_id = COALESCE(%s, tax_id),
+                email = COALESCE(%s, email),
+                updated_at = now()
+            WHERE org_id = %s AND id = %s
+            RETURNING *
+            """,
+            (clean_name, normalized, tax_id, email, str(org_id), str(supplier_id)),
+        )
+        return await cur.fetchone()
+
+
+async def delete_supplier(conn: AsyncConnection, org_id: UUID | str, supplier_id: UUID | str) -> bool:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "DELETE FROM suppliers WHERE org_id = %s AND id = %s",
+            (str(org_id), str(supplier_id)),
+        )
+        return cur.rowcount > 0
+
+
 async def get_or_create_supplier(
     conn: AsyncConnection,
     *,

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Términos de servicio · NEXORA</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b12;
+        --surface: #0f172a;
+        --ink: #f8fafc;
+        --muted: #94a3b8;
+        --line: rgba(148, 163, 184, 0.2);
+        --brand: #10b981;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.12), transparent 32%), var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        line-height: 1.65;
+      }
+      main { max-width: 860px; margin: 0 auto; padding: 56px 24px 80px; }
+      .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+      .mark {
+        width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center;
+        background: linear-gradient(145deg, #10b981, #059669); color: #03120d; font-weight: 800; font-size: 18px;
+      }
+      .brand strong { letter-spacing: 0.18em; font-size: 14px; }
+      h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -0.03em; margin: 0 0 8px; }
+      .updated { color: var(--muted); font-size: 13px; margin-bottom: 36px; }
+      h2 { font-size: 19px; margin: 34px 0 10px; }
+      p, li { color: var(--muted); font-size: 14.5px; }
+      ul { padding-left: 20px; }
+      a { color: var(--brand); }
+      .back {
+        display: inline-flex; margin-top: 40px; padding: 10px 16px; border-radius: 10px;
+        border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+        text-decoration: none; font-weight: 700; font-size: 13px;
+      }
+      .notice {
+        margin-top: 28px; padding: 14px 16px; border-radius: 12px;
+        border: 1px solid rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.08);
+        color: var(--muted); font-size: 13px;
+      }
+      footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><div class="mark">N</div><strong>NEXORA</strong></div>
+      <h1>Términos de servicio</h1>
+      <div class="updated">Última actualización: 5 de noviembre de 2026</div>
+
+      <p>
+        Estos términos regulan el acceso y uso de NEXORA, una plataforma B2B de análisis y auditoría
+        automatizada de compras, precios y documentos para distribuidores industriales.
+      </p>
+
+      <h2>1. Cuenta y organización</h2>
+      <p>
+        Para usar NEXORA debes crear una cuenta y una organización. Eres responsable de mantener la
+        confidencialidad de tus credenciales y de la actividad realizada por los miembros de tu
+        organización. Los roles disponibles son owner, admin, analyst, user, auditor y viewer.
+      </p>
+
+      <h2>2. Uso permitido</h2>
+      <ul>
+        <li>Subir documentos sobre los que tengas derechos o autorización de uso.</li>
+        <li>No intentar vulnerar el aislamiento entre organizaciones ni los controles de acceso.</li>
+        <li>No usar la plataforma para fines ilícitos ni para procesar datos sensibles no autorizados.</li>
+      </ul>
+
+      <h2>3. Contenido y propiedad intelectual</h2>
+      <p>
+        Conservas la titularidad de los documentos que cargas. Otorgas a NEXORA una licencia limitada
+        para procesar esos documentos con el único fin de entregar el servicio de extracción,
+        normalización y auditoría. El software, la marca y los elementos de la interfaz son propiedad
+        de NEXORA.
+      </p>
+
+      <h2>4. Planes, pagos y cancelación</h2>
+      <p>
+        Los planes de pago se facturan de forma recurrente según el proveedor de pagos configurado.
+        Puedes cancelar tu suscripción en cualquier momento desde el panel de facturación; la
+        cancelación se aplica al final del período vigente. Los impuestos aplicables corren por cuenta
+        del cliente.
+      </p>
+
+      <h2>5. Disponibilidad y límites</h2>
+      <p>
+        La plataforma puede imponer límites de documentos, tamaño de archivos y tasa de solicitudes.
+        El servicio se entrega "tal cual" y puede requerir mantenimiento programado. No garantizamos
+        resultados de extracción perfectos: las excepciones deben revisarse humanamente.
+      </p>
+
+      <h2>6. Terminación</h2>
+      <p>
+        Puedes eliminar tu organización desde Configuración. NEXORA puede suspender cuentas que
+        incumplan estos términos, realicen abuso del servicio o afecten la seguridad de otros clientes.
+      </p>
+
+      <h2>7. Contacto</h2>
+      <p>Para consultas sobre estos términos escribe a <a href="mailto:legal@nexora.app">legal@nexora.app</a>.</p>
+
+      <div class="notice">
+        Este documento es un modelo operativo y debe ser revisado por asesoría legal antes de su uso
+        comercial definitivo.
+      </div>
+
+      <a class="back" href="/">Volver a NEXORA</a>
+      <footer>© 2026 NEXORA. Todos los derechos reservados.</footer>
+    </main>
+  </body>
+</html>

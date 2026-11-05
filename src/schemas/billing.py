@@ -66,6 +66,23 @@ class CheckoutOut(BaseModel):
     currency: str
 
 
+class InvoiceOut(BaseModel):
+    id: UUID
+    provider: str
+    provider_invoice_id: str | None = None
+    amount: float
+    currency: str
+    status: str
+    period_start: date | None = None
+    period_end: date | None = None
+    paid_at: datetime | None = None
+    created_at: datetime
+
+
+class InvoiceListResponse(BaseModel):
+    items: list[InvoiceOut]
+
+
 class WebhookAck(BaseModel):
     success: bool = True
     received: bool = True

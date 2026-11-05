@@ -271,6 +271,91 @@ async def apply_subscription_payment(
     return await get_billing(conn, org_id)
 
 
+async def cancel_subscription(conn: AsyncConnection, org_id: UUID | str) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            UPDATE subscriptions
+            SET status = 'canceled', updated_at = now()
+            WHERE org_id = %s
+            RETURNING id
+            """,
+            (str(org_id),),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return await get_billing(conn, org_id)
+
+
+async def create_invoice(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID | str,
+    provider: str,
+    amount: float,
+    currency: str,
+    status: str = "paid",
+    provider_invoice_id: str | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            INSERT INTO invoices (
+                org_id, provider, provider_invoice_id, amount, currency, status,
+                period_start, period_end, metadata
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            ON CONFLICT (provider, provider_invoice_id) DO UPDATE SET
+                status = EXCLUDED.status,
+                amount = EXCLUDED.amount,
+                updated_at = now()
+            RETURNING *
+            """,
+            (
+                str(org_id),
+                provider,
+                provider_invoice_id,
+                amount,
+                currency,
+                status,
+                period_start,
+                period_end,
+                json.dumps(metadata or {}, default=str),
+            ),
+        )
+        row = await cur.fetchone()
+        assert row is not None
+        return row
+
+
+async def list_invoices(conn: AsyncConnection, org_id: UUID | str, *, limit: int = 50) -> list[dict]:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT *
+            FROM invoices
+            WHERE org_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(org_id), limit),
+        )
+        return list(await cur.fetchall())
+
+
+async def get_invoice(conn: AsyncConnection, org_id: UUID | str, invoice_id: UUID | str) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "SELECT * FROM invoices WHERE org_id = %s AND id = %s",
+            (str(org_id), str(invoice_id)),
+        )
+        return await cur.fetchone()
+
+
 async def count_period_documents(conn: AsyncConnection, org_id: UUID | str) -> int:
     billing = await get_billing(conn, org_id)
     return int(billing["usage"]["used"])

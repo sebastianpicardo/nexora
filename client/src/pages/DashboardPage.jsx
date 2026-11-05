@@ -18,6 +18,13 @@ export default function DashboardPage({ onNavigate }) {
   const [error, setError] = useState("");
   const [autoPaused, setAutoPaused] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currency, setCurrency] = useState("");
+
+  useEffect(() => {
+    if (!currency && organization?.default_currency) {
+      setCurrency(organization.default_currency);
+    }
+  }, [organization?.default_currency, currency]);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +33,8 @@ export default function DashboardPage({ onNavigate }) {
 
     async function poll() {
       try {
-        const data = await api("/api/dashboard/summary");
+        const query = currency ? `?currency=${encodeURIComponent(currency)}` : "";
+        const data = await api(`/api/dashboard/summary${query}`);
         if (cancelled) return;
         failures = 0;
         setSummary(data);
@@ -52,7 +60,7 @@ export default function DashboardPage({ onNavigate }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [refreshKey]);
+  }, [refreshKey, currency]);
 
   function retry() {
     setLoading(true);
@@ -62,7 +70,15 @@ export default function DashboardPage({ onNavigate }) {
   }
 
   const spendByCurrency = summary?.spend_by_currency || [];
-  const primarySpend = spendByCurrency[0];
+  const activeCurrency = currency || organization?.default_currency || "CLP";
+  const primarySpend = spendByCurrency.find((row) => row.currency === activeCurrency);
+  const currencyOptions = Array.from(
+    new Set([
+      activeCurrency,
+      organization?.default_currency,
+      ...spendByCurrency.map((row) => row.currency),
+    ].filter(Boolean)),
+  );
   const quota = summary?.quota || billing?.usage;
   const planName = billing?.subscription?.plan_name || "Free";
   const hasActivity = Boolean(
@@ -163,13 +179,17 @@ export default function DashboardPage({ onNavigate }) {
         />
         <StatCard
           label="Compra del mes"
-          value={loading ? "—" : primarySpend ? formatMoney(primarySpend.amount, primarySpend.currency) : "—"}
+          value={
+            loading
+              ? "—"
+              : formatMoney(primarySpend?.amount ?? 0, activeCurrency)
+          }
           detail={
             spendByCurrency.length > 1
               ? `${spendByCurrency.length} monedas con compras este mes`
               : primarySpend
-                ? `Moneda ${primarySpend.currency}`
-                : "Sin compras registradas este mes"
+                ? `Moneda ${activeCurrency}`
+                : `Sin compras en ${activeCurrency} este mes`
           }
         />
       </section>
@@ -179,11 +199,26 @@ export default function DashboardPage({ onNavigate }) {
           <div className="card-head">
             <div>
               <h2>Compras y alertas</h2>
-              <p>Últimos 6 meses en {organization?.default_currency || "CLP"}.</p>
+              <p>Últimos 6 meses en {activeCurrency}.</p>
             </div>
-            <span className="soft-chip">Tendencia</span>
+            <div className="card-head-tools">
+              <label className="page-size">
+                <span>Moneda</span>
+                <select
+                  value={activeCurrency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                >
+                  {currencyOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="soft-chip">Tendencia</span>
+            </div>
           </div>
-          <SpendChart data={summary?.monthly_purchases || []} currency={organization?.default_currency} />
+          <SpendChart data={summary?.monthly_purchases || []} currency={activeCurrency} />
         </section>
 
         <section className="stack">

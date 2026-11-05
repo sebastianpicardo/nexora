@@ -16,6 +16,7 @@ from src.schemas.team import (
     TeamMemberOut,
     TeamResponse,
 )
+from src.services import email_service
 
 router = APIRouter(prefix="/api/team", tags=["team"])
 
@@ -80,7 +81,23 @@ async def invite_member(
             role=payload.role,
             invited_by=user["id"],
         )
-        return _invitation_out(row)
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="team.invite",
+            entity_type="invitation",
+            entity_id=str(row["id"]),
+            metadata={"email": payload.email, "role": payload.role},
+        )
+    invitation = _invitation_out(row)
+    await email_service.send_invitation_email(
+        to=payload.email,
+        organization=user.get("org_name") or "tu organización",
+        invite_url=invitation.invite_url,
+        role=payload.role,
+    )
+    return invitation
 
 
 @router.patch("/members/{member_id}", response_model=TeamMemberOut)
@@ -121,6 +138,15 @@ async def update_member(
         )
         if updated is None:
             raise HTTPException(status_code=404, detail="Miembro no encontrado")
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="team.member_update",
+            entity_type="user",
+            entity_id=str(member_id),
+            metadata={"role": payload.role, "active": payload.active},
+        )
         return TeamMemberOut.model_validate(updated)
 
 
@@ -131,6 +157,15 @@ async def revoke_invitation(
 ):
     async with get_pool().connection() as conn:
         revoked = await repositories.revoke_invitation(conn, user["org_id"], invitation_id)
+        if revoked:
+            await repositories.record_audit_event(
+                conn,
+                org_id=user["org_id"],
+                user_id=user["id"],
+                action="team.invitation_revoke",
+                entity_type="invitation",
+                entity_id=str(invitation_id),
+            )
     if not revoked:
         raise HTTPException(status_code=404, detail="Invitación no encontrada")
     return None

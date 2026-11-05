@@ -21,6 +21,7 @@ USER_SELECT = """
         u.timezone,
         u.notify_quota,
         u.notify_weekly,
+        u.email_verified,
         u.active,
         u.last_login_at,
         u.created_at,
@@ -102,6 +103,7 @@ async def create_user_with_org(
     price_spike_threshold_pct: float | None = None,
     min_confidence: float | None = None,
     default_currency: str | None = None,
+    email_verified: bool = True,
 ) -> dict:
     email = email.strip().lower()
     display_name = (name or email.split("@")[0]).strip() or "Usuario"
@@ -112,9 +114,10 @@ async def create_user_with_org(
             await cur.execute(
                 """
                 INSERT INTO users (
-                    org_id, email, google_id, password_hash, name, avatar_url, role, active, last_login_at
+                    org_id, email, google_id, password_hash, name, avatar_url, role,
+                    active, last_login_at, email_verified
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, now(), %s)
                 RETURNING id
                 """,
                 (
@@ -125,6 +128,7 @@ async def create_user_with_org(
                     display_name,
                     avatar_url or "",
                     invitation["role"],
+                    email_verified,
                 ),
             )
             user_row = await cur.fetchone()
@@ -175,12 +179,13 @@ async def create_user_with_org(
         await cur.execute(
             """
             INSERT INTO users (
-                org_id, email, google_id, password_hash, name, avatar_url, role, active, last_login_at
+                org_id, email, google_id, password_hash, name, avatar_url, role,
+                active, last_login_at, email_verified
             )
-            VALUES (%s, %s, %s, %s, %s, %s, 'owner', TRUE, now())
+            VALUES (%s, %s, %s, %s, %s, %s, 'owner', TRUE, now(), %s)
             RETURNING id
             """,
-            (org_id, email, google_id, password_hash, display_name, avatar_url or ""),
+            (org_id, email, google_id, password_hash, display_name, avatar_url or "", email_verified),
         )
         user_row = await cur.fetchone()
         assert user_row is not None
@@ -224,6 +229,14 @@ async def set_password_hash(conn: AsyncConnection, user_id: UUID | str, password
         await cur.execute(
             "UPDATE users SET password_hash = %s WHERE id = %s",
             (password_hash, str(user_id)),
+        )
+
+
+async def set_email_verified(conn: AsyncConnection, user_id: UUID | str, verified: bool = True) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "UPDATE users SET email_verified = %s WHERE id = %s",
+            (verified, str(user_id)),
         )
 
 

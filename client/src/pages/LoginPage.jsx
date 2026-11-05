@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { CheckIcon } from "../components/Icons";
+import { CheckIcon, CloseIcon, MailIcon, LockIcon, ArrowLeftIcon } from "../components/Icons";
 import PricingTable from "../components/PricingTable";
 import { getRecaptchaToken } from "../lib/recaptcha";
 
@@ -45,23 +45,45 @@ function passwordChecks(password) {
   ];
 }
 
+const MODES = {
+  LOGIN: "login",
+  REGISTER: "register",
+  FORGOT: "forgot",
+  RESET: "reset",
+  VERIFY: "verify",
+};
+
 export default function LoginPage({ error }) {
-  const { login, register, loginWithGoogle } = useAuth();
-  const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const { login, register, loginWithGoogle, forgotPassword, resetPassword, verifyEmail, resendVerification } = useAuth();
+  const [mode, setMode] = useState(MODES.LOGIN);
+  const [form, setForm] = useState({ name: "", email: "", password: "", token: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
 
   const params = new URLSearchParams(window.location.search);
   const authError = params.get("auth") === "error";
   const authMessage = authError
     ? "No pudimos completar el inicio de sesión con Google. Intenta nuevamente."
     : "";
+  const verifyToken = params.get("verify_token");
+  const resetToken = params.get("reset_token");
   const feedback = message || authMessage || error;
 
+  // Auto-switch mode based on URL tokens
   const checks = useMemo(() => passwordChecks(form.password), [form.password]);
   const strength = checks.filter(Boolean).length;
+
+  useEffect(() => {
+    if (verifyToken && mode === MODES.LOGIN) {
+      setMode(MODES.VERIFY);
+      setForm((prev) => ({ ...prev, token: verifyToken }));
+    } else if (resetToken && mode === MODES.LOGIN) {
+      setMode(MODES.RESET);
+      setForm((prev) => ({ ...prev, token: resetToken }));
+    }
+  }, [verifyToken, resetToken, mode]);
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -70,18 +92,20 @@ export default function LoginPage({ error }) {
   function switchMode(next) {
     setMode(next);
     setMessage("");
+    setSuccess("");
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setMessage("");
+    setSuccess("");
 
     const email = form.email.trim().toLowerCase();
-    if (!EMAIL_RE.test(email)) {
+    if (!EMAIL_RE.test(email) && (mode === MODES.LOGIN || mode === MODES.REGISTER || mode === MODES.FORGOT)) {
       setMessage("Ingresa un email válido.");
       return;
     }
-    if (mode === "register") {
+    if (mode === MODES.REGISTER) {
       if (form.name.trim().length < 2) {
         setMessage("Ingresa tu nombre completo.");
         return;
@@ -90,26 +114,69 @@ export default function LoginPage({ error }) {
         setMessage("La contraseña necesita 8 caracteres, una mayúscula, una minúscula y un número.");
         return;
       }
-    } else if (!form.password) {
+    } else if (mode === MODES.RESET) {
+      if (!form.token) {
+        setMessage("Falta el token de recuperación.");
+        return;
+      }
+      if (strength < checks.length) {
+        setMessage("La contraseña necesita 8 caracteres, una mayúscula, una minúscula y un número.");
+        return;
+      }
+    } else if (mode === MODES.LOGIN && !form.password) {
       setMessage("Ingresa tu contraseña.");
+      return;
+    } else if (mode === MODES.VERIFY && !form.token) {
+      setMessage("Falta el token de verificación.");
       return;
     }
 
     setPending(true);
     try {
-      const recaptchaToken = await getRecaptchaToken(mode);
-      if (mode === "login") {
+      if (mode === MODES.LOGIN) {
+        const recaptchaToken = await getRecaptchaToken("login");
         await login({ email, password: form.password, recaptchaToken });
-      } else {
+      } else if (mode === MODES.REGISTER) {
+        const recaptchaToken = await getRecaptchaToken("register");
         await register({
           name: form.name.trim(),
           email,
           password: form.password,
           recaptchaToken,
         });
+      } else if (mode === MODES.FORGOT) {
+        const recaptchaToken = await getRecaptchaToken("forgot_password");
+        await forgotPassword({ email, recaptchaToken });
+        setSuccess("Si el email existe, recibirás un enlace de recuperación.");
+      } else if (mode === MODES.RESET) {
+        await resetPassword({ token: form.token, password: form.password });
+        setSuccess("Contraseña actualizada. Ya puedes iniciar sesión.");
+        setTimeout(() => switchMode(MODES.LOGIN), 2000);
+      } else if (mode === MODES.VERIFY) {
+        await verifyEmail({ token: form.token });
+        setSuccess("Email verificado correctamente.");
+        setTimeout(() => switchMode(MODES.LOGIN), 2000);
       }
     } catch (err) {
       setMessage(err.message || "No pudimos completar la operación.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setMessage("");
+    setSuccess("");
+    if (!EMAIL_RE.test(form.email)) {
+      setMessage("Ingresa un email válido.");
+      return;
+    }
+    setPending(true);
+    try {
+      await resendVerification({ email: form.email });
+      setSuccess("Si la cuenta existe y no está verificada, recibirás un correo.");
+    } catch (err) {
+      setMessage(err.message || "No se pudo reenviar el correo.");
     } finally {
       setPending(false);
     }
@@ -152,29 +219,37 @@ export default function LoginPage({ error }) {
             <button
               type="button"
               role="tab"
-              aria-selected={mode === "login"}
-              className={`auth-tab ${mode === "login" ? "active" : ""}`}
-              onClick={() => switchMode("login")}
+              aria-selected={mode === MODES.LOGIN}
+              className={`auth-tab ${mode === MODES.LOGIN ? "active" : ""}`}
+              onClick={() => switchMode(MODES.LOGIN)}
             >
               Iniciar sesión
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={mode === "register"}
-              className={`auth-tab ${mode === "register" ? "active" : ""}`}
-              onClick={() => switchMode("register")}
+              aria-selected={mode === MODES.REGISTER}
+              className={`auth-tab ${mode === MODES.REGISTER ? "active" : ""}`}
+              onClick={() => switchMode(MODES.REGISTER)}
             >
               Crear cuenta
             </button>
           </div>
 
           <div className="login-card-head">
-            <h2>{mode === "login" ? "Accede a tu panel" : "Crea tu espacio de trabajo"}</h2>
+            <h2>
+              {mode === MODES.LOGIN && "Accede a tu panel"}
+              {mode === MODES.REGISTER && "Crea tu espacio de trabajo"}
+              {mode === MODES.FORGOT && "Recuperar contraseña"}
+              {mode === MODES.RESET && "Nueva contraseña"}
+              {mode === MODES.VERIFY && "Verificar email"}
+            </h2>
             <p>
-              {mode === "login"
-                ? "Ingresa con tu email o usa tu cuenta corporativa de Google."
-                : "Registra tu organización en menos de un minuto."}
+              {mode === MODES.LOGIN && "Ingresa con tu email o usa tu cuenta corporativa de Google."}
+              {mode === MODES.REGISTER && "Registra tu organización en menos de un minuto."}
+              {mode === MODES.FORGOT && "Te enviaremos un enlace para restablecer tu contraseña."}
+              {mode === MODES.RESET && "Tu nueva contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número."}
+              {mode === MODES.VERIFY && "Ingresa el token recibido por email para verificar tu cuenta."}
             </p>
           </div>
 
@@ -183,9 +258,14 @@ export default function LoginPage({ error }) {
               {feedback}
             </div>
           ) : null}
+          {success ? (
+            <div className="alert success" role="alert">
+              {success}
+            </div>
+          ) : null}
 
           <form className="auth-form" onSubmit={handleSubmit} noValidate>
-            {mode === "register" ? (
+            {mode === MODES.REGISTER ? (
               <label className="auth-field">
                 <span>Nombre completo</span>
                 <input
@@ -202,46 +282,50 @@ export default function LoginPage({ error }) {
               </label>
             ) : null}
 
-            <label className="auth-field">
-              <span>Email corporativo</span>
-              <input
-                type="email"
-                inputMode="email"
-                aria-label="Email corporativo"
-                autoComplete="email"
-                placeholder="tu@empresa.com"
-                value={form.email}
-                onChange={(event) => update("email", event.target.value)}
-                disabled={pending}
-                required
-              />
-            </label>
-
-            <label className="auth-field">
-              <span>Contraseña</span>
-              <div className="auth-password">
+            {mode !== MODES.VERIFY && mode !== MODES.RESET ? (
+              <label className="auth-field">
+                <span>Email corporativo</span>
                 <input
-                  type={showPassword ? "text" : "password"}
-                  aria-label="Contraseña"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  placeholder={mode === "login" ? "Tu contraseña" : "Mínimo 8 caracteres"}
-                  value={form.password}
-                  onChange={(event) => update("password", event.target.value)}
+                  type="email"
+                  inputMode="email"
+                  aria-label="Email corporativo"
+                  autoComplete="email"
+                  placeholder="tu@empresa.com"
+                  value={form.email}
+                  onChange={(event) => update("email", event.target.value)}
                   disabled={pending}
                   required
                 />
-                <button
-                  type="button"
-                  className="auth-password-toggle"
-                  onClick={() => setShowPassword((value) => !value)}
-                  tabIndex={-1}
-                >
-                  {showPassword ? "Ocultar" : "Mostrar"}
-                </button>
-              </div>
-            </label>
+              </label>
+            ) : null}
 
-            {mode === "register" ? (
+            {mode === MODES.LOGIN || mode === MODES.REGISTER || mode === MODES.RESET ? (
+              <label className="auth-field">
+                <span>Contraseña</span>
+                <div className="auth-password">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    aria-label="Contraseña"
+                    autoComplete={mode === MODES.LOGIN ? "current-password" : "new-password"}
+                    placeholder={mode === MODES.LOGIN ? "Tu contraseña" : "Mínimo 8 caracteres"}
+                    value={form.password}
+                    onChange={(event) => update("password", event.target.value)}
+                    disabled={pending}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword((value) => !value)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
+              </label>
+            ) : null}
+
+            {mode === MODES.REGISTER ? (
               <div className="pw-meter" aria-live="polite">
                 <div className="pw-meter-track">
                   <span className={`pw-meter-bar level-${strength}`} />
@@ -256,37 +340,121 @@ export default function LoginPage({ error }) {
               </div>
             ) : null}
 
+            {mode === MODES.RESET || mode === MODES.VERIFY ? (
+              <label className="auth-field">
+                <span>Token</span>
+                <input
+                  type="text"
+                  aria-label="Token de verificación o recuperación"
+                  autoComplete="one-time-code"
+                  placeholder="Pega aquí el token recibido por email"
+                  value={form.token}
+                  onChange={(event) => update("token", event.target.value)}
+                  disabled={pending}
+                  required
+                />
+              </label>
+            ) : null}
+
             <button type="submit" className="button primary full auth-submit" disabled={pending}>
               {pending
-                ? mode === "login"
+                ? mode === MODES.LOGIN
                   ? "Ingresando…"
-                  : "Creando cuenta…"
-                : mode === "login"
-                  ? "Ingresar con email"
-                  : "Crear cuenta gratis"}
+                  : mode === MODES.REGISTER
+                  ? "Creando cuenta…"
+                  : mode === MODES.FORGOT
+                  ? "Enviando…"
+                  : mode === MODES.RESET
+                  ? "Actualizando…"
+                  : "Verificando…"
+                : mode === MODES.LOGIN
+                ? "Ingresar con email"
+                : mode === MODES.REGISTER
+                ? "Crear cuenta gratis"
+                : mode === MODES.FORGOT
+                ? "Enviar enlace de recuperación"
+                : mode === MODES.RESET
+                ? "Actualizar contraseña"
+                : "Verificar email"}
             </button>
           </form>
 
-          <div className="login-divider">
-            <span />
-            <small>o continúa con</small>
-            <span />
+          {mode === MODES.FORGOT && (
+            <div className="login-divider">
+              <span />
+              <small>¿No recibiste el email?</small>
+              <span />
+            </div>
+          )}
+          {mode === MODES.FORGOT && (
+            <button type="button" className="button secondary full" onClick={handleResendVerification} disabled={pending}>
+              Reenviar correo de verificación
+            </button>
+          )}
+
+          {mode !== MODES.FORGOT && mode !== MODES.RESET && mode !== MODES.VERIFY && (
+            <>
+              <div className="login-divider">
+                <span />
+                <small>o continúa con</small>
+                <span />
+              </div>
+
+              <button type="button" className="google-button" onClick={loginWithGoogle} disabled={pending}>
+                <GoogleMark />
+                Continuar con Google
+              </button>
+
+              <p className="login-note">
+                Al ingresar aceptas que los documentos que subas sean procesados para extraer ítems,
+                precios y unidades. Los datos quedan aislados por organización.
+              </p>
+            </>
+          )}
+
+          <div className="auth-links">
+            {mode === MODES.LOGIN && (
+              <>
+                <button type="button" className="link-button" onClick={() => switchMode(MODES.FORGOT)}>
+                  ¿Olvidaste tu contraseña?
+                </button>
+                <button type="button" className="link-button" onClick={() => switchMode(MODES.REGISTER)}>
+                  ¿No tienes cuenta? Crear una
+                </button>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={handleResendVerification}
+                  disabled={pending}
+                >
+                  Reenviar email de verificación
+                </button>
+              </>
+            )}
+            {mode === MODES.REGISTER && (
+              <button type="button" className="link-button" onClick={() => switchMode(MODES.LOGIN)}>
+                ¿Ya tienes cuenta? Iniciar sesión
+              </button>
+            )}
+            {(mode === MODES.FORGOT || mode === MODES.RESET || mode === MODES.VERIFY) && (
+              <button type="button" className="link-button" onClick={() => switchMode(MODES.LOGIN)}>
+                <ArrowLeftIcon /> Volver al inicio de sesión
+              </button>
+            )}
           </div>
 
-          <button type="button" className="google-button" onClick={loginWithGoogle} disabled={pending}>
-            <GoogleMark />
-            Continuar con Google
-          </button>
-
-          <p className="login-note">
-            Al ingresar aceptas que los documentos que subas sean procesados para extraer ítems,
-            precios y unidades. Los datos quedan aislados por organización.
+          <p className="login-footnote">
+            ¿Necesitas acceso para tu equipo? Los roles se administran desde el panel de equipo por el
+            owner de la organización.
           </p>
         </div>
 
-        <p className="login-footnote">
-          ¿Necesitas acceso para tu equipo? Los roles se administran desde el panel de equipo por el
-          owner de la organización.
+        <p className="login-footnote legal-links">
+          <a href="/terms.html" target="_blank" rel="noopener">Términos de servicio</a>
+          <span>·</span>
+          <a href="/privacy.html" target="_blank" rel="noopener">Política de privacidad</a>
+          <span>·</span>
+          <a href="/cookies.html" target="_blank" rel="noopener">Cookies</a>
         </p>
       </section>
 
@@ -296,7 +464,7 @@ export default function LoginPage({ error }) {
           title="Empieza gratis y escala cuando lo necesites"
           subtitle="Todos los planes incluyen auditoría de precios, histórico y exportaciones."
           onSelect={() => {
-            switchMode("register");
+            switchMode(MODES.REGISTER);
             document.getElementById("auth-name")?.focus();
           }}
         />

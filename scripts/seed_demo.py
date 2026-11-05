@@ -552,12 +552,13 @@ def main() -> None:
         try:
             conn.execute("SET ROLE postgres")
         except Exception as e:
-            print(f"Información: no se pudo cambiar a rol postgres ({e}); se continuará sin desactivar RLS explícitamente.")
-        # Intentamos desactivar RLS en las tablas clave; si falla (por ejemplo, por falta de permisos), registramos y proseguimos.
+            print(f"Información: no se pudo cambiar a rol postgres ({e}).")
+        # Intentamos desactivar RLS en las tablas clave; si falla (por ejemplo,
+        # por falta de permisos), registramos y proseguimos.
         try:
             conn.execute("ALTER TABLE plans DISABLE ROW LEVEL SECURITY")
         except Exception as e:
-            print(f"Información: no se pudo desactivar RLS en plans ({e}); proseguimos confiando que ya está desactivado.")
+            print(f"Información: no se pudo desactivar RLS en plans ({e}).")
         try:
             conn.execute("ALTER TABLE subscriptions DISABLE ROW LEVEL SECURITY")
         except Exception as e:

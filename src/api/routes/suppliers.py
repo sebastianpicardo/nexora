@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.deps import CurrentUser, require_roles
 from src.db import repositories
 from src.db.pool import get_pool
-from src.schemas.suppliers import SupplierCreate, SupplierListResponse, SupplierOut
+from src.schemas.suppliers import SupplierCreate, SupplierListResponse, SupplierOut, SupplierUpdate
 
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
@@ -31,3 +33,51 @@ async def create_supplier(
             email=payload.email,
         )
     return SupplierOut.model_validate(row)
+
+
+@router.patch("/{supplier_id}", response_model=SupplierOut)
+async def update_supplier(
+    supplier_id: UUID,
+    payload: SupplierUpdate,
+    user: dict = Depends(require_roles("owner", "admin", "analyst")),
+):
+    async with get_pool().connection() as conn:
+        row = await repositories.update_supplier(
+            conn,
+            org_id=user["org_id"],
+            supplier_id=supplier_id,
+            name=payload.name,
+            tax_id=payload.tax_id,
+            email=payload.email,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="supplier.update",
+            entity_type="supplier",
+            entity_id=str(supplier_id),
+        )
+    return SupplierOut.model_validate(row)
+
+
+@router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_supplier(
+    supplier_id: UUID,
+    user: dict = Depends(require_roles("owner", "admin")),
+):
+    async with get_pool().connection() as conn:
+        deleted = await repositories.delete_supplier(conn, user["org_id"], supplier_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="supplier.delete",
+            entity_type="supplier",
+            entity_id=str(supplier_id),
+        )
+    return None

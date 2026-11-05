@@ -95,6 +95,38 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const forgotPassword = useCallback(async ({ email, recaptchaToken }) => {
+    const data = await api("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email, recaptcha_token: recaptchaToken }),
+    });
+    return data;
+  }, []);
+
+  const resetPassword = useCallback(async ({ token, password }) => {
+    const data = await api("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    });
+    return data;
+  }, []);
+
+  const verifyEmail = useCallback(async ({ token }) => {
+    const data = await api("/api/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+    return data;
+  }, []);
+
+  const resendVerification = useCallback(async ({ email }) => {
+    const data = await api("/api/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return data;
+  }, []);
+
   const role = user?.role || "";
   const value = {
     user,
@@ -112,6 +144,10 @@ export function AuthProvider({ children }) {
     logout,
     refresh,
     refreshBilling,
+    forgotPassword,
+    resetPassword,
+    verifyEmail,
+    resendVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

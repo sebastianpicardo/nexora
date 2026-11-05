@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'owner'
         CHECK (role IN ('owner', 'admin', 'analyst', 'viewer')),
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -391,6 +392,86 @@ BEGIN
     SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') INTO has_authenticated;
 
     FOREACH table_name IN ARRAY ARRAY['subscriptions', 'team_invitations']
+    LOOP
+        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);
+        IF has_anon THEN
+            EXECUTE format('REVOKE ALL ON TABLE %I FROM anon', table_name);
+        END IF;
+        IF has_authenticated THEN
+            EXECUTE format('REVOKE ALL ON TABLE %I FROM authenticated', table_name);
+        END IF;
+    END LOOP;
+END $$;
+
+-- ── Tokens de autenticación (reset password, verificación email) ───────────────
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_type TEXT NOT NULL CHECK (token_type IN ('password_reset', 'email_verify')),
+    token_hash TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS auth_tokens_user_type_expires_idx
+    ON auth_tokens (user_id, token_type, expires_at DESC);
+
+-- ── Log de auditoría ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS audit_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL DEFAULT '',
+    entity_id TEXT NOT NULL DEFAULT '',
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip_address TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS audit_events_org_created_idx
+    ON audit_events (org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_action_idx
+    ON audit_events (action);
+
+-- ── Facturas / Recibos ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    provider_invoice_id TEXT,
+    amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    currency TEXT NOT NULL DEFAULT 'USD',
+    status TEXT NOT NULL DEFAULT 'paid',
+    period_start DATE,
+    period_end DATE,
+    paid_at TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (provider, provider_invoice_id)
+);
+
+CREATE INDEX IF NOT EXISTS invoices_org_created_idx ON invoices (org_id, created_at DESC);
+
+-- Trigger updated_at para invoices
+DROP TRIGGER IF EXISTS invoices_set_updated_at ON invoices;
+CREATE TRIGGER invoices_set_updated_at
+    BEFORE UPDATE ON invoices
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- RLS para nuevas tablas
+DO $$
+DECLARE
+    table_name TEXT;
+    has_anon BOOLEAN;
+    has_authenticated BOOLEAN;
+BEGIN
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') INTO has_anon;
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') INTO has_authenticated;
+
+    FOREACH table_name IN ARRAY ARRAY['auth_tokens', 'audit_events', 'invoices']
     LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);
         IF has_anon THEN

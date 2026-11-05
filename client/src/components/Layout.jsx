@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../lib/api";
 import {
   AdminIcon,
+  BellIcon,
   BillingIcon,
   DashboardIcon,
   DocumentsIcon,
@@ -8,7 +11,9 @@ import {
   LogoutIcon,
   PricesIcon,
   ProfileIcon,
+  SettingsIcon,
   SparkIcon,
+  SuppliersIcon,
   TeamIcon,
 } from "./Icons";
 import { formatDate, initials, labelize, percent } from "../lib/format";
@@ -21,6 +26,7 @@ const NAV_SECTIONS = [
       { id: "documents", label: "Documentos", icon: DocumentsIcon },
       { id: "items", label: "Precios", icon: PricesIcon },
       { id: "exceptions", label: "Excepciones", icon: ExceptionsIcon },
+      { id: "suppliers", label: "Proveedores", icon: SuppliersIcon },
     ],
   },
   {
@@ -28,6 +34,7 @@ const NAV_SECTIONS = [
     items: [
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
       { id: "billing", label: "Facturación", icon: BillingIcon, admin: true },
+      { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },
       { id: "profile", label: "Mi perfil", icon: ProfileIcon },
     ],
   },
@@ -41,10 +48,83 @@ const ALL_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
 
 export default function Layout({ active, onNavigate, children }) {
   const { user, organization, billing, canManage, isSuperAdmin, logout } = useAuth();
+  const [summary, setSummary] = useState(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationRef = useRef(null);
   const quota = billing?.usage;
   const subscription = billing?.subscription;
   const width = quota?.unlimited ? 100 : Math.min(Number(quota?.percentage) || 0, 100);
   const quotaTone = quota?.exceeded ? "danger" : quota?.warning ? "warning" : "ok";
+
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/dashboard/summary")
+      .then((data) => {
+        if (!cancelled) setSummary(data);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
+
+  useEffect(() => {
+    function handleClick(event) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const notifications = [];
+  if (quota?.exceeded) {
+    notifications.push({
+      id: "quota-exceeded",
+      tone: "danger",
+      title: "Límite de documentos alcanzado",
+      body: "Actualiza tu plan para seguir cargando archivos.",
+      action: "billing",
+    });
+  } else if (quota?.warning) {
+    notifications.push({
+      id: "quota-warning",
+      tone: "warning",
+      title: "Estás cerca del límite mensual",
+      body: `Usaste ${quota.used}/${quota.limit} documentos de tu plan.`,
+      action: "billing",
+    });
+  }
+  if (summary?.documents_pending) {
+    notifications.push({
+      id: "documents-pending",
+      tone: "info",
+      title: `${summary.documents_pending} documento(s) en proceso`,
+      body: "La extracción continúa en segundo plano.",
+      action: "documents",
+    });
+  }
+  if (summary?.exceptions_pending) {
+    notifications.push({
+      id: "exceptions-pending",
+      tone: "warning",
+      title: `${summary.exceptions_pending} excepción(es) pendientes`,
+      body: "Revisa la bandeja para aprobar o corregir.",
+      action: "exceptions",
+    });
+  }
+  if (quota?.period_end) {
+    notifications.push({
+      id: "period-end",
+      tone: "info",
+      title: "Renovación de plan",
+      body: `Tu período actual termina el ${formatDate(quota.period_end)}.`,
+      action: "billing",
+    });
+  }
 
   const sections = NAV_SECTIONS.map((section) => ({
     ...section,
@@ -135,6 +215,51 @@ export default function Layout({ active, onNavigate, children }) {
             </h1>
           </div>
           <div className="user-area">
+            <div className="notification-area" ref={notificationRef}>
+              <button
+                type="button"
+                className={`icon-button notification-button ${notificationsOpen ? "active" : ""}`}
+                title="Notificaciones"
+                aria-label="Notificaciones"
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen((value) => !value)}
+              >
+                <BellIcon />
+                {notifications.length > 0 ? (
+                  <span className="notification-badge">{notifications.length}</span>
+                ) : null}
+              </button>
+              {notificationsOpen ? (
+                <div className="notification-panel" role="menu">
+                  <div className="notification-panel-head">
+                    <strong>Notificaciones</strong>
+                    <span>{notifications.length}</span>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="notification-empty">Todo al día. No tienes alertas nuevas.</div>
+                  ) : (
+                    notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        role="menuitem"
+                        className="notification-item"
+                        onClick={() => {
+                          onNavigate(notification.action);
+                          setNotificationsOpen(false);
+                        }}
+                      >
+                        <span className={`notification-dot ${notification.tone || ""}`} />
+                        <span className="notification-copy">
+                          <strong>{notification.title}</strong>
+                          <small>{notification.body}</small>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
             <div className="user-copy">
               <div className="user-name">{user?.name || user?.email}</div>
               <div className="user-role">{labelize(user?.role)}</div>
