@@ -400,6 +400,8 @@ Ejecuta en orden sobre una base existente:
 
 La migración 004 añade `users.email_verified`, `auth_tokens` (con `consumed_at`), `audit_events` e `invoices`, junto con índices y RLS.
 
+> Ejecuta las migraciones con el rol owner de la base (por ejemplo, el SQL Editor de Supabase). El rol de aplicación `nexora_app` no tiene privilegios DDL y falla con `must be owner of table users`.
+
 ## Variables de entorno relevantes
 
 - `RATE_LIMIT_PER_MINUTE` (por defecto `120`): límite por IP y minuto en `/api`. Los webhooks de pago están exentos. El limitador es en memoria, adecuado para una sola instancia.

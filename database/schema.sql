@@ -460,16 +460,17 @@ DROP TRIGGER IF EXISTS invoices_set_updated_at ON invoices;
 CREATE TRIGGER invoices_set_updated_at
     BEFORE UPDATE ON invoices
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
--- RLS para nuevas tablas
+-- RLS y permisos para nuevas tablas
 DO $$
 DECLARE
     table_name TEXT;
     has_anon BOOLEAN;
     has_authenticated BOOLEAN;
+    has_app BOOLEAN;
 BEGIN
     SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') INTO has_anon;
     SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') INTO has_authenticated;
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nexora_app') INTO has_app;
 
     FOREACH table_name IN ARRAY ARRAY['auth_tokens', 'audit_events', 'invoices']
     LOOP
@@ -479,6 +480,20 @@ BEGIN
         END IF;
         IF has_authenticated THEN
             EXECUTE format('REVOKE ALL ON TABLE %I FROM authenticated', table_name);
+        END IF;
+        IF has_app THEN
+            EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO nexora_app', table_name);
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies p
+                WHERE p.schemaname = 'public'
+                  AND p.tablename = table_name
+                  AND p.policyname = 'nexora_app_all'
+            ) THEN
+                EXECUTE format(
+                    'CREATE POLICY nexora_app_all ON %I FOR ALL TO nexora_app USING (true) WITH CHECK (true)',
+                    table_name
+                );
+            END IF;
         END IF;
     END LOOP;
 END $$;
