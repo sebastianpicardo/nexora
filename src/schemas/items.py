@@ -38,3 +38,13 @@ class ItemListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+class ItemSummary(BaseModel):
+    currency: str
+    total_items: int
+    documents: int
+    suppliers: int
+    audited_spend: float
+    avg_confidence: float
+    auto_approved: int
+    pending: int

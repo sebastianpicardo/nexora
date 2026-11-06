@@ -61,6 +61,7 @@ export default function LoginPage({ error }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
   const authError = params.get("auth") === "error";
@@ -99,6 +100,11 @@ export default function LoginPage({ error }) {
     event.preventDefault();
     setMessage("");
     setSuccess("");
+
+    if ((mode === MODES.LOGIN || mode === MODES.REGISTER) && !acceptedTerms) {
+      setMessage("Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.");
+      return;
+    }
 
     const email = form.email.trim().toLowerCase();
     if (!EMAIL_RE.test(email) && (mode === MODES.LOGIN || mode === MODES.REGISTER || mode === MODES.FORGOT)) {
@@ -180,6 +186,15 @@ export default function LoginPage({ error }) {
     } finally {
       setPending(false);
     }
+  }
+
+  function handleGoogleLogin() {
+    if (!acceptedTerms) {
+      setMessage("Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.");
+      return;
+    }
+    setMessage("");
+    loginWithGoogle();
   }
 
   return (
@@ -356,6 +371,39 @@ export default function LoginPage({ error }) {
               </label>
             ) : null}
 
+            {mode === MODES.LOGIN || mode === MODES.REGISTER ? (
+              <label className="auth-consent">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  disabled={pending}
+                  required
+                />
+                <span>
+                  Acepto los{" "}
+                  <a
+                    href="/terms.html"
+                    target="_blank"
+                    rel="noopener"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    Términos y Condiciones
+                  </a>{" "}
+                  y la{" "}
+                  <a
+                    href="/privacy.html"
+                    target="_blank"
+                    rel="noopener"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    Política de Privacidad
+                  </a>{" "}
+                  de Nexora.
+                </span>
+              </label>
+            ) : null}
+
             <button type="submit" className="button primary full auth-submit" disabled={pending}>
               {pending
                 ? mode === MODES.LOGIN
@@ -400,7 +448,7 @@ export default function LoginPage({ error }) {
                 <span />
               </div>
 
-              <button type="button" className="google-button" onClick={loginWithGoogle} disabled={pending}>
+              <button type="button" className="google-button" onClick={handleGoogleLogin} disabled={pending}>
                 <GoogleMark />
                 Continuar con Google
               </button>

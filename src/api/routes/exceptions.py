@@ -11,6 +11,7 @@ from src.schemas.exceptions import (
     ExceptionListResponse,
     ExceptionOut,
     ExceptionResolveRequest,
+    ExceptionSummary,
 )
 from src.services.exception_service import resolve_exception
 
@@ -44,6 +45,21 @@ async def list_exceptions(
         page=result["page"],
         page_size=result["page_size"],
     )
+
+
+@router.get("/summary", response_model=ExceptionSummary)
+async def summarize_exceptions(
+    user: CurrentUser,
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+):
+    active_currency = (currency or user["default_currency"] or "CLP").strip().upper()
+    async with get_pool().connection() as conn:
+        row = await repositories.summarize_exceptions(
+            conn,
+            user["org_id"],
+            currency=active_currency,
+        )
+    return ExceptionSummary(currency=active_currency, **row)
 
 
 @router.get("/{exception_id}", response_model=ExceptionOut)

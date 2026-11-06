@@ -68,6 +68,7 @@ export default function DocumentsTable({
                         type="button"
                         className="button ghost small"
                         onClick={() => onView(document)}
+                        title="Ver metadatos, descargar o reprocesar"
                       >
                         Detalle
                       </button>

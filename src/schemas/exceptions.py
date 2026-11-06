@@ -62,3 +62,13 @@ class ExceptionResolveRequest(BaseModel):
     action: Literal["approve", "reject", "correct"]
     corrections: ExceptionCorrection | None = None
     notes: str | None = Field(default=None, max_length=2000)
+
+class ExceptionSummary(BaseModel):
+    currency: str
+    total: int
+    pending: int
+    critical_pending: int
+    resolved: int
+    price_alerts: int
+    estimated_savings: float
+    potential_exposure: float

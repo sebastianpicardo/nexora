@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from src.api.deps import CurrentUser
 from src.db import repositories
 from src.db.pool import get_pool
-from src.schemas.items import ItemListResponse, ItemOut
+from src.schemas.items import ItemListResponse, ItemOut, ItemSummary
 
 router = APIRouter(prefix="/api/items", tags=["items"])
 
@@ -46,6 +46,21 @@ async def list_items(
         page=result["page"],
         page_size=result["page_size"],
     )
+
+
+@router.get("/summary", response_model=ItemSummary)
+async def summarize_items(
+    user: CurrentUser,
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+):
+    active_currency = (currency or user["default_currency"] or "CLP").strip().upper()
+    async with get_pool().connection() as conn:
+        row = await repositories.summarize_items(
+            conn,
+            user["org_id"],
+            currency=active_currency,
+        )
+    return ItemSummary(currency=active_currency, **row)
 
 
 @router.get("/{item_id}", response_model=ItemOut)

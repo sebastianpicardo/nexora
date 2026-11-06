@@ -44,12 +44,14 @@ from src.db.repositories.exceptions import (
     get_exception,
     list_exceptions,
     resolve_exception,
+    summarize_exceptions,
 )
 from src.db.repositories.items import (
     get_item,
     get_price_history,
     insert_item,
     list_items,
+    summarize_items,
     update_item_fields,
 )
 from src.db.repositories.organizations import delete_organization, get_organization, update_organization
@@ -155,6 +157,8 @@ __all__ = [
     "set_email_verified",
     "set_password_hash",
     "set_user_role",
+    "summarize_exceptions",
+    "summarize_items",
     "touch_last_login",
     "update_document_status",
     "update_google_profile",

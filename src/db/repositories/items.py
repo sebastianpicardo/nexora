@@ -260,3 +260,41 @@ async def get_price_history(
             ),
         )
         return list(await cur.fetchall())
+
+async def summarize_items(
+    conn: AsyncConnection,
+    org_id: UUID | str,
+    *,
+    currency: str,
+) -> dict:
+    """KPIs comerciales del historico de precios para la moneda activa."""
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT
+                count(*) AS total_items,
+                count(DISTINCT i.document_id) AS documents,
+                count(DISTINCT i.supplier_id) FILTER (WHERE i.supplier_id IS NOT NULL) AS suppliers,
+                COALESCE(
+                    SUM(i.normalized_unit_price * i.quantity)
+                        FILTER (WHERE i.currency = %s AND i.normalized_unit_price IS NOT NULL),
+                    0
+                ) AS audited_spend,
+                COALESCE(AVG(i.confidence), 0) AS avg_confidence,
+                count(*) FILTER (WHERE i.review_status = 'auto_approved') AS auto_approved,
+                count(*) FILTER (WHERE i.review_status = 'pending') AS pending
+            FROM items_history i
+            WHERE i.org_id = %s
+            """,
+            (currency, str(org_id)),
+        )
+        row = await cur.fetchone()
+    return row or {
+        "total_items": 0,
+        "documents": 0,
+        "suppliers": 0,
+        "audited_spend": 0,
+        "avg_confidence": 0,
+        "auto_approved": 0,
+        "pending": 0,
+    }

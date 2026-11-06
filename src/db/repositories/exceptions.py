@@ -172,3 +172,79 @@ async def count_open(conn: AsyncConnection, org_id: UUID | str) -> int:
         )
         row = await cur.fetchone()
         return int(row["total"]) if row else 0
+
+async def summarize_exceptions(
+    conn: AsyncConnection,
+    org_id: UUID | str,
+    *,
+    currency: str,
+) -> dict:
+    """KPIs de riesgo y ahorro estimado para la bandeja de excepciones."""
+    median_expr = """
+        CASE
+            WHEN jsonb_typeof(e.evidence->'historical_median') = 'number'
+            THEN (e.evidence->>'historical_median')::numeric
+            ELSE 0
+        END
+    """
+    delta_expr = f"""
+        GREATEST(
+            COALESCE(i.normalized_unit_price, 0) - COALESCE({median_expr}, 0),
+            0
+        ) * GREATEST(COALESCE(i.quantity, 0), 0)
+    """
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"""
+            SELECT
+                count(*) AS total,
+                count(*) FILTER (WHERE e.status = 'pending') AS pending,
+                count(*) FILTER (
+                    WHERE e.status = 'pending' AND e.severity = 'critical'
+                ) AS critical_pending,
+                count(*) FILTER (
+                    WHERE e.status IN ('approved', 'resolved', 'rejected')
+                ) AS resolved,
+                count(*) FILTER (
+                    WHERE e.status = 'pending' AND e.type = 'price_spike'
+                ) AS price_alerts,
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN e.type = 'price_spike'
+                             AND e.status IN ('approved', 'resolved')
+                             AND i.currency = %s
+                            THEN {delta_expr}
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS estimated_savings,
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN e.type = 'price_spike'
+                             AND e.status = 'pending'
+                             AND i.currency = %s
+                            THEN {delta_expr}
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS potential_exposure
+            FROM exceptions_log e
+            LEFT JOIN items_history i ON i.id = e.item_id
+            WHERE e.org_id = %s
+            """,
+            (currency, currency, str(org_id)),
+        )
+        row = await cur.fetchone()
+    return row or {
+        "total": 0,
+        "pending": 0,
+        "critical_pending": 0,
+        "resolved": 0,
+        "price_alerts": 0,
+        "estimated_savings": 0,
+        "potential_exposure": 0,
+    }

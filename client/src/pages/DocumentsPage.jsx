@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, downloadFile } from "../lib/api";
 import DocumentsTable from "../components/DocumentsTable";
 import DocumentDetailModal from "../components/DocumentDetailModal";
+import InfoHint from "../components/InfoHint";
 import UploadCard from "../components/UploadCard";
 import { ArrowLeftIcon, ArrowRightIcon } from "../components/Icons";
 
@@ -116,7 +117,13 @@ export default function DocumentsPage() {
       <section className="page-intro">
         <div>
           <div className="eyebrow">Ingesta documental</div>
-          <h2>Documentos de compra</h2>
+          <h2 className="title-with-help">
+            Documentos de compra
+            <InfoHint title="¿Qué es esta pantalla?">
+              Centraliza cotizaciones, facturas y listas de precios. Cada archivo se procesa de forma
+              asíncrona para extraer proveedor, ítems, unidades y precios auditables.
+            </InfoHint>
+          </h2>
           <p>Cada archivo se procesa de forma asíncrona y queda asociado a tu organización.</p>
         </div>
         <button type="button" className="button ghost" onClick={load}>

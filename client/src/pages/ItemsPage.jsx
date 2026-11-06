@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, labelize } from "../lib/format";
-import { ArrowLeftIcon, ArrowRightIcon, DownloadIcon, SearchIcon } from "../components/Icons";
+import InfoHint from "../components/InfoHint";
+import StatCard from "../components/StatCard";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  DocumentsIcon,
+  DownloadIcon,
+  PricesIcon,
+  SearchIcon,
+  SuppliersIcon,
+} from "../components/Icons";
 
 export default function ItemsPage() {
+  const { organization } = useAuth();
+  const currency = organization?.default_currency || "CLP";
   const [items, setItems] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -34,6 +48,24 @@ export default function ItemsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const data = await api(`/api/items/summary?currency=${encodeURIComponent(currency)}`);
+      setSummary(data);
+    } catch {
+      setSummary(null);
+    }
+  }, [currency]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  function refresh() {
+    load();
+    loadSummary();
+  }
 
   function submitSearch(event) {
     event.preventDefault();
@@ -65,13 +97,49 @@ export default function ItemsPage() {
       <section className="page-intro">
         <div>
           <div className="eyebrow">Histórico normalizado</div>
-          <h2>Precios auditados</h2>
+          <h2 className="title-with-help">
+            Precios auditados
+            <InfoHint title="Propósito de la pantalla">
+              Compara precios unitarios en una unidad base común por proveedor, SKU y fecha. Aquí se
+              concentra el histórico que permite detectar alzas y negociar con evidencia.
+            </InfoHint>
+          </h2>
           <p>
             Precios unitarios llevados a una unidad base comparable por proveedor, SKU y fecha.
           </p>
         </div>
         <span className="counter-chip">{total} ítems</span>
       </section>
+
+      {summary ? (
+        <section className="stats-grid">
+          <StatCard
+            label="Dinero auditado"
+            value={formatMoney(summary.audited_spend, summary.currency)}
+            detail={`${summary.documents} documentos procesados`}
+            tone="brand"
+            icon={<PricesIcon />}
+          />
+          <StatCard
+            label="Ítems normalizados"
+            value={formatNumber(summary.total_items, 0)}
+            detail={`${summary.auto_approved} auto-aprobados · ${summary.pending} por revisar`}
+            icon={<DocumentsIcon />}
+          />
+          <StatCard
+            label="Proveedores analizados"
+            value={formatNumber(summary.suppliers, 0)}
+            detail="Con historial de compras comparable"
+            icon={<SuppliersIcon />}
+          />
+          <StatCard
+            label="Confianza promedio"
+            value={`${Math.round(Number(summary.avg_confidence || 0) * 100)}%`}
+            detail="Calidad de la extracción documental"
+            tone={Number(summary.avg_confidence) < 0.75 ? "warning" : "default"}
+          />
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="filters-row">
@@ -105,13 +173,13 @@ export default function ItemsPage() {
               <option value="100">100</option>
             </select>
           </label>
-          <button type="button" className="button ghost" onClick={load}>
+          <button type="button" className="button ghost" onClick={refresh}>
             Actualizar
           </button>
-          <button type="button" className="button ghost" onClick={() => exportItems("xlsx")}>
+          <button type="button" className="button ghost" onClick={() => exportItems("xlsx")} title="Descargar el historial filtrado en Excel">
             <DownloadIcon /> Excel
           </button>
-          <button type="button" className="button ghost" onClick={() => exportItems("pdf")}>
+          <button type="button" className="button ghost" onClick={() => exportItems("pdf")} title="Descargar el historial filtrado en PDF">
             <DownloadIcon /> PDF
           </button>
         </div>

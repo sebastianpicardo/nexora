@@ -19,11 +19,12 @@ export default function DocumentDetailModal({
   reprocessing = false,
 }) {
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
     function handleKey(event) {
       if (event.key === "Escape") onClose?.();
     }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
   if (!document) return null;

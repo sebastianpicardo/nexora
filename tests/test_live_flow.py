@@ -192,6 +192,14 @@ def test_full_ingestion_review_and_reprocess_flow(live_database, monkeypatch):
         assert by_sku["TOR-1"]["review_status"] == "auto_approved", by_sku["TOR-1"]
         assert by_sku["PLA-1"]["review_status"] == "pending", by_sku["PLA-1"]
 
+        items_summary = client.get("/api/items/summary")
+        assert items_summary.status_code == 200, items_summary.text
+        summary = items_summary.json()
+        assert summary["currency"] == "CLP", summary
+        assert summary["total_items"] == 2, summary
+        assert summary["auto_approved"] == 1, summary
+        assert summary["pending"] == 1, summary
+
         org = client.get("/api/organizations/current")
         assert org.status_code == 200, org.text
         assert org.json()["default_currency"] == "CLP", org.text
@@ -204,6 +212,13 @@ def test_full_ingestion_review_and_reprocess_flow(live_database, monkeypatch):
         assert exceptions.status_code == 200, exceptions.text
         pending = exceptions.json()["items"]
         assert {row["type"] for row in pending} == {"low_confidence", "price_mismatch"}
+
+        exceptions_summary = client.get("/api/exceptions/summary")
+        assert exceptions_summary.status_code == 200, exceptions_summary.text
+        ex_summary = exceptions_summary.json()
+        assert ex_summary["currency"] == "CLP", ex_summary
+        assert ex_summary["pending"] == 2, ex_summary
+        assert ex_summary["resolved"] == 0, ex_summary
 
         low_conf = next(row for row in pending if row["type"] == "low_confidence")
         resolved = client.post(

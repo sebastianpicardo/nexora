@@ -1,13 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { formatMoney, formatNumber } from "../lib/format";
 import ExceptionsTable from "../components/ExceptionsTable";
+import InfoHint from "../components/InfoHint";
 import ResolveExceptionModal from "../components/ResolveExceptionModal";
-import { ArrowLeftIcon, ArrowRightIcon, DownloadIcon } from "../components/Icons";
+import StatCard from "../components/StatCard";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  DownloadIcon,
+  ExceptionsIcon,
+  PricesIcon,
+} from "../components/Icons";
 
 export default function ExceptionsPage() {
-  const { canOperate } = useAuth();
+  const { canOperate, organization } = useAuth();
+  const currency = organization?.default_currency || "CLP";
   const [exceptions, setExceptions] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -39,9 +52,28 @@ export default function ExceptionsPage() {
     load();
   }, [load]);
 
+  const loadSummary = useCallback(async () => {
+    try {
+      const data = await api(`/api/exceptions/summary?currency=${encodeURIComponent(currency)}`);
+      setSummary(data);
+    } catch {
+      setSummary(null);
+    }
+  }, [currency]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  function refresh() {
+    load();
+    loadSummary();
+  }
+
   function handleResolved() {
     setSelected(null);
     load();
+    loadSummary();
   }
 
   function changeStatus(value) {
@@ -67,7 +99,13 @@ export default function ExceptionsPage() {
       <section className="page-intro">
         <div>
           <div className="eyebrow">Human-in-the-Loop</div>
-          <h2>Bandeja de excepciones</h2>
+          <h2 className="title-with-help">
+            Bandeja de excepciones
+            <InfoHint title="¿Qué es esto?">
+              Es tu cola de revisión humana. NEXORA prioriza por severidad los casos donde el precio,
+              la unidad o la confianza requieren una decisión antes de afectar tus compras.
+            </InfoHint>
+          </h2>
           <p>
             Cada alerta incluye la evidencia extraída, el histórico utilizado y la acción aplicada
             sobre el ítem.
@@ -75,6 +113,37 @@ export default function ExceptionsPage() {
         </div>
         <span className="counter-chip">{total} en total</span>
       </section>
+
+      {summary ? (
+        <section className="stats-grid">
+          <StatCard
+            label="Excepciones abiertas"
+            value={formatNumber(summary.pending, 0)}
+            detail={`${summary.total} alertas en el histórico`}
+            icon={<ExceptionsIcon />}
+          />
+          <StatCard
+            label="Críticas sin resolver"
+            value={formatNumber(summary.critical_pending, 0)}
+            detail="Prioridad máxima para el equipo"
+            tone="warning"
+            icon={<AlertTriangleIcon />}
+          />
+          <StatCard
+            label="Alertas resueltas"
+            value={formatNumber(summary.resolved, 0)}
+            detail={`${summary.price_alerts} alzas de precio pendientes`}
+            icon={<CheckIcon />}
+          />
+          <StatCard
+            label="Ahorro estimado"
+            value={formatMoney(summary.estimated_savings, summary.currency)}
+            detail={`Exposición potencial: ${formatMoney(summary.potential_exposure, summary.currency)}`}
+            tone="brand"
+            icon={<PricesIcon />}
+          />
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="filters-row">
@@ -97,13 +166,13 @@ export default function ExceptionsPage() {
               <option value="100">100</option>
             </select>
           </label>
-          <button type="button" className="button ghost" onClick={load}>
+          <button type="button" className="button ghost" onClick={refresh}>
             Actualizar
           </button>
-          <button type="button" className="button ghost" onClick={() => exportExceptions("xlsx")}>
+          <button type="button" className="button ghost" onClick={() => exportExceptions("xlsx")} title="Descargar excepciones filtradas en Excel">
             <DownloadIcon /> Excel
           </button>
-          <button type="button" className="button ghost" onClick={() => exportExceptions("pdf")}>
+          <button type="button" className="button ghost" onClick={() => exportExceptions("pdf")} title="Descargar excepciones filtradas en PDF">
             <DownloadIcon /> PDF
           </button>
         </div>
