@@ -145,7 +145,7 @@ function IntegrationResultModal({ result, onClose }) {
       <div className="integration-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>
-            <provider.icon /> {result.provider_name || provider}
+            {result.provider_name}
           </h3>
           <button type="button" className="icon-button" onClick={onClose}>
             <XIcon />
