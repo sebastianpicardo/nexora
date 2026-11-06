@@ -5,7 +5,7 @@ import DocumentsTable from "../components/DocumentsTable";
 import DocumentDetailModal from "../components/DocumentDetailModal";
 import InfoHint from "../components/InfoHint";
 import UploadCard from "../components/UploadCard";
-import { ArrowLeftIcon, ArrowRightIcon } from "../components/Icons";
+import { ArrowLeftIcon, ArrowRightIcon, SearchIcon, CheckIcon, DocumentsIcon } from "../components/Icons";
 
 function processedFilename(document, format) {
   const name = document.original_filename || `documento-${document.id}`;
@@ -25,6 +25,7 @@ export default function DocumentsPage() {
   const [selected, setSelected] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
   const [exporting, setExporting] = useState("");
+  const [integrationRunning, setIntegrationRunning] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,6 +98,27 @@ export default function DocumentsPage() {
     }
   }
 
+  async function handleIntegrationAction(document, actionId) {
+    setIntegrationRunning(`${document.id}:${actionId}`);
+    setError("");
+    try {
+      const labelMap = {
+        search_items: "Buscar precio en ChileCompra",
+        validate_rut: "Validar RUT en SII",
+        save_drive: "Guardar en Google Drive",
+      };
+      await api(`/api/integrations/native/chilecompra/${actionId}`, {
+        method: "POST",
+        body: JSON.stringify({ document_id: document.id }),
+      });
+      setSuccess(labelMap[actionId] || "Acción ejecutada.");
+    } catch (err) {
+      setError(err.message || "No se pudo ejecutar la acción de integración.");
+    } finally {
+      setIntegrationRunning(null);
+    }
+  }
+
   function handleUploaded() {
     if (page !== 1) {
       setPage(1);
@@ -165,6 +187,9 @@ export default function DocumentsPage() {
               onView={setSelected}
               onDownload={downloadingId ? undefined : handleDownload}
               onExport={exporting ? undefined : handleExport}
+              onIntegrationAction={
+                integrationRunning ? undefined : handleIntegrationAction
+              }
             />
             <div className="pagination">
               <button

@@ -1,5 +1,5 @@
 import { formatDateTime, labelize } from "../lib/format";
-import { DownloadIcon } from "./Icons";
+import { DownloadIcon, SearchIcon, CheckIcon, DocumentsIcon } from "./Icons";
 
 export default function DocumentsTable({
   documents,
@@ -8,6 +8,7 @@ export default function DocumentsTable({
   onView,
   onDownload,
   onExport,
+  onIntegrationAction,
   compact = false,
 }) {
   if (!documents?.length) {
@@ -32,6 +33,7 @@ export default function DocumentsTable({
             <th>Fecha</th>
             <th>Estado</th>
             {showActions ? <th className="right">Acciones</th> : null}
+            {onIntegrationAction ? <th className="right">Integraciones</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -60,63 +62,93 @@ export default function DocumentsTable({
               <td>
                 <span className={`badge status-${document.status}`}>{labelize(document.status)}</span>
               </td>
-              {showActions ? (
-                <td className="right">
-                  <div className="table-actions">
-                    {onView ? (
-                      <button
-                        type="button"
-                        className="button ghost small"
-                        onClick={() => onView(document)}
-                        title="Ver metadatos, descargar o reprocesar"
-                      >
-                        Detalle
-                      </button>
-                    ) : null}
-                    {onDownload ? (
-                      <button
-                        type="button"
-                        className="button ghost icon-only"
-                        onClick={() => onDownload(document)}
-                        title="Descargar original"
-                      >
-                        <DownloadIcon />
-                      </button>
-                    ) : null}
-                    {onExport ? (
-                      <>
+                  {showActions ? (
+                    <td className="right">
+                      <div className="table-actions">
+                        {onView ? (
+                          <button
+                            type="button"
+                            className="button ghost small"
+                            onClick={() => onView(document)}
+                            title="Ver metadatos, descargar o reprocesar"
+                          >
+                            Detalle
+                          </button>
+                        ) : null}
+                        {onDownload ? (
+                          <button
+                            type="button"
+                            className="button ghost icon-only"
+                            onClick={() => onDownload(document)}
+                            title="Descargar original"
+                          >
+                            <DownloadIcon />
+                          </button>
+                        ) : null}
+                        {onExport ? (
+                          <>
+                            <button
+                              type="button"
+                              className="button ghost small"
+                              onClick={() => onExport(document, "xlsx")}
+                              title="Exportar procesado a Excel"
+                            >
+                              XLSX
+                            </button>
+                            <button
+                              type="button"
+                              className="button ghost small"
+                              onClick={() => onExport(document, "pdf")}
+                              title="Exportar procesado a PDF"
+                            >
+                              PDF
+                            </button>
+                          </>
+                        ) : null}
+                        {onReprocess &&
+                        (document.status === "failed" || document.status === "processed") ? (
+                          <button
+                            type="button"
+                            className="button ghost small"
+                            onClick={() => onReprocess(document)}
+                            disabled={reprocessingId === document.id}
+                          >
+                            {reprocessingId === document.id ? "Enviando…" : "Reprocesar"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  ) : null}
+                  {onIntegrationAction ? (
+                    <td className="right">
+                      <div className="table-actions">
                         <button
                           type="button"
-                          className="button ghost small"
-                          onClick={() => onExport(document, "xlsx")}
-                          title="Exportar procesado a Excel"
+                          className="button ghost icon-only"
+                          onClick={() => onIntegrationAction(document, "search_items")}
+                          title="Buscar precio en ChileCompra"
                         >
-                          XLSX
+                          <SearchIcon />
                         </button>
                         <button
                           type="button"
-                          className="button ghost small"
-                          onClick={() => onExport(document, "pdf")}
-                          title="Exportar procesado a PDF"
+                          className="button ghost icon-only"
+                          onClick={() => onIntegrationAction(document, "validate_rut")}
+                          title="Validar RUT en SII"
                         >
-                          PDF
+                          <CheckIcon />
                         </button>
-                      </>
-                    ) : null}
-                    {onReprocess &&
-                    (document.status === "failed" || document.status === "processed") ? (
-                      <button
-                        type="button"
-                        className="button ghost small"
-                        onClick={() => onReprocess(document)}
-                        disabled={reprocessingId === document.id}
-                      >
-                        {reprocessingId === document.id ? "Enviando…" : "Reprocesar"}
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              ) : null}
+                        <button
+                          type="button"
+                          className="button ghost icon-only"
+                          onClick={() => onIntegrationAction(document, "save_drive")}
+                          title="Guardar en Google Drive"
+                        >
+                          <DocumentsIcon />
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
             </tr>
           ))}
         </tbody>

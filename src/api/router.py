@@ -12,6 +12,7 @@ from src.api.routes import (
     exceptions,
     exports,
     items,
+    native_integrations,
     organizations,
     profile,
     public_api,
@@ -34,4 +35,5 @@ api_router.include_router(exports.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(enterprise.router)
 api_router.include_router(enterprise.inbound_router)
+api_router.include_router(native_integrations.router)
 api_router.include_router(public_api.router)

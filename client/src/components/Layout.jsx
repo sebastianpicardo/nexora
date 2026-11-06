@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import {
   AdminIcon,
+  ArrowRightIcon,
   BellIcon,
   BillingIcon,
   CheckIcon,
@@ -35,6 +36,7 @@ const NAV_SECTIONS = [
     label: "Organización",
     items: [
       { id: "enterprise", label: "Enterprise", icon: SparkIcon, admin: true },
+      { id: "integrations", label: "Integraciones", icon: ArrowRightIcon, admin: true },
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
       { id: "billing", label: "Facturación", icon: BillingIcon, admin: true },
       { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },

@@ -16,6 +16,7 @@ export default function SuppliersPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [supplierIntegrationRunning, setSupplierIntegrationRunning] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +105,26 @@ export default function SuppliersPage() {
     }
   }
 
+  async function handleSupplierIntegration(supplier, actionId) {
+    setSupplierIntegrationRunning(`${supplier.id}:${actionId}`);
+    setError("");
+    setSuccess("");
+    try {
+      const provider = actionId === "validate_rut" ? "sii" : "chilecompra";
+      const payload = actionId === "validate_rut" ? { rut: supplier.tax_id } : { name: supplier.name };
+      await api(`/api/integrations/native/${provider}/${actionId}`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setSuccess(actionId === "validate_rut" ? "RUT validado en SII." : "Proveedor buscado en ChileCompra.");
+      load();
+    } catch (err) {
+      setError(err.message || "No se pudo ejecutar la acción de integración.");
+    } finally {
+      setSupplierIntegrationRunning(null);
+    }
+  }
+
   return (
     <div className="page-stack">
       <section className="page-intro">
@@ -151,6 +172,7 @@ export default function SuppliersPage() {
                   <th>RUT / Tax ID</th>
                   <th>Email</th>
                   <th>Creado</th>
+                  <th>Integraciones</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -161,6 +183,28 @@ export default function SuppliersPage() {
                     <td className="mono">{s.tax_id || "—"}</td>
                     <td>{s.email || "—"}</td>
                     <td>{formatDate(s.created_at)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="button ghost icon-only"
+                          onClick={() => handleSupplierIntegration(s, "validate_rut")}
+                          disabled={supplierIntegrationRunning?.startsWith(`${s.id}:validate_rut`)}
+                          title="Validar RUT en SII"
+                        >
+                          <CheckIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="button ghost icon-only"
+                          onClick={() => handleSupplierIntegration(s, "search_suppliers")}
+                          disabled={supplierIntegrationRunning?.startsWith(`${s.id}:search_suppliers`)}
+                          title="Buscar en ChileCompra"
+                        >
+                          <SearchIcon />
+                        </button>
+                      </div>
+                    </td>
                     <td>
                       <div className="table-actions">
                         <button

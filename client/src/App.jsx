@@ -15,6 +15,7 @@ import SuppliersPage from "./pages/SuppliersPage";
 import SettingsPage from "./pages/SettingsPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import EnterprisePage from "./pages/EnterprisePage";
+import NativeIntegrationsPage from "./pages/NativeIntegrationsPage";
 
 function Splash() {
   return (
@@ -52,7 +53,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === "admin" && !isSuperAdmin) setView("dashboard");
-    if (["team", "billing", "settings", "enterprise"].includes(view) && !canManage) setView("dashboard");
+    if (["team", "billing", "settings", "enterprise", "integrations"].includes(view) && !canManage) setView("dashboard");
   }, [view, isSuperAdmin, canManage]);
 
   if (loading) return <Splash />;
@@ -74,6 +75,8 @@ export default function App() {
         <SuppliersPage />
       ) : view === "enterprise" ? (
         <EnterprisePage onNavigate={setView} />
+      ) : view === "integrations" ? (
+        <NativeIntegrationsPage />
       ) : view === "team" ? (
         <TeamPage />
       ) : view === "billing" ? (
