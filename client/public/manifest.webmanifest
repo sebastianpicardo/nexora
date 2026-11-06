@@ -1,0 +1,25 @@
+{
+  "name": "NEXORA · Auditoría de compras y precios",
+  "short_name": "NEXORA",
+  "description": "Analizador y auditor automatizado de compras y precios para distribuidores industriales.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090e16",
+  "theme_color": "#10b981",
+  "lang": "es-CL",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

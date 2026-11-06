@@ -3,10 +3,42 @@ import { api, googleLoginUrl } from "../lib/api";
 
 const AuthContext = createContext(null);
 
+const DEFAULT_BRAND = {
+  brand_name: "",
+  brand_primary_color: "#10b981",
+  brand_accent_color: "#059669",
+  logo_url: "",
+  support_email: "",
+  custom_domain: "",
+  hide_powered_by: false,
+};
+
+function hexToRgba(hex, alpha = 0.12) {
+  const value = String(hex || "").replace("#", "");
+  if (value.length !== 6) return `rgba(16, 185, 129, ${alpha})`;
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function setBrandingVariables(data) {
+  const branding = { ...DEFAULT_BRAND, ...(data || {}) };
+  const root = document.documentElement;
+  root.style.setProperty("--brand", branding.brand_primary_color);
+  root.style.setProperty("--brand-dark", branding.brand_accent_color);
+  root.style.setProperty("--brand-soft", hexToRgba(branding.brand_primary_color));
+  document.title = branding.brand_name
+    ? `${branding.brand_name} · Auditoría de compras`
+    : "NEXORA · Auditoría de compras y precios";
+  document.documentElement.dataset.whiteLabel = branding.brand_name ? "true" : "false";
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [organization, setOrganization] = useState(null);
   const [billing, setBilling] = useState(null);
+  const [branding, setBranding] = useState(DEFAULT_BRAND);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -20,6 +52,22 @@ export function AuthProvider({ children }) {
       return null;
     }
   }, []);
+
+  const applyBranding = useCallback((data) => {
+    setBranding({ ...DEFAULT_BRAND, ...(data || {}) });
+    setBrandingVariables(data);
+  }, []);
+
+  const refreshBranding = useCallback(async () => {
+    try {
+      const data = await api("/api/enterprise/branding");
+      applyBranding(data);
+      return data;
+    } catch {
+      applyBranding(DEFAULT_BRAND);
+      return null;
+    }
+  }, [applyBranding]);
 
   const refresh = useCallback(async () => {
     try {
@@ -44,6 +92,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (user) refreshBranding();
+    else applyBranding(DEFAULT_BRAND);
+  }, [user, refreshBranding, applyBranding]);
 
   useEffect(() => {
     if (user) refreshBilling();
@@ -132,6 +185,7 @@ export function AuthProvider({ children }) {
     user,
     organization,
     billing,
+    branding,
     loading,
     error,
     isAuthenticated: Boolean(user),
@@ -144,6 +198,8 @@ export function AuthProvider({ children }) {
     logout,
     refresh,
     refreshBilling,
+    refreshBranding,
+    applyBranding,
     forgotPassword,
     resetPassword,
     verifyEmail,

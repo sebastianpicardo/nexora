@@ -8,11 +8,13 @@ from src.api.routes import (
     billing,
     dashboard,
     documents,
+    enterprise,
     exceptions,
     exports,
     items,
     organizations,
     profile,
+    public_api,
     suppliers,
     team,
 )
@@ -30,3 +32,6 @@ api_router.include_router(items.router)
 api_router.include_router(exceptions.router)
 api_router.include_router(exports.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(enterprise.router)
+api_router.include_router(enterprise.inbound_router)
+api_router.include_router(public_api.router)

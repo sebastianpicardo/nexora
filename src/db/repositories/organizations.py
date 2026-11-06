@@ -23,6 +23,17 @@ async def update_organization(conn: AsyncConnection, org_id: UUID | str, fields:
         "price_spike_threshold_pct",
         "min_confidence",
         "default_currency",
+        "brand_name",
+        "brand_primary_color",
+        "brand_accent_color",
+        "logo_url",
+        "support_email",
+        "custom_domain",
+        "hide_powered_by",
+        "sso_enabled",
+        "sso_domain",
+        "sso_required",
+        "audit_retention_days",
     }
     updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
     if not updates:

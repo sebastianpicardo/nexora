@@ -5,6 +5,7 @@ import {
   AdminIcon,
   BellIcon,
   BillingIcon,
+  CheckIcon,
   DashboardIcon,
   DocumentsIcon,
   ExceptionsIcon,
@@ -26,12 +27,14 @@ const NAV_SECTIONS = [
       { id: "documents", label: "Documentos", icon: DocumentsIcon },
       { id: "items", label: "Precios", icon: PricesIcon },
       { id: "exceptions", label: "Excepciones", icon: ExceptionsIcon },
+      { id: "approvals", label: "Aprobaciones", icon: CheckIcon },
       { id: "suppliers", label: "Proveedores", icon: SuppliersIcon },
     ],
   },
   {
     label: "Organización",
     items: [
+      { id: "enterprise", label: "Enterprise", icon: SparkIcon, admin: true },
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
       { id: "billing", label: "Facturación", icon: BillingIcon, admin: true },
       { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },
@@ -47,7 +50,7 @@ const NAV_SECTIONS = [
 const ALL_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
 
 export default function Layout({ active, onNavigate, children }) {
-  const { user, organization, billing, canManage, isSuperAdmin, logout } = useAuth();
+  const { user, organization, billing, branding, canManage, isSuperAdmin, logout } = useAuth();
   const [summary, setSummary] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationRef = useRef(null);
@@ -139,9 +142,11 @@ export default function Layout({ active, onNavigate, children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">N</div>
+          <div className="brand-mark">
+            {branding?.logo_url ? <img src={branding.logo_url} alt="" /> : (branding?.brand_name || "N").slice(0, 1)}
+          </div>
           <div>
-            <div className="brand-name">NEXORA</div>
+            <div className="brand-name">{branding?.brand_name || "NEXORA"}</div>
             <div className="brand-sub">Compras auditadas</div>
           </div>
         </div>

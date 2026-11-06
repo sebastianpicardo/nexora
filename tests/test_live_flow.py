@@ -441,3 +441,121 @@ def test_saas_billing_team_profile_and_exports(live_database):
         admin = client.get("/api/admin/overview")
         assert admin.status_code == 200, admin.text
         assert admin.json()["stats"]["organizations_total"] >= 1, admin.text
+
+def test_enterprise_suite_end_to_end(live_database):
+    user = asyncio.run(_seed_user())
+    token = create_access_token(
+        user_id=user["id"],
+        email=user["email"],
+        org_id=user["org_id"],
+        role=user["role"],
+        name=user["name"],
+    )
+
+    from fastapi.testclient import TestClient
+
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", token)
+
+        overview = client.get("/api/enterprise/overview")
+        assert overview.status_code == 200, overview.text
+        assert overview.json()["roi"]["currency"] == "CLP", overview.text
+
+        approval = client.post(
+            "/api/enterprise/approvals",
+            json={
+                "title": "Compra de prueba",
+                "amount": 150000,
+                "currency": "CLP",
+                "priority": "high",
+                "notes": "Aprobación desde test",
+            },
+        )
+        assert approval.status_code == 201, approval.text
+        approval_id = approval.json()["id"]
+        approved = client.post(
+            f"/api/enterprise/approvals/{approval_id}/decision",
+            json={"status": "approved", "notes": "OK"},
+        )
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["status"] == "approved", approved.text
+
+        channel = client.post(
+            "/api/enterprise/notifications/channels",
+            json={
+                "name": "Compras",
+                "channel": "email",
+                "target": "compras@nexora.test",
+                "events": ["alerts"],
+            },
+        )
+        assert channel.status_code == 201, channel.text
+        dispatch = client.post("/api/enterprise/notifications/dispatch")
+        assert dispatch.status_code == 200, dispatch.text
+        assert dispatch.json()["deliveries"], dispatch.text
+
+        integration = client.post(
+            "/api/enterprise/integrations",
+            json={"provider": "erp", "name": "ERP Demo", "config": {}},
+        )
+        assert integration.status_code == 201, integration.text
+        sync = client.post(f"/api/enterprise/integrations/{integration.json()['id']}/sync")
+        assert sync.status_code == 200, sync.text
+        assert sync.json()["success"] is True, sync.text
+
+        api_key = client.post(
+            "/api/enterprise/api-keys",
+            json={"name": "Integración demo", "scopes": ["read"]},
+        )
+        assert api_key.status_code == 201, api_key.text
+        raw_key = api_key.json()["token"]
+        public = client.get("/api/public/v1/summary", headers={"X-API-Key": raw_key})
+        assert public.status_code == 200, public.text
+        assert public.json()["currency"] == "CLP", public.text
+
+        inbound = client.post("/api/enterprise/inbound-email/tokens", json={"label": "Compras"})
+        assert inbound.status_code == 201, inbound.text
+        assert inbound.json()["address"].endswith("@inbox.nexora.app"), inbound.text
+
+        demo = client.post("/api/enterprise/onboarding/demo")
+        assert demo.status_code == 200, demo.text
+        onboarding = client.get("/api/enterprise/onboarding")
+        assert onboarding.status_code == 200, onboarding.text
+        assert onboarding.json()["steps"]["documents"] is True, onboarding.text
+        scorecards = client.get("/api/enterprise/suppliers/scorecards")
+        assert scorecards.status_code == 200, scorecards.text
+        assert scorecards.json()["items"], scorecards.text
+
+        branding = client.patch(
+            "/api/enterprise/branding",
+            json={"brand_name": "NEXORA Demo", "brand_primary_color": "#0ea5e9"},
+        )
+        assert branding.status_code == 200, branding.text
+        assert branding.json()["brand_name"] == "NEXORA Demo", branding.text
+
+        security = client.patch(
+            "/api/enterprise/security",
+            json={"sso_enabled": True, "sso_domain": "nexora.test", "audit_retention_days": 180},
+        )
+        assert security.status_code == 200, security.text
+        assert security.json()["audit_retention_days"] == 180, security.text
+        purged = client.post("/api/enterprise/security/purge-audit")
+        assert purged.status_code == 200, purged.text
+
+        push_key = client.get("/api/enterprise/push/public-key")
+        assert push_key.status_code == 200, push_key.text
+        subscribed = client.post(
+            "/api/enterprise/push/subscribe",
+            json={"endpoint": "https://push.example.test/abc", "p256dh": "p" * 20, "auth": "a" * 10},
+        )
+        assert subscribed.status_code == 201, subscribed.text
+
+        for fmt, content_type in (
+            ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("pdf", "application/pdf"),
+        ):
+            exported = client.get(f"/api/enterprise/roi/export?format={fmt}")
+            assert exported.status_code == 200, exported.text
+            assert exported.headers["content-type"].startswith(content_type), exported.headers

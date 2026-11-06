@@ -103,6 +103,20 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+async def _record_session(user: dict, request: Request) -> None:
+    try:
+        async with get_pool().connection() as conn:
+            await repositories.record_user_session(
+                conn,
+                org_id=user["org_id"],
+                user_id=user["id"],
+                ip_address=_client_ip(request),
+                user_agent=request.headers.get("user-agent", ""),
+            )
+    except Exception:
+        logger.exception("No se pudo registrar la sesión del usuario %s", user.get("id"))
+
+
 async def _audit(user: dict, action: str, request: Request) -> None:
     try:
         async with get_pool().connection() as conn:
@@ -149,6 +163,7 @@ async def register(
     )
     _set_session_cookie(response, user)
     await _audit(user, "auth.register", request)
+    await _record_session(user, request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -166,6 +181,7 @@ async def login(
     user = await authenticate_with_password(email=payload.email, password=payload.password)
     _set_session_cookie(response, user)
     await _audit(user, "auth.login", request)
+    await _record_session(user, request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -193,6 +209,8 @@ async def google_callback(request: Request):
 
     response = RedirectResponse(url=f"{settings.frontend_origin}/?auth=ok", status_code=302)
     _set_session_cookie(response, user)
+    await _audit(user, "auth.google", request)
+    await _record_session(user, request)
     return response
 
 

@@ -38,6 +38,23 @@ async def _ensure_super_admin(conn, user: dict) -> dict:
     return refreshed or user
 
 
+async def _assert_sso_allowed(conn, user: dict, method: str) -> None:
+    org = await repositories.get_organization(conn, user["org_id"])
+    if org is None:
+        return
+    sso_required = bool(org.get("sso_required"))
+    sso_domain = (org.get("sso_domain") or "").strip().lower()
+    email_domain = user["email"].split("@")[-1].lower()
+    if sso_required and method != "google":
+        raise PermissionDeniedError(
+            "Tu organización requiere iniciar sesión con Google Workspace (SSO)."
+        )
+    if sso_required and sso_domain and email_domain != sso_domain:
+        raise PermissionDeniedError(
+            "Tu email no pertenece al dominio SSO autorizado por la organización."
+        )
+
+
 def _profile_values(profile: dict) -> tuple[str, str, str, str]:
     email = str(profile.get("email") or "").strip().lower()
     google_id = str(profile.get("sub") or "").strip()
@@ -152,10 +169,11 @@ async def authenticate_with_password(*, email: str, password: str) -> dict:
         if not row["active"]:
             raise PermissionDeniedError("La cuenta está desactivada. Contacta al administrador.")
 
-        await repositories.touch_last_login(conn, row["id"])
         user = await repositories.get_user_with_org(conn, row["id"])
         if user is None:
             raise PermissionDeniedError("No se pudo recuperar la cuenta.")
+        await _assert_sso_allowed(conn, user, "password")
+        await repositories.touch_last_login(conn, row["id"])
         return await _ensure_super_admin(conn, user)
 
 
@@ -177,6 +195,7 @@ async def upsert_google_user(profile: dict) -> dict:
             refreshed = await repositories.get_user_with_org(conn, user["id"])
             if refreshed is None:
                 raise RuntimeError("No se pudo refrescar el usuario.")
+            await _assert_sso_allowed(conn, refreshed, "google")
             return await _ensure_super_admin(conn, refreshed)
 
         user = await repositories.get_user_by_email(conn, email)
@@ -193,6 +212,7 @@ async def upsert_google_user(profile: dict) -> dict:
             refreshed = await repositories.get_user_with_org(conn, user["id"])
             if refreshed is None:
                 raise RuntimeError("No se pudo refrescar el usuario.")
+            await _assert_sso_allowed(conn, refreshed, "google")
             return await _ensure_super_admin(conn, refreshed)
 
         try:
@@ -206,6 +226,7 @@ async def upsert_google_user(profile: dict) -> dict:
                 min_confidence=settings.min_extraction_confidence,
                 default_currency=settings.default_currency.strip().upper(),
             )
+            await _assert_sso_allowed(conn, created, "google")
             return await _ensure_super_admin(conn, created)
         except UniqueViolation:
             await conn.rollback()
@@ -217,5 +238,6 @@ async def upsert_google_user(profile: dict) -> dict:
             raise RuntimeError("No se pudo crear ni recuperar el usuario de Google.")
         if not user["active"]:
             raise PermissionDeniedError("La cuenta está desactivada.")
+        await _assert_sso_allowed(conn, user, "google")
         await repositories.touch_last_login(conn, user["id"])
         return await _ensure_super_admin(conn, user)

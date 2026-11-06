@@ -87,6 +87,15 @@ class Settings(BaseSettings):
 
     rate_limit_per_minute: int = Field(default=120, ge=1)
 
+    inbound_email_domain: str = "inbox.nexora.app"
+    whatsapp_api_url: str = "https://graph.facebook.com/v21.0"
+    whatsapp_phone_id: str = ""
+    whatsapp_token: str = ""
+    integration_timeout_seconds: int = Field(default=10, ge=2, le=60)
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:no-reply@nexora.app"
+
     payment_provider: str = "mock"
     payment_webhook_secret: str = ""
     payment_success_url: str = ""
