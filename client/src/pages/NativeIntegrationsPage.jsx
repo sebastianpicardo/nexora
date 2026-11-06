@@ -274,36 +274,42 @@ function IntegrationResultModal({ result, onClose }) {
 
           {resultados.length > 0 ? (
             <div className="result-table-wrap">
-              {resultados[0].rut ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Proveedor</th>
-                      <th>RUT</th>
-                      <th>Región</th>
-                      <th>Confianza</th>
-                      <th>Ranking</th>
-                      <th>Precio promedio</th>
-                      <th>Quejas</th>
-                      <th>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((r, i) => (
-                      <tr key={i}>
-                        <td>{r.name || "—"}</td>
-                        <td className="mono">{r.rut || "—"}</td>
-                        <td>{r.region || "—"}</td>
-                        <td>{r.confianza ?? "—"}</td>
-                        <td>{r.ranking ?? "—"}</td>
-                        <td className="mono">${Number(r.precio_promedio ?? 0).toLocaleString("es-CL")}</td>
-                        <td>{r.quejas ?? "—"}</td>
-                        <td>{r.estado || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
+                  {resultados[0].rut ? (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Proveedor</th>
+                          <th>RUT</th>
+                          <th>Región</th>
+                          <th>Confianza</th>
+                          <th>Ranking</th>
+                          <th>Precio promedio</th>
+                          <th>Quejas</th>
+                          <th>Contacto</th>
+                          <th>Teléfono</th>
+                          <th>Email</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resultados.map((r, i) => (
+                          <tr key={i}>
+                            <td>{r.name || "—"}</td>
+                            <td className="mono">{r.rut || "—"}</td>
+                            <td>{r.region || "—"}</td>
+                            <td>{r.confianza ?? "—"}</td>
+                            <td>{r.ranking ?? "—"}</td>
+                            <td className="mono">${Number(r.precio_promedio ?? 0).toLocaleString("es-CL")}</td>
+                            <td>{r.quejas ?? "—"}</td>
+                            <td>{r.contacto || "—"}</td>
+                            <td className="mono">{r.telefono || "—"}</td>
+                            <td>{r.email || "—"}</td>
+                            <td>{r.estado || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
                 <table className="data-table">
                   <thead>
                     <tr>

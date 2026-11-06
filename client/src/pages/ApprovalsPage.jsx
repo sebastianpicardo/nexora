@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDateTime, formatMoney, labelize } from "../lib/format";
 import { CheckIcon, PlusIcon, XIcon, ArrowRightIcon, BellIcon } from "../components/Icons";
+import InfoHint from "../components/InfoHint";
 
 const EMPTY_FORM = {
   title: "",
@@ -115,7 +116,13 @@ export default function ApprovalsPage() {
       <section className="page-intro">
         <div>
           <div className="eyebrow">Gobierno de compras</div>
-          <h2>Aprobaciones</h2>
+          <h2 className="title-with-help">
+            Aprobaciones
+            <InfoHint title="¿Para qué sirve esta pantalla?">
+              Controla solicitudes de compra antes de emitir la orden. Aquí ves monto, proveedor, prioridad y quién
+              debe aprobar. Los administradores pueden aprobar o rechazar cada solicitud.
+            </InfoHint>
+          </h2>
           <p>Controla solicitudes de compra, montos y responsables antes de emitir la orden.</p>
         </div>
         {canOperate ? (

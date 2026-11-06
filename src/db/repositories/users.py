@@ -336,3 +336,50 @@ async def update_profile(conn: AsyncConnection, user_id: UUID | str, fields: dic
     if row is None:
         return None
     return await get_user_with_org(conn, user_id)
+
+
+async def list_all_users(conn: AsyncConnection) -> list[dict]:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"""
+            {USER_SELECT}
+            ORDER BY u.created_at DESC
+            """
+        )
+        return list(await cur.fetchall())
+
+
+async def update_user_global(
+    conn: AsyncConnection,
+    user_id: UUID | str,
+    *,
+    role: str | None = None,
+    active: bool | None = None,
+) -> dict | None:
+    updates: list[str] = []
+    values: list = []
+    if role is not None:
+        updates.append("role = %s")
+        values.append(role)
+    if active is not None:
+        updates.append("active = %s")
+        values.append(active)
+    if not updates:
+        return await get_user_with_org(conn, user_id)
+
+    values.append(str(user_id))
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"UPDATE users SET {', '.join(updates)} WHERE id = %s RETURNING id",
+            values,
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return await get_user_with_org(conn, user_id)
+
+
+async def delete_user_global(conn: AsyncConnection, user_id: UUID | str) -> bool:
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM users WHERE id = %s", (str(user_id),))
+        return cur.rowcount > 0

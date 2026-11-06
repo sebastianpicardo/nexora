@@ -246,5 +246,8 @@ __all__ = [
     "update_member",
     "update_organization",
     "update_profile",
+    "list_all_users",
+    "update_user_global",
+    "delete_user_global",
     "update_supplier",
 ]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi.responses import Response
 
 from src.api.deps import require_super_admin
 from src.db import repositories
@@ -42,3 +43,39 @@ async def overview(user: dict = Depends(require_super_admin)):
             for row in organizations
         ],
     )
+
+
+@router.get("/users")
+async def list_all_users(user: dict = Depends(require_super_admin)):
+    async with get_pool().connection() as conn:
+        rows = await repositories.list_all_users(conn)
+    return {"users": rows}
+
+
+@router.patch("/users/{user_id}")
+async def update_user_global(
+    user_id: str = Path(...),
+    payload: dict = {},
+    user: dict = Depends(require_super_admin),
+):
+    role = payload.get("role")
+    active = payload.get("active")
+    if role is None and active is None:
+        raise HTTPException(status_code=400, detail="Debe enviar role o active")
+    async with get_pool().connection() as conn:
+        updated = await repositories.update_user_global(conn, user_id, role=role, active=active)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return updated
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_global(
+    user_id: str = Path(...),
+    user: dict = Depends(require_super_admin),
+):
+    async with get_pool().connection() as conn:
+        deleted = await repositories.delete_user_global(conn, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -106,6 +106,10 @@ export default function SuppliersPage() {
   }
 
   async function handleSupplierIntegration(supplier, actionId) {
+    if (actionId === "validate_rut" && !supplier.tax_id) {
+      setError("El proveedor no tiene RUT registrado.");
+      return;
+    }
     setSupplierIntegrationRunning(`${supplier.id}:${actionId}`);
     setError("");
     setSuccess("");

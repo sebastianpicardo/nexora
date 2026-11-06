@@ -59,16 +59,16 @@ FERRETERIA_REFERENCIAS = [
 
 # Proveedores de referencia para ChileCompra
 CHILECOMPRA_PROVEEDORES = [
-    {"rut": "76.000.000-0", "name": "Ferretería del Norte SpA", "region": "Metropolitana", "confianza": 85, "ranking": 1, "precio_promedio": 12500, "quejas": 3, "estado": "Activo"},
-    {"rut": "76.111.111-1", "name": "Tornillería Central Ltda", "region": "Metropolitana", "confianza": 92, "ranking": 2, "precio_promedio": 9800, "quejas": 1, "estado": "Activo"},
-    {"rut": "76.222.222-2", "name": "Pinturas Sur Limitada", "region": "Valparaíso", "confianza": 78, "ranking": 3, "precio_promedio": 15200, "quejas": 7, "estado": "Activo"},
-    {"rut": "76.333.333-3", "name": "Fontanería Express SpA", "region": "Biobío", "confianza": 88, "ranking": 4, "precio_promedio": 11000, "quejas": 2, "estado": "Activo"},
-    {"rut": "76.444.444-4", "name": "Eléctrica Moderna Ltda", "region": "Metropolitana", "confianza": 90, "ranking": 5, "precio_promedio": 10500, "quejas": 4, "estado": "Activo"},
-    {"rut": "76.555.555-5", "name": "Herramientas SA", "region": "O'Higgins", "confianza": 75, "ranking": 6, "precio_promedio": 14500, "quejas": 9, "estado": "Activo"},
-    {"rut": "76.666.666-6", "name": "Color y Decoración SpA", "region": "Valparaíso", "confianza": 82, "ranking": 7, "precio_promedio": 13000, "quejas": 5, "estado": "Activo"},
-    {"rut": "76.777.777-7", "name": "Tuberías Chile Ltda", "region": "Maule", "confianza": 80, "ranking": 8, "precio_promedio": 11800, "quejas": 3, "estado": "Activo"},
-    {"rut": "76.888.888-8", "name": "Voltaje y Cable SpA", "region": "Metropolitana", "confianza": 86, "ranking": 9, "precio_promedio": 9900, "quejas": 2, "estado": "Activo"},
-    {"rut": "76.999.999-9", "name": "Hogar y Ferretería Ltda", "region": "Los Lagos", "confianza": 70, "ranking": 10, "precio_promedio": 16000, "quejas": 12, "estado": "Activo"},
+    {"rut": "76.000.000-0", "name": "Ferretería del Norte SpA", "region": "Metropolitana", "confianza": 85, "ranking": 1, "precio_promedio": 12500, "quejas": 3, "estado": "Activo", "contacto": "Carlos Méndez", "telefono": "+56 2 2345 6789", "email": "ventas@ferreteriadelnorte.cl"},
+    {"rut": "76.111.111-1", "name": "Tornillería Central Ltda", "region": "Metropolitana", "confianza": 92, "ranking": 2, "precio_promedio": 9800, "quejas": 1, "estado": "Activo", "contacto": "Andrea Rojas", "telefono": "+56 2 2123 4567", "email": "contacto@tornilleriacentral.cl"},
+    {"rut": "76.222.222-2", "name": "Pinturas Sur Limitada", "region": "Valparaíso", "confianza": 78, "ranking": 3, "precio_promedio": 15200, "quejas": 7, "estado": "Activo", "contacto": "Luis Valenzuela", "telefono": "+56 32 255 1234", "email": "ventas@pinturassur.cl"},
+    {"rut": "76.333.333-3", "name": "Fontanería Express SpA", "region": "Biobío", "confianza": 88, "ranking": 4, "precio_promedio": 11000, "quejas": 2, "estado": "Activo", "contacto": "Sofía Castro", "telefono": "+56 41 233 4455", "email": "sofia@fontaneriaexpress.cl"},
+    {"rut": "76.444.444-4", "name": "Eléctrica Moderna Ltda", "region": "Metropolitana", "confianza": 90, "ranking": 5, "precio_promedio": 10500, "quejas": 4, "estado": "Activo", "contacto": "Martín Silva", "telefono": "+56 2 2678 9012", "email": "martin@electricalmodern.cl"},
+    {"rut": "76.555.555-5", "name": "Herramientas SA", "region": "O'Higgins", "confianza": 75, "ranking": 6, "precio_promedio": 14500, "quejas": 9, "estado": "Activo", "contacto": "Patricia Gómez", "telefono": "+56 72 211 3344", "email": "patricia@herramientassa.cl"},
+    {"rut": "76.666.666-6", "name": "Color y Decoración SpA", "region": "Valparaíso", "confianza": 82, "ranking": 7, "precio_promedio": 13000, "quejas": 5, "estado": "Activo", "contacto": "Diego Muñoz", "telefono": "+56 32 244 5566", "email": "diego@colorydecoracion.cl"},
+    {"rut": "76.777.777-7", "name": "Tuberías Chile Ltda", "region": "Maule", "confianza": 80, "ranking": 8, "precio_promedio": 11800, "quejas": 3, "estado": "Activo", "contacto": "Carmen Ortiz", "telefono": "+56 71 222 3344", "email": "carmen@tuberiaschile.cl"},
+    {"rut": "76.888.888-8", "name": "Voltaje y Cable SpA", "region": "Metropolitana", "confianza": 86, "ranking": 9, "precio_promedio": 9900, "quejas": 2, "estado": "Activo", "contacto": "Francisca Díaz", "telefono": "+56 2 2777 8899", "email": "francisca@voltajeycable.cl"},
+    {"rut": "76.999.999-9", "name": "Hogar y Ferretería Ltda", "region": "Los Lagos", "confianza": 70, "ranking": 10, "precio_promedio": 16000, "quejas": 12, "estado": "Activo", "contacto": "Roberto Pino", "telefono": "+56 65 233 4455", "email": "roberto@hogaryferreteria.cl"},
 ]
 
 
