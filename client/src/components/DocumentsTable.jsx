@@ -125,7 +125,7 @@ export default function DocumentsTable({
                         <button
                           type="button"
                           className="button ghost icon-only"
-                          onClick={() => onIntegrationAction(document, "search_items")}
+                          onClick={() => onIntegrationAction(document, "chilecompra", "search_items")}
                           title="Buscar precio en ChileCompra"
                         >
                           <SearchIcon />
@@ -133,7 +133,7 @@ export default function DocumentsTable({
                         <button
                           type="button"
                           className="button ghost icon-only"
-                          onClick={() => onIntegrationAction(document, "validate_rut")}
+                          onClick={() => onIntegrationAction(document, "sii", "validate_rut")}
                           title="Validar RUT en SII"
                         >
                           <CheckIcon />
@@ -141,7 +141,7 @@ export default function DocumentsTable({
                         <button
                           type="button"
                           className="button ghost icon-only"
-                          onClick={() => onIntegrationAction(document, "save_drive")}
+                          onClick={() => onIntegrationAction(document, "google_workspace", "save_drive")}
                           title="Guardar en Google Drive"
                         >
                           <DocumentsIcon />

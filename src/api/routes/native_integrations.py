@@ -4,14 +4,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.deps import CurrentUser, require_roles
+from src.api.deps import require_roles
 from src.services import native_integrations_service as ni
 
 router = APIRouter(prefix="/api/integrations/native", tags=["native-integrations"])
 
 
 @router.get("/status")
-async def native_integrations_status(user: CurrentUser) -> dict[str, Any]:
+async def native_integrations_status(user: dict = Depends(require_roles("owner", "admin", "analyst", "user"))) -> dict[str, Any]:
     return await ni.list_native_integrations(user)
 
 
@@ -33,4 +33,4 @@ async def native_integration_action(
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - degrade seguro
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

@@ -98,20 +98,25 @@ export default function DocumentsPage() {
     }
   }
 
-  async function handleIntegrationAction(document, actionId) {
-    setIntegrationRunning(`${document.id}:${actionId}`);
+  async function handleIntegrationAction(document, provider, actionId) {
+    setIntegrationRunning(`${document.id}:${provider}:${actionId}`);
     setError("");
+    setSuccess("");
     try {
-      const labelMap = {
-        search_items: "Buscar precio en ChileCompra",
-        validate_rut: "Validar RUT en SII",
-        save_drive: "Guardar en Google Drive",
-      };
-      await api(`/api/integrations/native/chilecompra/${actionId}`, {
+      let endpoint = `/api/integrations/native/${provider}/${actionId}`;
+      let body = {};
+      if (provider === "chilecompra" && actionId === "search_items") {
+        body = { query: document.original_filename || "" };
+      }
+      if (provider === "google_workspace" && actionId === "save_drive") {
+        body = { document_id: document.id };
+      }
+      await api(endpoint, {
         method: "POST",
-        body: JSON.stringify({ document_id: document.id }),
+        body: JSON.stringify(body),
       });
-      setSuccess(labelMap[actionId] || "Acción ejecutada.");
+      setSuccess("Acción de integración ejecutada.");
+      load();
     } catch (err) {
       setError(err.message || "No se pudo ejecutar la acción de integración.");
     } finally {

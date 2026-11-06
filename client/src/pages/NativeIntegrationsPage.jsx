@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { formatDateTime, labelize } from "../lib/format";
-import { ArrowRightIcon, BellIcon, CheckIcon, DocumentsIcon, LockIcon, SearchIcon, SuppliersIcon } from "../components/Icons";
+import {
+  ArrowRightIcon,
+  BellIcon,
+  CheckIcon,
+  DocumentsIcon,
+  LockIcon,
+  SearchIcon,
+  SuppliersIcon,
+} from "../components/Icons";
 
 const PROVIDERS = [
   {
     id: "chilecompra",
     name: "ChileCompra",
     icon: SearchIcon,
-    description: "Compara precios con el mercado público, busca proveedores registrados e importa órdenes de compra desde ChileCompra.",
+    description: "Compara precios de referencia del mercado público y busca proveedores para tus compras de ferretería.",
+    color: "#10b981",
     actions: [
-      { id: "search_items", label: "Buscar productos", primary: true, icon: SearchIcon },
+      { id: "search_items", label: "Buscar precios", primary: true, icon: SearchIcon },
       { id: "search_suppliers", label: "Buscar proveedores", icon: SuppliersIcon },
       { id: "import_order", label: "Importar orden", icon: ArrowRightIcon },
     ],
@@ -20,39 +28,43 @@ const PROVIDERS = [
     id: "sii",
     name: "SII",
     icon: CheckIcon,
-    description: "Valida RUT de proveedores, obtiene facturas electrónicas y concilia documentos contra el Servicio de Impuestos Internos.",
+    description: "Valida el formato RUT de tus proveedores y prepara documentos para conciliación tributaria.",
+    color: "#059669",
     actions: [
       { id: "validate_rut", label: "Validar RUT", primary: true, icon: CheckIcon },
-      { id: "fetch_invoices", label: "Obtener facturas", icon: DocumentsIcon },
+      { id: "fetch_invoices", label: "Facturas electrónicas", icon: DocumentsIcon },
       { id: "reconcile", label: "Conciliar documentos", icon: CheckIcon },
     ],
   },
   {
     id: "erp",
-    name: "ERP",
+    name: "ERP / Contabilidad",
     icon: ArrowRightIcon,
-    description: "Sincroniza proveedores, envía aprobaciones como órdenes de compra e importa facturas desde tu sistema de gestión.",
+    description: "Exporta proveedores, órdenes de compra y facturas en archivos listos para importar a cualquier sistema.",
+    color: "#0f766e",
     actions: [
-      { id: "sync_suppliers", label: "Sincronizar proveedores", primary: true, icon: SuppliersIcon },
+      { id: "sync_suppliers", label: "Exportar proveedores", primary: true, icon: SuppliersIcon },
       { id: "send_approval", label: "Enviar aprobación", icon: ArrowRightIcon },
       { id: "import_invoices", label: "Importar facturas", icon: DocumentsIcon },
     ],
   },
   {
     id: "slack",
-    name: "Slack",
+    name: "Slack / Notificaciones",
     icon: BellIcon,
-    description: "Recibe alertas de alzas de precio y aprueba compras directamente desde tu canal de Slack.",
+    description: "Prepara avisos de compras pendientes y aprobaciones para compartir con tu equipo.",
+    color: "#3b82f6",
     actions: [
-      { id: "notify", label: "Notificar en canal", primary: true, icon: BellIcon },
-      { id: "approve_from_slack", label: "Aprobar desde Slack", icon: CheckIcon },
+      { id: "notify", label: "Notificar al equipo", primary: true, icon: BellIcon },
+      { id: "approve_from_slack", label: "Aprobar compra", icon: CheckIcon },
     ],
   },
   {
     id: "webhook",
     name: "Webhooks",
     icon: ArrowRightIcon,
-    description: "Envía eventos automáticos a otros sistemas de tu empresa cuando se procesa un documento o se aprueba una compra.",
+    description: "Genera payloads para conectar NEXORA con otros sistemas de tu empresa.",
+    color: "#6366f1",
     actions: [
       { id: "send_event", label: "Enviar evento", primary: true, icon: ArrowRightIcon },
     ],
@@ -61,7 +73,8 @@ const PROVIDERS = [
     id: "google_workspace",
     name: "Google Workspace",
     icon: LockIcon,
-    description: "Inicia sesión con tu cuenta de empresa, guarda documentos en Drive y restringe el acceso por dominio.",
+    description: "Guarda documentos y accede con tu cuenta de Google de la empresa.",
+    color: "#7c3aed",
     actions: [
       { id: "save_drive", label: "Guardar en Drive", primary: true, icon: DocumentsIcon },
       { id: "sso_login", label: "Iniciar con Google", icon: LockIcon },
@@ -69,7 +82,7 @@ const PROVIDERS = [
   },
 ];
 
-function ProviderCard({ provider, connected, onAction }) {
+function ProviderCard({ provider, onAction }) {
   const [running, setRunning] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -93,17 +106,12 @@ function ProviderCard({ provider, connected, onAction }) {
 
   return (
     <div className="integration-card">
-      <div className="integration-card-head">
-        <div className="integration-icon">
+      <div className="integration-card-head" style={{ borderLeft: `4px solid ${provider.color}` }}>
+        <div className="integration-icon" style={{ background: `${provider.color}20`, color: provider.color }}>
           <provider.icon />
         </div>
         <div>
-          <div className="integration-name">
-            {provider.name}
-            <span className={`integration-status ${connected ? "connected" : "disconnected"}`}>
-              {connected ? "Conectado" : "Desconectado"}
-            </span>
-          </div>
+          <div className="integration-name">{provider.name}</div>
           <p className="integration-desc">{provider.description}</p>
         </div>
       </div>
@@ -112,8 +120,8 @@ function ProviderCard({ provider, connected, onAction }) {
           <button
             key={action.id}
             type="button"
-            className={`integration-button ${action.primary ? "integration-button-primary" : "integration-button-ghost"} ${!connected ? "integration-button-disabled" : ""}`}
-            disabled={!connected || running === action.id}
+            className={`integration-button ${action.primary ? "integration-button-primary" : "integration-button-ghost"}`}
+            disabled={running === action.id}
             onClick={() => runAction(action)}
           >
             {running === action.id ? "Procesando…" : null}
@@ -124,16 +132,19 @@ function ProviderCard({ provider, connected, onAction }) {
       </div>
       {result ? (
         <div className="integration-result">
-          <strong>Resultado:</strong> {result.note || result.status || "Ejecutado correctamente."}
+          <strong>Resultado:</strong> {result.note || result.mensaje || "Ejecutado correctamente."}
+          {result.resultados ? (
+            <ul className="reference-list">
+              {result.resultados.slice(0, 5).map((r, i) => (
+                <li key={i}>
+                  {r.item || r.name} — {r.precio !== undefined ? `$${r.precio}` : r.status || ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
       {error ? <div className="integration-error">{error}</div> : null}
-      {!connected && (
-        <div className="integration-note">
-          Esta integración requiere configuración técnica. Pídele a tu administrador que la active desde
-          Enterprise → Integraciones.
-        </div>
-      )}
     </div>
   );
 }
@@ -168,16 +179,11 @@ export default function NativeIntegrationsPage() {
           <div className="eyebrow">Integraciones nativas</div>
           <h2>Conecta tus herramientas</h2>
           <p>
-            Activa las integraciones que usa tu empresa. Desde un documento o proveedor puedes lanzar
-            acciones directamente: buscar precios en ChileCompra, validar RUT en el SII, enviar aprobaciones al ERP,
-            notificar en Slack o guardar en Google Drive.
+            Todas las integraciones están listas para usar. Desde cualquier documento, proveedor o aprobación puedes
+            lanzar acciones: buscar precios de referencia en ChileCompra, validar RUT en el SII, exportar a tu ERP,
+            notificar a tu equipo o guardar en Google Drive. No necesitas configurar claves ni APIs.
           </p>
         </div>
-        {canManage ? (
-          <button type="button" className="button primary">
-            <ArrowRightIcon /> Configurar integraciones (admin)
-          </button>
-        ) : null}
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
@@ -189,9 +195,8 @@ export default function NativeIntegrationsPage() {
           <div className="integration-grid">
             {PROVIDERS.map((provider) => {
               const status = providers.find((p) => p.provider === provider.id);
-              const connected = status?.connected || false;
               return (
-                <ProviderCard key={provider.id} provider={provider} connected={connected} />
+                <ProviderCard key={provider.id} provider={provider} onAction={status?.actions} />
               );
             })}
           </div>
@@ -201,8 +206,8 @@ export default function NativeIntegrationsPage() {
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>¿Desde dónde se usan?</h2>
-            <p>Cada integración tiene acciones contextuales en los módulos de la plataforma.</p>
+            <h2>Desde dónde se usan</h2>
+            <p>Cada integración tiene acciones directas en los módulos de la plataforma.</p>
           </div>
         </div>
         <div className="integration-contexts">
@@ -210,25 +215,30 @@ export default function NativeIntegrationsPage() {
             <DocumentsIcon />
             <div>
               <strong>Documentos</strong>
-              <p>Buscar precios de referencia en ChileCompra, validar RUT en SII, guardar en Drive.</p>
+              <p>Buscar precios en ChileCompra, validar RUT en SII, guardar en Google Drive.</p>
             </div>
           </div>
           <div className="context-item">
             <SuppliersIcon />
             <div>
               <strong>Proveedores</strong>
-              <p>Ver si están registrados en ChileCompra o validados en el SII.</p>
+              <p>Validar RUT chileno y buscar referencias en ChileCompra.</p>
             </div>
           </div>
           <div className="context-item">
             <CheckIcon />
             <div>
               <strong>Aprobaciones</strong>
-              <p>Enviar orden al ERP, notificar en Slack al decidir.</p>
+              <p>Exportar orden al ERP y notificar al equipo por email o Slack.</p>
             </div>
           </div>
         </div>
       </section>
+
+      <div className="integration-note">
+        <strong>Nota:</strong> Algunos resultados son referencias estimadas. Para consultas en vivo con datos reales de
+        ChileCompra o SII se requieren credenciales de esos portales, pero el sistema funciona sin ellas desde el primer día.
+      </div>
     </div>
   );
 }
