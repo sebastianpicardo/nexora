@@ -6203,3 +6203,148 @@ a {
   font-size: 12px;
   color: var(--ink-soft);
 }
+/* ── Modal de resultados de integración ── */
+.integration-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(9, 14, 22, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.integration-modal {
+  width: 100%;
+  max-width: 720px;
+  max-height: 85vh;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.integration-modal .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.integration-modal .modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.integration-modal .modal-head svg {
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+
+.integration-modal .modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.integration-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.result-summary {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.result-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.result-file {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.result-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.result-payload {
+  margin-top: 10px;
+  background: #0f172a;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.result-payload pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #818cf8;
+  line-height: 1.4;
+}
+
+.result-payload strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ink);
+}
+
+.result-table-wrap .muted.small {
+  display: block;
+  margin-top: 6px;
+}
+
+@media print {
+  .integration-modal-overlay {
+    background: #fff;
+    position: static;
+    display: block;
+  }
+  .integration-modal {
+    box-shadow: none;
+    border: none;
+    max-height: none;
+    width: 100%;
+  }
+  .integration-modal .modal-actions,
+  .integration-modal .icon-button,
+  .page-stack > *:not(.integration-modal-overlay),
+  .app-shell .sidebar,
+  .app-shell .topbar {
+    display: none !important;
+  }
+  .result-table-wrap .data-table {
+    font-size: 11px;
+  }
+  .result-table-wrap .data-table th,
+  .result-table-wrap .data-table td {
+    padding: 4px 6px;
+  }
+}

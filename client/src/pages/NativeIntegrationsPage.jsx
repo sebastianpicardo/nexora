@@ -9,6 +9,7 @@ import {
   LockIcon,
   SearchIcon,
   SuppliersIcon,
+  XIcon,
 } from "../components/Icons";
 
 const PROVIDERS = [
@@ -77,32 +78,30 @@ const PROVIDERS = [
     color: "#7c3aed",
     actions: [
       { id: "save_drive", label: "Guardar en Drive", primary: true, icon: DocumentsIcon },
-      { id: "sso_login", label: "Iniciar con Google", icon: LockIcon },
+      { id: "sso_login", label: "Iniciar sesión con Google", icon: LockIcon },
     ],
   },
 ];
 
-function ProviderCard({ provider, onAction }) {
+function ProviderCard({ provider, onResult }) {
   const [running, setRunning] = useState(null);
-  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
   const runAction = useCallback(async (action) => {
     setRunning(action.id);
-    setResult(null);
     setError(null);
     try {
       const data = await api(`/api/integrations/native/${provider.id}/${action.id}`, {
         method: "POST",
         body: JSON.stringify({}),
       });
-      setResult(data);
+      onResult(provider, action, data);
     } catch (err) {
       setError(err.message || "No se pudo ejecutar la acción.");
     } finally {
       setRunning(null);
     }
-  }, [provider.id]);
+  }, [provider.id, onResult]);
 
   return (
     <div className="integration-card">
@@ -130,21 +129,117 @@ function ProviderCard({ provider, onAction }) {
           </button>
         ))}
       </div>
-      {result ? (
-        <div className="integration-result">
-          <strong>Resultado:</strong> {result.note || result.mensaje || "Ejecutado correctamente."}
-          {result.resultados ? (
-            <ul className="reference-list">
-              {result.resultados.slice(0, 5).map((r, i) => (
-                <li key={i}>
-                  {r.item || r.name} — {r.precio !== undefined ? `$${r.precio}` : r.status || ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
       {error ? <div className="integration-error">{error}</div> : null}
+    </div>
+  );
+}
+
+function IntegrationResultModal({ result, onClose }) {
+  const provider = result.provider;
+  const action = result.action;
+  const resultados = result.resultados || [];
+  const invoices = result.invoices || [];
+
+  return (
+    <div className="integration-modal-overlay" onClick={onClose}>
+      <div className="integration-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>
+            <provider.icon /> {result.provider_name || provider}
+          </h3>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <XIcon />
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="result-summary">
+            <strong>Acción:</strong> {action}
+          </div>
+          {resultados.length > 0 ? (
+            <div className="result-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Ítem / Proveedor</th>
+                    <th>Categoría</th>
+                    <th>Unidad</th>
+                    <th>Precio ref.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resultados.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.item || r.name || "—"}</td>
+                      <td>{r.categoria || "—"}</td>
+                      <td>{r.unit || "—"}</td>
+                      <td className="mono">
+                        {r.precio !== undefined ? `$${Number(r.precio).toLocaleString("es-CL")}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="muted small">
+                Precios de referencia estimados. No son cotizaciones oficiales de ChileCompra.
+              </p>
+            </div>
+          ) : invoices.length > 0 ? (
+            <div className="result-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Folio</th>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.folio || r.id || "—"}</td>
+                      <td>{r.fecha || "—"}</td>
+                      <td className="mono">{r.monto || "—"}</td>
+                      <td>{r.estado || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {result.file && (
+            <div className="result-file">
+              <strong>Archivo listo:</strong> {result.file}
+              <p className="muted small">{result.note || ""}</p>
+            </div>
+          )}
+          {!result.file && !resultados.length && !invoices.length && (
+            <div className="result-note">
+              <p>{result.note || result.mensaje || "Ejecutado correctamente."}</p>
+              {result.payload && (
+                <div className="result-payload">
+                  <strong>Payload:</strong>
+                  <pre>{JSON.stringify(result.payload, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button ghost" onClick={onClose}>
+            Cerrar
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => {
+              window.print();
+            }}
+          >
+            <DocumentsIcon /> Guardar PDF
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -154,6 +249,7 @@ export default function NativeIntegrationsPage() {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openResult, setOpenResult] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -196,7 +292,13 @@ export default function NativeIntegrationsPage() {
             {PROVIDERS.map((provider) => {
               const status = providers.find((p) => p.provider === provider.id);
               return (
-                <ProviderCard key={provider.id} provider={provider} onAction={status?.actions} />
+                <ProviderCard
+                  key={provider.id}
+                  provider={provider}
+                  onResult={(prov, act, data) =>
+                    setOpenResult({ ...data, provider_name: prov.name })
+                  }
+                />
               );
             })}
           </div>
@@ -239,6 +341,8 @@ export default function NativeIntegrationsPage() {
         <strong>Nota:</strong> Algunos resultados son referencias estimadas. Para consultas en vivo con datos reales de
         ChileCompra o SII se requieren credenciales de esos portales, pero el sistema funciona sin ellas desde el primer día.
       </div>
+
+      {openResult && <IntegrationResultModal result={openResult} onClose={() => setOpenResult(null)} />}
     </div>
   );
 }
