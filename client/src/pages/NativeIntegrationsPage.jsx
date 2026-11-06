@@ -137,7 +137,7 @@ function ProviderCard({ provider, onResult }) {
 function IntegrationResultModal({ result, onClose }) {
   const provider = result.provider;
   const action = result.action;
-  const resultados = result.resultados || [];
+  const resultados = result.results || [];
   const invoices = result.invoices || [];
 
   return (
@@ -207,9 +207,9 @@ function IntegrationResultModal({ result, onClose }) {
               </table>
             </div>
           ) : null}
-          {result.file && (
+          {(result.file || result.archivo) && (
             <div className="result-file">
-              <strong>Archivo listo:</strong> {result.file}
+              <strong>Archivo listo:</strong> {result.file || result.archivo}
               <p className="muted small">{result.note || ""}</p>
             </div>
           )}
@@ -220,6 +220,22 @@ function IntegrationResultModal({ result, onClose }) {
                 <div className="result-payload">
                   <strong>Payload:</strong>
                   <pre>{JSON.stringify(result.payload, null, 2)}</pre>
+                </div>
+              )}
+              {!result.payload && (
+                <div className="result-details">
+                  {Object.entries(result).map(([key, value]) => {
+                    const skip = ["provider", "action", "note", "mensaje", "payload", "results", "invoices", "file", "archivo"];
+                    if (skip.includes(key) || value === undefined || value === null) return null;
+                    const label = key
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^./, (str) => str.toUpperCase());
+                    return (
+                      <div key={key} className="result-detail-row">
+                        <strong>{label}:</strong> {String(value)}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
