@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from src.api.routes import (
     admin,
     auth,
+    backup,
     billing,
     dashboard,
     documents,
@@ -36,4 +37,5 @@ api_router.include_router(dashboard.router)
 api_router.include_router(enterprise.router)
 api_router.include_router(enterprise.inbound_router)
 api_router.include_router(native_integrations.router)
+api_router.include_router(backup.router)
 api_router.include_router(public_api.router)
