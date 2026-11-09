@@ -56,9 +56,10 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     local_upload_dir: str = "./uploads"
 
-    jwt_secret: str = "change-me-in-production"
+    jwt_secret: str = ""
     jwt_expires_minutes: int = 10080
-    session_secret: str = "change-me-in-production"
+    jwt_key_version: int = 1
+    session_secret: str = ""
     cookie_name: str = "nexora_token"
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
@@ -125,6 +126,7 @@ class Settings(BaseSettings):
     price_lookback_days: int = Field(default=365, ge=1)
     min_history_samples: int = Field(default=2, ge=1)
     max_upload_mb: int = Field(default=25, ge=1)
+    max_concurrent_sessions: int = Field(default=5, ge=1, le=50)
 
     process_in_background: bool = True
     worker_poll_seconds: int = Field(default=10, ge=1)
@@ -171,7 +173,10 @@ class Settings(BaseSettings):
         origins: list[str] = []
         for candidate in candidates:
             origin = _normalize_origin(candidate)
-            if not origin or origin == "*" or origin in origins:
+            if not origin or origin in origins:
+                continue
+            # En producción nunca permitir comodín
+            if self.is_production and origin == "*":
                 continue
             if self.is_production and _is_placeholder_url(origin):
                 continue
@@ -225,12 +230,17 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "DATABASE_URL no está configurada. Copia .env.example a .env y completa la conexión de Supabase."
             )
-        if self.is_production and not self.cookie_secure:
-            raise RuntimeError("COOKIE_SECURE debe ser true en producción.")
-        if self.is_production and len(self.jwt_secret) < 32:
-            raise RuntimeError("JWT_SECRET debe tener al menos 32 caracteres en producción.")
-        if self.is_production and len(self.session_secret) < 32:
-            raise RuntimeError("SESSION_SECRET debe tener al menos 32 caracteres en producción.")
+        if self.is_production:
+            if not self.jwt_secret or self.jwt_secret == "change-me-in-production":
+                raise RuntimeError("JWT_SECRET debe configurarse con un valor seguro en producción.")
+            if len(self.jwt_secret) < 32:
+                raise RuntimeError("JWT_SECRET debe tener al menos 32 caracteres en producción.")
+            if not self.session_secret or self.session_secret == "change-me-in-production":
+                raise RuntimeError("SESSION_SECRET debe configurarse con un valor seguro en producción.")
+            if len(self.session_secret) < 32:
+                raise RuntimeError("SESSION_SECRET debe tener al menos 32 caracteres en producción.")
+            if not self.cookie_secure:
+                raise RuntimeError("COOKIE_SECURE debe ser true en producción.")
         if self.storage_backend not in {"local", "supabase"}:
             raise RuntimeError("STORAGE_BACKEND debe ser 'local' o 'supabase'.")
         if self.storage_backend == "supabase" and not (self.supabase_url and self.supabase_service_role_key):

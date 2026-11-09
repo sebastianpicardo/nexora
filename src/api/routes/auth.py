@@ -106,6 +106,18 @@ def _client_ip(request: Request) -> str | None:
 async def _record_session(user: dict, request: Request) -> None:
     try:
         async with get_pool().connection() as conn:
+            # Límite de sesiones concurrentes por usuario (M3)
+            max_sessions = settings.max_concurrent_sessions
+            existing = await repositories.list_user_sessions(conn, user["org_id"], limit=max_sessions + 1)
+            user_sessions = [s for s in existing if s.get("user_id") == user["id"]]
+            if len(user_sessions) >= max_sessions:
+                # Invalidar la sesión más antigua
+                oldest = user_sessions[-1]
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "DELETE FROM user_sessions WHERE id = %s",
+                        (str(oldest["id"]),),
+                    )
             await repositories.record_user_session(
                 conn,
                 org_id=user["org_id"],
@@ -115,6 +127,26 @@ async def _record_session(user: dict, request: Request) -> None:
             )
     except Exception:
         logger.exception("No se pudo registrar la sesión del usuario %s", user.get("id"))
+
+
+def _sanitize_metadata(metadata: dict | None) -> dict | None:
+    """Elimina campos sensibles de los metadatos de auditoría (M4)."""
+    if not metadata:
+        return metadata
+    sensitive_keys = {
+        "password", "password_hash", "token", "access_token", "refresh_token",
+        "api_key", "secret", "private_key", "client_secret", "recaptcha_token",
+        "email", "ip_address", "user_agent",
+    }
+    sanitized: dict = {}
+    for key, value in metadata.items():
+        if key.lower() in sensitive_keys:
+            sanitized[key] = "[REDACTED]"
+        elif isinstance(value, dict):
+            sanitized[key] = _sanitize_metadata(value)
+        else:
+            sanitized[key] = value
+    return sanitized
 
 
 async def _audit(user: dict, action: str, request: Request) -> None:
@@ -128,6 +160,7 @@ async def _audit(user: dict, action: str, request: Request) -> None:
                 entity_type="auth",
                 entity_id=str(user.get("id") or ""),
                 ip_address=_client_ip(request),
+                metadata=_sanitize_metadata({"action": action}),
             )
     except Exception:
         logger.exception("No se pudo registrar el evento de auditoría %s", action)

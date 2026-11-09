@@ -107,6 +107,7 @@ def create_access_token(
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_expires_minutes),
         "iss": settings.app_name,
+        "kid": settings.jwt_key_version,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
@@ -124,6 +125,12 @@ def decode_access_token(token: str) -> dict:
 
     if not payload.get("sub"):
         raise ValueError("Token sin identificador de usuario")
+
+    # Validar versión de clave (key rotation)
+    kid = payload.get("kid")
+    if kid is not None and int(kid) != settings.jwt_key_version:
+        raise ValueError("Token con clave de firma obsoleta. Inicie sesión nuevamente.")
+
     return payload
 
 

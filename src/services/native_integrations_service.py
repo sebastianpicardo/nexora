@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 from typing import Any
@@ -167,8 +168,14 @@ async def chilecompra_search_items(user: dict, payload: dict) -> dict[str, Any]:
     resultados = resultados[:limit]
 
     async with get_pool().connection() as conn:
+        meta = {"query": query, "mode": mode}
         await _audit(
-            conn, user, "integration.chilecompra.search_items", "integration", "chilecompra", {"query": query, "mode": mode}
+            conn,
+            user,
+            "integration.chilecompra.search_items",
+            "integration",
+            "chilecompra",
+            meta,
         )
     return {
         "provider": "chilecompra",
@@ -202,8 +209,14 @@ async def chilecompra_search_suppliers(user: dict, payload: dict) -> dict[str, A
         proveedores.sort(key=lambda x: x["ranking"])
 
     async with get_pool().connection() as conn:
+        meta = {"name": name, "order_by": order_by}
         await _audit(
-            conn, user, "integration.chilecompra.search_suppliers", "integration", "chilecompra", {"name": name, "order_by": order_by}
+            conn,
+            user,
+            "integration.chilecompra.search_suppliers",
+            "integration",
+            "chilecompra",
+            meta,
         )
     return {
         "provider": "chilecompra",

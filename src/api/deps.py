@@ -90,6 +90,7 @@ def org_settings(user: dict) -> dict:
         "default_currency": user["default_currency"],
     }
 
+
 class RateLimitMiddleware:
     """Rate limiting en memoria por IP para las rutas /api.
 
@@ -147,3 +148,42 @@ class RateLimitMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
+
+
+class SecurityHeadersMiddleware:
+    """Añade encabezados de seguridad a todas las respuestas HTTP."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_security_headers(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                # Prevenir clickjacking
+                headers["X-Frame-Options"] = "DENY"
+                # Prevenir MIME sniffing
+                headers["X-Content-Type-Options"] = "nosniff"
+                # Política de remitente
+                headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                # HSTS solo en producción (HTTPS)
+                if settings.is_production:
+                    headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                # Content Security Policy básica
+                headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "img-src 'self' data: https:; "
+                    "connect-src 'self' https:; "
+                    "font-src 'self'; "
+                    "object-src 'none'; "
+                    "base-uri 'self';"
+                )
+            await send(message)
+
+        await self.app(scope, receive, send_with_security_headers)

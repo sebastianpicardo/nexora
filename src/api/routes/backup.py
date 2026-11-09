@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -41,8 +40,11 @@ async def backup_status(user: dict = Depends(require_roles("owner", "admin"))) -
 async def create_backup(user: dict = Depends(require_roles("owner", "admin"))) -> dict[str, Any]:
     try:
         return backup_service.create_backup()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo crear el backup.",
+        ) from None
 
 
 @router.get("/download/{filename}")
@@ -70,5 +72,8 @@ async def restore_backup(
         raise HTTPException(status_code=404, detail="Backup no encontrado.")
     try:
         return backup_service.restore_backup(filename)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo restaurar el backup.",
+        ) from None

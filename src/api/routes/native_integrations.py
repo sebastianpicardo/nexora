@@ -36,5 +36,8 @@ async def native_integration_action(
         return await handler(user, payload)
     except HTTPException:
         raise
-    except Exception as exc:  # pragma: no cover - degrade seguro
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except Exception:  # pragma: no cover - degrade seguro
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Error al comunicarse con el proveedor.",
+        ) from None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
@@ -14,7 +15,10 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-async def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> dict:
+async def require_api_key(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    required_scopes: list[str] | None = None,
+) -> dict:
     if not x_api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Falta el header X-API-Key")
     async with get_pool().connection() as conn:
@@ -24,12 +28,32 @@ async def require_api_key(x_api_key: str | None = Header(default=None, alias="X-
         org = await repositories.get_organization(conn, key["org_id"])
     if org is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Organización no disponible")
+
+    # Validar scopes si se especifican
+    if required_scopes:
+        key_scopes = set(key.get("scopes") or [])
+        missing = set(required_scopes) - key_scopes
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"La API key no tiene los alcances requeridos: {', '.join(sorted(missing))}",
+            )
+
     return {**key, "default_currency": org["default_currency"], "org_name": org["name"]}
+
+
+async def require_api_key_read(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> dict:
+    return await require_api_key(x_api_key, required_scopes=["read"])
+
+
+ApiKeyRead = Annotated[dict, Depends(require_api_key_read)]
 
 
 @router.get("/summary")
 async def public_summary(
-    key: dict = Depends(require_api_key),
+    key: ApiKeyRead,
     currency: str | None = Query(default=None, min_length=3, max_length=3),
 ):
     active_currency = (currency or key["default_currency"] or "CLP").strip().upper()
@@ -54,7 +78,7 @@ async def public_summary(
 
 @router.get("/items")
 async def public_items(
-    key: dict = Depends(require_api_key),
+    key: ApiKeyRead,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
 ):
@@ -70,7 +94,7 @@ async def public_items(
 
 @router.get("/suppliers")
 async def public_suppliers(
-    key: dict = Depends(require_api_key),
+    key: ApiKeyRead,
     search: str | None = Query(default=None, max_length=100),
 ):
     async with get_pool().connection() as conn:
@@ -80,7 +104,7 @@ async def public_suppliers(
 
 @router.get("/approvals")
 async def public_approvals(
-    key: dict = Depends(require_api_key),
+    key: ApiKeyRead,
     status_filter: str | None = Query(default=None, alias="status"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),

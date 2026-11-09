@@ -119,9 +119,9 @@ def create_backup() -> dict[str, Any]:
             "message": "Backup creado correctamente.",
         }
     except subprocess.TimeoutExpired:
-        raise RuntimeError("El backup tardó demasiado y se canceló.")
+        raise RuntimeError("El backup tardó demasiado y se canceló.") from None
     except FileNotFoundError:
-        raise RuntimeError("pg_dump no está instalado en el servidor.")
+        raise RuntimeError("pg_dump no está instalado en el servidor.") from None
 
 
 def restore_backup(filename: str) -> dict[str, Any]:
@@ -178,6 +178,6 @@ def restore_backup(filename: str) -> dict[str, Any]:
             "message": "Backup restaurado correctamente.",
         }
     except subprocess.TimeoutExpired:
-        raise RuntimeError("La restauración tardó demasiado y se canceló.")
+        raise RuntimeError("La restauración tardó demasiado y se canceló.") from None
     except FileNotFoundError:
-        raise RuntimeError("psql no está instalado en el servidor.")
+        raise RuntimeError("psql no está instalado en el servidor.") from None
