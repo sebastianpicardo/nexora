@@ -2,7 +2,6 @@ const CACHE_NAME = "nexora-v1";
 const SHELL_URLS = [
   "/",
   "/index.html",
-  "/src/main.jsx",
   "/manifest.webmanifest",
   "/icon-192.svg",
   "/icon-512.svg",
@@ -10,7 +9,14 @@ const SHELL_URLS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()),
+    caches.open(CACHE_NAME).then((cache) => {
+      const promises = SHELL_URLS.map((url) =>
+        cache.add(url).catch((err) => {
+          console.warn("[SW] No se pudo cachear:", url, err);
+        }),
+      );
+      return Promise.allSettled(promises).then(() => self.skipWaiting());
+    }),
   );
 });
 

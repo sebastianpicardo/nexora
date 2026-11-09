@@ -18,11 +18,15 @@ async def list_search_history(
     action: str | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
-    async with get_pool().connection() as conn:
-        rows = await repositories.list_user_search_history(
-            conn, user["id"], provider=provider, action=action, limit=limit
-        )
-    return {"items": rows}
+    try:
+        async with get_pool().connection() as conn:
+            rows = await repositories.list_user_search_history(
+                conn, user["id"], provider=provider, action=action, limit=limit
+            )
+        return {"items": rows}
+    except Exception:
+        # Migración 006 aún no aplicada en producción; devolver vacío sin romper la UI
+        return {"items": []}
 
 
 @router.post("")
@@ -39,14 +43,21 @@ async def save_search_history(
     if not provider or not action:
         raise HTTPException(status_code=400, detail="provider y action son obligatorios")
 
-    async with get_pool().connection() as conn:
-        row = await repositories.save_user_search_history(
-            conn,
-            user_id=user["id"],
-            provider=provider,
-            action=action,
-            query=query,
-            result_summary=result_summary,
-            result_data=result_data,
-        )
-    return row
+    try:
+        async with get_pool().connection() as conn:
+            row = await repositories.save_user_search_history(
+                conn,
+                user_id=user["id"],
+                provider=provider,
+                action=action,
+                query=query,
+                result_summary=result_summary,
+                result_data=result_data,
+            )
+        return row
+    except Exception:
+        # Migración 006 aún no aplicada; no fallar la acción de integración
+        return {
+            "saved": False,
+            "note": "Historial no disponible (migración pendiente en Supabase).",
+        }
