@@ -249,5 +249,7 @@ __all__ = [
     "list_all_users",
     "update_user_global",
     "delete_user_global",
+    "save_user_search_history",
+    "list_user_search_history",
     "update_supplier",
 ]

@@ -673,6 +673,52 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 CREATE INDEX IF NOT EXISTS push_subscriptions_org_idx
     ON push_subscriptions (org_id, active);
 
+-- ── Historial de búsquedas por usuario ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_search_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL CHECK (provider IN ('chilecompra', 'sii', 'erp', 'slack', 'webhook', 'google_workspace')),
+    action TEXT NOT NULL,
+    query TEXT NOT NULL DEFAULT '',
+    result_summary TEXT NOT NULL DEFAULT '',
+    result_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS user_search_history_user_idx
+    ON user_search_history (user_id, provider, action, created_at DESC);
+
+CREATE OR REPLACE FUNCTION trim_user_search_history()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user_id UUID;
+    v_provider TEXT;
+    v_action TEXT;
+BEGIN
+    v_user_id := NEW.user_id;
+    v_provider := NEW.provider;
+    v_action := NEW.action;
+
+    DELETE FROM user_search_history
+    WHERE id IN (
+        SELECT id FROM user_search_history
+        WHERE user_id = v_user_id
+          AND provider = v_provider
+          AND action = v_action
+        ORDER BY created_at DESC
+        OFFSET 3
+    );
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_trim_user_search_history ON user_search_history;
+CREATE TRIGGER trg_trim_user_search_history
+    AFTER INSERT ON user_search_history
+    FOR EACH ROW
+    EXECUTE FUNCTION trim_user_search_history();
+
 DROP TRIGGER IF EXISTS purchase_approvals_set_updated_at ON purchase_approvals;
 CREATE TRIGGER purchase_approvals_set_updated_at
     BEFORE UPDATE ON purchase_approvals
@@ -707,7 +753,7 @@ BEGIN
     FOREACH table_name IN ARRAY ARRAY[
         'purchase_approvals', 'notification_channels', 'notification_deliveries',
         'integrations', 'api_keys', 'webhook_subscriptions', 'inbound_email_tokens',
-        'onboarding_progress', 'user_sessions', 'push_subscriptions'
+        'onboarding_progress', 'user_sessions', 'push_subscriptions', 'user_search_history'
     ]
     LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);

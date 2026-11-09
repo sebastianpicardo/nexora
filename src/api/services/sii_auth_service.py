@@ -1,11 +1,12 @@
+import html
 import os
 import re
-import html
-import requests
 import xml.etree.ElementTree as ET
-from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.hazmat.primitives import serialization
+
+import requests
 import signxml
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import pkcs12
 from signxml import XMLSigner
 
 URL_SEED = "https://maullin.sii.cl/DTEWS/CrSeed.jws"

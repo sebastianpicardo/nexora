@@ -35,7 +35,7 @@ const PROVIDERS = [
     actions: [
       { id: "validate_rut", label: "Validar RUT", primary: true, icon: CheckIcon },
       { id: "fetch_invoices", label: "Facturas electrónicas", icon: DocumentsIcon },
-      { id: "reconcile", "label": "Conciliar documentos", icon: CheckIcon },
+      { id: "reconcile", label: "Conciliar documentos", icon: CheckIcon },
     ],
   },
   {
@@ -84,7 +84,7 @@ const PROVIDERS = [
   },
 ];
 
-function ProviderCard({ provider, onConfiguredAction }) {
+function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
   const [running, setRunning] = useState(null);
   const [error, setError] = useState(null);
   const [configureModal, setConfigureModal] = useState(null);
@@ -98,7 +98,7 @@ function ProviderCard({ provider, onConfiguredAction }) {
         method: "POST",
         body: JSON.stringify(body),
       });
-      onConfiguredAction(provider, action, data);
+      onConfiguredAction(provider, action, data, config);
     } catch (err) {
       setError(err.message || "No se pudo ejecutar la acción.");
     } finally {
@@ -115,6 +115,10 @@ function ProviderCard({ provider, onConfiguredAction }) {
     setConfigureModal(null);
     setError(null);
   };
+
+  const providerHistory = recentSearches.filter(
+    (h) => h.provider === provider.id && (h.action === "search_items" || h.action === "search_suppliers")
+  );
 
   return (
     <div className="integration-card">
@@ -147,14 +151,32 @@ function ProviderCard({ provider, onConfiguredAction }) {
             {!running && action.label}
           </button>
         ))}
+        {providerHistory.length > 0 && (
+          <div className="recent-searches">
+            <strong>Búsquedas recientes:</strong>
+            {providerHistory.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                className="recent-search-chip"
+                onClick={() => {
+                  const config = h.action === "search_items" ? { query: h.query, mode: h.mode || "all" } : { name: h.query, order_by: h.order_by || "ranking" };
+                  runAction({ ...provider.actions.find((a) => a.id === h.action), id: h.action }, config);
+                }}
+              >
+                {h.query}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {error ? <div className="integration-error">{error}</div> : null}
 
-      {/* Configurar modal para ChileCompra */}
       {configureModal && (
         <IntegrationConfigModal
           provider={provider}
           action={configureModal}
+          recentSearches={providerHistory}
           onClose={closeConfigure}
           onRun={(config) => {
             closeConfigure();
@@ -166,7 +188,7 @@ function ProviderCard({ provider, onConfiguredAction }) {
   );
 }
 
-function IntegrationConfigModal({ provider, action, onClose, onRun }) {
+function IntegrationConfigModal({ provider, action, recentSearches, onClose, onRun }) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const [orderBy, setOrderBy] = useState("ranking");
@@ -174,6 +196,19 @@ function IntegrationConfigModal({ provider, action, onClose, onRun }) {
 
   const isItems = action.id === "search_items";
   const isSuppliers = action.id === "search_suppliers";
+
+  // Precargar de la búsqueda más reciente si existe
+  useEffect(() => {
+    const latest = recentSearches[0];
+    if (latest && isItems && !query) {
+      setQuery(latest.query || "");
+      setMode(latest.mode || "all");
+    }
+    if (latest && isSuppliers && !supplierName) {
+      setSupplierName(latest.query || "");
+      setOrderBy(latest.order_by || "ranking");
+    }
+  }, [recentSearches, isItems, isSuppliers, query, supplierName]);
 
   return (
     <div className="integration-modal-overlay" onClick={onClose}>
@@ -185,6 +220,30 @@ function IntegrationConfigModal({ provider, action, onClose, onRun }) {
           </button>
         </div>
         <div className="modal-body">
+          {recentSearches.length > 0 && (
+            <div className="recent-searches">
+              <strong>Búsquedas guardadas:</strong>
+              {recentSearches.map((h) => (
+                <button
+                  key={h.id}
+                  type="button"
+                  className="recent-search-chip"
+                  onClick={() => {
+                    if (isItems) {
+                      setQuery(h.query || "");
+                      setMode(h.mode || "all");
+                    }
+                    if (isSuppliers) {
+                      setSupplierName(h.query || "");
+                      setOrderBy(h.order_by || "ranking");
+                    }
+                  }}
+                >
+                  {h.query}
+                </button>
+              ))}
+            </div>
+          )}
           {isItems && (
             <>
               <label className="form-field">
@@ -274,42 +333,42 @@ function IntegrationResultModal({ result, onClose }) {
 
           {resultados.length > 0 ? (
             <div className="result-table-wrap">
-                  {resultados[0].rut ? (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Proveedor</th>
-                          <th>RUT</th>
-                          <th>Región</th>
-                          <th>Confianza</th>
-                          <th>Ranking</th>
-                          <th>Precio promedio</th>
-                          <th>Quejas</th>
-                          <th>Contacto</th>
-                          <th>Teléfono</th>
-                          <th>Email</th>
-                          <th>Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resultados.map((r, i) => (
-                          <tr key={i}>
-                            <td>{r.name || "—"}</td>
-                            <td className="mono">{r.rut || "—"}</td>
-                            <td>{r.region || "—"}</td>
-                            <td>{r.confianza ?? "—"}</td>
-                            <td>{r.ranking ?? "—"}</td>
-                            <td className="mono">${Number(r.precio_promedio ?? 0).toLocaleString("es-CL")}</td>
-                            <td>{r.quejas ?? "—"}</td>
-                            <td>{r.contacto || "—"}</td>
-                            <td className="mono">{r.telefono || "—"}</td>
-                            <td>{r.email || "—"}</td>
-                            <td>{r.estado || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
+              {resultados[0].rut ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Proveedor</th>
+                      <th>RUT</th>
+                      <th>Región</th>
+                      <th>Confianza</th>
+                      <th>Ranking</th>
+                      <th>Precio promedio</th>
+                      <th>Quejas</th>
+                      <th>Contacto</th>
+                      <th>Teléfono</th>
+                      <th>Email</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultados.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.name || "—"}</td>
+                        <td className="mono">{r.rut || "—"}</td>
+                        <td>{r.region || "—"}</td>
+                        <td>{r.confianza ?? "—"}</td>
+                        <td>{r.ranking ?? "—"}</td>
+                        <td className="mono">${Number(r.precio_promedio ?? 0).toLocaleString("es-CL")}</td>
+                        <td>{r.quejas ?? "—"}</td>
+                        <td>{r.contacto || "—"}</td>
+                        <td className="mono">{r.telefono || "—"}</td>
+                        <td>{r.email || "—"}</td>
+                        <td>{r.estado || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -528,18 +587,23 @@ function BackupSection() {
 }
 
 export default function NativeIntegrationsPage() {
-  const { canManage } = useAuth();
+  const { user } = useAuth();
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openResult, setOpenResult] = useState(null);
+  const [searchHistory, setSearchHistory] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await api("/api/integrations/native/status");
-      setProviders(data.providers || []);
+      const [statusData, historyData] = await Promise.all([
+        api("/api/integrations/native/status"),
+        api("/api/user/search-history?limit=20"),
+      ]);
+      setProviders(statusData.providers || []);
+      setSearchHistory(historyData.items || []);
     } catch (err) {
       setError(err.message || "No se pudieron cargar las integraciones.");
     } finally {
@@ -550,6 +614,27 @@ export default function NativeIntegrationsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const saveSearch = useCallback(async (providerId, actionId, config, result) => {
+    if (!user) return;
+    try {
+      await api("/api/user/search-history", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: providerId,
+          action: actionId,
+          query: config.query || config.name || "",
+          result_summary: result.note || result.mensaje || "Ejecutado correctamente.",
+          result_data: result,
+        }),
+      });
+      // Recargar historial para mostrarlo actualizado
+      const historyData = await api("/api/user/search-history?limit=20");
+      setSearchHistory(historyData.items || []);
+    } catch {
+      // No fallar la UI si no se puede guardar el historial
+    }
+  }, [user]);
 
   return (
     <div className="page-stack">
@@ -578,9 +663,11 @@ export default function NativeIntegrationsPage() {
                 <ProviderCard
                   key={provider.id}
                   provider={provider}
-                  onConfiguredAction={(prov, act, data) =>
-                    setOpenResult({ ...data, provider_name: prov.name })
-                  }
+                  onConfiguredAction={(prov, act, data, config) => {
+                    setOpenResult({ ...data, provider_name: prov.name });
+                    saveSearch(prov.id, act.id, config, data);
+                  }}
+                  recentSearches={searchHistory}
                 />
               );
             })}
@@ -588,7 +675,7 @@ export default function NativeIntegrationsPage() {
         </section>
       )}
 
-      {canManage && <BackupSection />}
+      {user && user.role !== "viewer" && <BackupSection />}
 
       <section className="card">
         <div className="card-head">

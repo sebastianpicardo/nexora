@@ -55,9 +55,11 @@ async def list_all_users(user: dict = Depends(require_super_admin)):
 @router.patch("/users/{user_id}")
 async def update_user_global(
     user_id: str = Path(...),
-    payload: dict = {},
+    payload: dict | None = None,
     user: dict = Depends(require_super_admin),
 ):
+    if payload is None:
+        payload = {}
     role = payload.get("role")
     active = payload.get("active")
     if role is None and active is None:

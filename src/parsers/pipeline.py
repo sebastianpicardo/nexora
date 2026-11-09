@@ -4,14 +4,14 @@ import asyncio
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from src.core.errors import ExtractionError
 from src.parsers.extractors.base import ExtractedContent
 from src.parsers.extractors.images import extract_image
 from src.parsers.extractors.pdf import extract_pdf
 from src.parsers.extractors.tabular import extract_tabular
-from src.parsers.llm.base import LLMProvider
-from src.parsers.llm.factory import get_llm_provider
+from src.parsers.llm.factory import extract_with_fallback
 from src.parsers.normalization.currency import normalize_currency, parse_decimal, quantize_money
 from src.parsers.normalization.dates import parse_flexible_date
 from src.parsers.normalization.descriptions import clean_sku, normalize_description
@@ -107,15 +107,24 @@ async def run_pipeline(
     doc_type_hint: str | None,
     org_settings: dict,
     upload_date: date | None = None,
-    provider: LLMProvider | None = None,
+    provider: Any = None,
 ) -> NormalizationResult:
     extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
-    llm = provider or get_llm_provider()
-    extraction: ExtractedDocument = await llm.extract_document(
-        extracted,
-        filename=filename,
-        doc_type_hint=doc_type_hint,
-    )
+    if provider is not None:
+        extraction: ExtractedDocument = await provider.extract_document(
+            extracted,
+            filename=filename,
+            doc_type_hint=doc_type_hint,
+        )
+        provider_name = provider.name
+        model_name = provider.model
+    else:
+        extraction, provider_name = await extract_with_fallback(
+            extracted,
+            filename=filename,
+            doc_type_hint=doc_type_hint,
+        )
+        model_name = provider_name
 
     default_currency = str(org_settings.get("default_currency") or "CLP")
     raw_min_confidence = org_settings.get("min_confidence")
@@ -196,6 +205,6 @@ async def run_pipeline(
         extraction=extraction,
         items=normalized_items,
         raw_text=extracted.combined_text[:200_000],
-        provider=llm.name,
-        model=llm.model,
+        provider=provider_name,
+        model=model_name,
     )

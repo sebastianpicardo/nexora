@@ -19,6 +19,7 @@ from src.api.routes import (
     public_api,
     suppliers,
     team,
+    user_search_history,
 )
 
 api_router = APIRouter()
@@ -37,5 +38,6 @@ api_router.include_router(dashboard.router)
 api_router.include_router(enterprise.router)
 api_router.include_router(enterprise.inbound_router)
 api_router.include_router(native_integrations.router)
+api_router.include_router(user_search_history.router)
 api_router.include_router(backup.router)
 api_router.include_router(public_api.router)

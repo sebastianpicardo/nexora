@@ -11,7 +11,9 @@ router = APIRouter(prefix="/api/integrations/native", tags=["native-integrations
 
 
 @router.get("/status")
-async def native_integrations_status(user: dict = Depends(require_roles("owner", "admin", "analyst", "user"))) -> dict[str, Any]:
+async def native_integrations_status(
+    user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
+) -> dict[str, Any]:
     return await ni.list_native_integrations(user)
 
 
@@ -19,9 +21,11 @@ async def native_integrations_status(user: dict = Depends(require_roles("owner",
 async def native_integration_action(
     provider: str,
     action: str,
-    payload: dict[str, Any] = {},
+    payload: dict[str, Any] | None = None,
     user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
 ) -> dict[str, Any]:
+    if payload is None:
+        payload = {}
     if provider not in ni.PROVIDERS:
         raise HTTPException(status_code=404, detail="Proveedor no soportado.")
     handlers = ni.ACTION_HANDLERS.get(provider, {})

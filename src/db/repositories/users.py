@@ -6,6 +6,7 @@ import unicodedata
 from uuid import UUID
 
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 
 USER_SELECT = """
     SELECT
@@ -383,3 +384,57 @@ async def delete_user_global(conn: AsyncConnection, user_id: UUID | str) -> bool
     async with conn.cursor() as cur:
         await cur.execute("DELETE FROM users WHERE id = %s", (str(user_id),))
         return cur.rowcount > 0
+
+
+async def save_user_search_history(
+    conn: AsyncConnection,
+    *,
+    user_id: UUID | str,
+    provider: str,
+    action: str,
+    query: str,
+    result_summary: str,
+    result_data: dict,
+) -> dict:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            INSERT INTO user_search_history (user_id, provider, action, query, result_summary, result_data)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, user_id, provider, action, query, result_summary, result_data, created_at
+            """,
+            (str(user_id), provider, action, query, result_summary, Jsonb(result_data)),
+        )
+        return await cur.fetchone()
+
+
+async def list_user_search_history(
+    conn: AsyncConnection,
+    user_id: UUID | str,
+    *,
+    provider: str | None = None,
+    action: str | None = None,
+    limit: int = 10,
+) -> list[dict]:
+    filters = ["user_id = %s"]
+    values: list = [str(user_id)]
+    if provider:
+        filters.append("provider = %s")
+        values.append(provider)
+    if action:
+        filters.append("action = %s")
+        values.append(action)
+    where = " AND ".join(filters)
+    values.append(limit)
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"""
+            SELECT id, user_id, provider, action, query, result_summary, result_data, created_at
+            FROM user_search_history
+            WHERE {where}
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            values,
+        )
+        return list(await cur.fetchall())

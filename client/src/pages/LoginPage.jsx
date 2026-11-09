@@ -101,7 +101,7 @@ export default function LoginPage({ error }) {
     setMessage("");
     setSuccess("");
 
-    if ((mode === MODES.LOGIN || mode === MODES.REGISTER) && !acceptedTerms) {
+    if (mode === MODES.REGISTER && !acceptedTerms) {
       setMessage("Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.");
       return;
     }
@@ -189,7 +189,7 @@ export default function LoginPage({ error }) {
   }
 
   function handleGoogleLogin() {
-    if (!acceptedTerms) {
+    if (mode === MODES.REGISTER && !acceptedTerms) {
       setMessage("Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.");
       return;
     }
@@ -371,7 +371,7 @@ export default function LoginPage({ error }) {
               </label>
             ) : null}
 
-            {mode === MODES.LOGIN || mode === MODES.REGISTER ? (
+            {mode === MODES.REGISTER ? (
               <label className="auth-consent">
                 <input
                   type="checkbox"

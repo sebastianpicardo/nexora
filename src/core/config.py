@@ -108,6 +108,7 @@ class Settings(BaseSettings):
     flow_secret_key: str = ""
 
     llm_provider: str = "openai"
+    llm_provider_order: str = "openai,anthropic,gemini"
     llm_model: str = "gpt-4.1-mini"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
