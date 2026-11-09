@@ -309,7 +309,7 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
   );
 }
 
-function IntegrationResultModal({ result, onClose }) {
+function IntegrationResultModal({ result, onClose, onViewHistory }) {
   const resultados = result.results || [];
   const invoices = result.invoices || [];
 
@@ -460,6 +460,15 @@ function IntegrationResultModal({ result, onClose }) {
           <button type="button" className="button ghost" onClick={onClose}>
             Cerrar
           </button>
+          {onViewHistory ? (
+            <button
+              type="button"
+              className="button ghost"
+              onClick={onViewHistory}
+            >
+              <SearchIcon /> Ver historial
+            </button>
+          ) : null}
           <button
             type="button"
             className="button primary"
@@ -477,7 +486,7 @@ function IntegrationResultModal({ result, onClose }) {
 
 /* ── Backup ── */
 
-function BackupSection() {
+function BackupSection({ available }) {
   const [backups, setBackups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -525,6 +534,13 @@ function BackupSection() {
         </div>
       </div>
 
+      {!available && (
+        <div className="alert warning">
+          <strong>Backup no disponible.</strong> El servidor no tiene <code>pg_dump</code> instalado.
+          Contacta al administrador para habilitar copias de seguridad automáticas.
+        </div>
+      )}
+
       {error ? <div className="alert error">{error}</div> : null}
       {success ? <div className="alert success">{success}</div> : null}
 
@@ -532,16 +548,19 @@ function BackupSection() {
         <button
           type="button"
           className="button primary"
-          disabled={creating}
+          disabled={creating || !available}
           onClick={handleCreate}
         >
           {creating ? "Creando backup…" : <><DocumentsIcon /> Crear backup ahora</>}
         </button>
       </div>
 
-      <div className="muted small">
-        Los backups se guardan en el servidor. Descarga una copia para tenerla fuera de la plataforma.
-      </div>
+      {!available && (
+        <div className="muted small">
+          Los backups requieren configuración del servidor (pg_dump). Mientras tanto, exporta tus
+          datos desde los módulos de Documentos, Proveedores y Aprobaciones.
+        </div>
+      )}
 
       <div className="table-wrapper">
         <table className="data-table">
@@ -586,26 +605,100 @@ function BackupSection() {
   );
 }
 
+function SearchHistoryModal({ history, onClose }) {
+  return (
+    <div className="integration-modal-overlay" onClick={onClose}>
+      <div className="integration-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Historial de búsquedas</h3>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <XIcon />
+          </button>
+        </div>
+        <div className="modal-body">
+          {history.length === 0 ? (
+            <div className="empty-state">No hay búsquedas guardadas aún.</div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Proveedor</th>
+                  <th>Acción</th>
+                  <th>Filtro / Query</th>
+                  <th>Fecha</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td>{h.provider}</td>
+                    <td>{h.action}</td>
+                    <td className="mono truncate">{h.query || "—"}</td>
+                    <td>{h.created_at}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button ghost small"
+                        onClick={() => {
+                          onClose();
+                          // Precargar en el modal de configuración según la acción
+                          if (h.action === "search_items") {
+                            setOpenResult({
+                              provider_name: h.provider,
+                              action: h.action,
+                              query: h.query,
+                              results: (h.result_data && h.result_data.results) || [],
+                              note: h.result_summary,
+                              total: h.result_data && h.result_data.total,
+                            });
+                          }
+                        }}
+                      >
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button ghost" onClick={onClose}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NativeIntegrationsPage() {
   const { user } = useAuth();
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openResult, setOpenResult] = useState(null);
+  const [openHistory, setOpenHistory] = useState(null);
   const [searchHistory, setSearchHistory] = useState([]);
+  const [backupAvailable, setBackupAvailable] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [statusData, historyData] = await Promise.all([
+      const [statusData, historyData, backupStatus] = await Promise.all([
         api("/api/integrations/native/status"),
         api("/api/user/search-history?limit=20"),
+        api("/api/backups/status"),
       ]);
       setProviders(statusData.providers || []);
       setSearchHistory(historyData.items || []);
+      setBackupAvailable(backupStatus.available !== false);
     } catch (err) {
       setError(err.message || "No se pudieron cargar las integraciones.");
+      setBackupAvailable(true);
     } finally {
       setLoading(false);
     }
@@ -675,7 +768,7 @@ export default function NativeIntegrationsPage() {
         </section>
       )}
 
-      {user && user.role !== "viewer" && <BackupSection />}
+      {user && user.role !== "viewer" && <BackupSection available={backupAvailable} />}
 
       <section className="card">
         <div className="card-head">
@@ -714,7 +807,20 @@ export default function NativeIntegrationsPage() {
         ChileCompra o SII se requieren credenciales de esos portales, pero el sistema funciona sin ellas desde el primer día.
       </div>
 
-      {openResult && <IntegrationResultModal result={openResult} onClose={() => setOpenResult(null)} />}
+      {openResult && (
+        <IntegrationResultModal
+          result={openResult}
+          onClose={() => setOpenResult(null)}
+          onViewHistory={() =>
+            setOpenHistory(
+              searchHistory.filter(
+                (h) => h.provider === openResult.provider && h.action === openResult.action
+              )
+            )
+          }
+        />
+      )}
+      {openHistory && <SearchHistoryModal history={openHistory} onClose={() => setOpenHistory(null)} />}
     </div>
   );
 }

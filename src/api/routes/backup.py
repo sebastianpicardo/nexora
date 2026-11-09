@@ -32,6 +32,11 @@ async def list_backups(user: dict = Depends(require_roles("owner", "admin"))) ->
     return {"backups": backup_service.list_backups()}
 
 
+@router.get("/status")
+async def backup_status(user: dict = Depends(require_roles("owner", "admin"))) -> dict[str, Any]:
+    return {"available": backup_service.is_backup_available()}
+
+
 @router.post("")
 async def create_backup(user: dict = Depends(require_roles("owner", "admin"))) -> dict[str, Any]:
     try:

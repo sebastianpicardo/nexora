@@ -15,6 +15,22 @@ BACKUP_DIR = Path("./backups")
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def is_backup_available() -> bool:
+    """Indica si pg_dump está instalado en el servidor."""
+    try:
+        subprocess.run(
+            ["pg_dump", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return True
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
 def _database_name(database_url: str) -> str:
     """Extrae el nombre de la base de datos de la URL."""
     # postgres://user:pass@host:port/dbname
