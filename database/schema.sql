@@ -779,6 +779,39 @@ CREATE TRIGGER price_catalog_set_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION price_catalog_set_updated_at();
 
+-- ── Alertas automáticas con umbrales ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS alert_config (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    alert_type TEXT NOT NULL CHECK (alert_type IN ('price_spike', 'exception_pending', 'approval_pending', 'document_pending', 'quota_warning', 'quota_exceeded')),
+    threshold_pct NUMERIC(6, 2) CHECK (threshold_pct >= 0),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    channels JSONB NOT NULL DEFAULT '[]'::jsonb,
+    email_recipients JSONB NOT NULL DEFAULT '[]'::jsonb,
+    slack_channels JSONB NOT NULL DEFAULT '[]'::jsonb,
+    last_triggered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, alert_type)
+);
+
+CREATE INDEX IF NOT EXISTS alert_config_org_idx ON alert_config (org_id);
+CREATE INDEX IF NOT EXISTS alert_config_enabled_idx ON alert_config (org_id, enabled);
+
+CREATE OR REPLACE FUNCTION alert_config_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS alert_config_set_updated_at ON alert_config;
+CREATE TRIGGER alert_config_set_updated_at
+    BEFORE UPDATE ON alert_config
+    FOR EACH ROW
+    EXECUTE FUNCTION alert_config_set_updated_at();
+
 DO $$
 DECLARE
     table_name TEXT;
@@ -794,7 +827,7 @@ BEGIN
         'purchase_approvals', 'notification_channels', 'notification_deliveries',
         'integrations', 'api_keys', 'webhook_subscriptions', 'inbound_email_tokens',
         'onboarding_progress', 'user_sessions', 'push_subscriptions', 'user_search_history',
-        'price_catalog'
+        'price_catalog', 'alert_config'
     ]
     LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', table_name);

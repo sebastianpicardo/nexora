@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import httpx
 from typing import Any
 from uuid import UUID
-
-import httpx
 
 from src.core.config import settings
 from src.core.logging import get_logger
 from src.db import repositories
+from src.db.pool import get_pool
 from src.services.email_service import send_email
 
 logger = get_logger(__name__)
@@ -132,3 +132,103 @@ async def dispatch_alerts(
         "deliveries": deliveries,
         "channels": len(channels),
     }
+
+
+async def send_email_notification(
+    *,
+    org_id: str,
+    recipient: str,
+    alert: dict,
+) -> bool:
+    """Envía una notificación de alerta por email a un destinatario específico."""
+    org_name = "Tu organización"
+    subject = f"Alerta de compra · {org_name}"
+    lines = [f"Alerta detectada en {org_name}:", ""]
+    lines.append(f"- Tipo: {alert.get('type')}")
+    lines.append(f"- Descripción: {alert.get('item')}")
+    if alert.get("spike_pct") is not None:
+        lines.append(f"- Variación: {alert['spike_pct']:.1f}%")
+    if alert.get("current_price") not in (None, 0):
+        lines.append(f"- Precio actual: {alert['current_price']} {alert.get('currency', 'CLP')}")
+    if alert.get("historical_median") not in (None, 0):
+        lines.append(f"- Precio medio histórico: {alert['historical_median']} {alert.get('currency', 'CLP')}")
+    lines.extend(["", "Ingresa a NEXORA para revisar el detalle."])
+    text = "\n".join(lines)
+
+    try:
+        sent = await send_email(
+            to=recipient,
+            subject=subject,
+            text=text,
+            html=f"<p>{text.replace(chr(10), '<br>')}</p>",
+        )
+        if not settings.email_enabled:
+            logger.warning("SMTP no configurado; email de alerta no se envía realmente a %s", recipient)
+        return bool(sent)
+    except Exception as exc:
+        logger.warning("No se pudo enviar email de alerta a %s: %s", recipient, exc)
+        return False
+
+
+async def send_slack_notification(
+    *,
+    org_id: str,
+    channel: str,
+    alert: dict,
+) -> bool:
+    """Envía una notificación de alerta a un canal de Slack."""
+    org_name = "Tu organización"
+    text = (
+        f"*Alerta de compra · {org_name}*\n"
+        f"• Tipo: {alert.get('type')}\n"
+        f"• Descripción: {alert.get('item')}\n"
+    )
+    if alert.get("spike_pct") is not None:
+        text += f"• Variación: {alert['spike_pct']:.1f}%\n"
+    if alert.get("current_price") not in (None, 0):
+        text += f"• Precio actual: {alert['current_price']} {alert.get('currency', 'CLP')}\n"
+    if alert.get("historical_median") not in (None, 0):
+        text += f"• Precio medio histórico: {alert['historical_median']} {alert.get('currency', 'CLP')}\n"
+    text += "\nIngresa a NEXORA para revisar el detalle."
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
+            response = await client.post(channel, json={"text": text})
+            response.raise_for_status()
+            return True
+    except Exception as exc:
+        logger.warning("No se pudo enviar alerta a Slack %s: %s", channel, exc)
+        return False
+
+
+async def send_webhook_notification(
+    *,
+    org_id: str,
+    alert: dict,
+) -> bool:
+    """Envía una notificación de alerta al webhook configurado de la organización."""
+    async with get_pool().connection() as conn:
+        rows = await repositories.list_integrations(conn, org_id)
+    webhook_url = None
+    for row in rows or []:
+        config = row.get("config") or {}
+        if row.get("active") and config.get("url"):
+            webhook_url = config.get("url")
+            break
+    if not webhook_url:
+        logger.warning("No hay webhook configurado para la organización %s", org_id)
+        return False
+
+    payload = {
+        "event": "alert",
+        "organization_id": org_id,
+        "alert": alert,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
+            response = await client.post(webhook_url, json=payload)
+            response.raise_for_status()
+            return True
+    except Exception as exc:
+        logger.warning("No se pudo enviar webhook de alerta a %s: %s", webhook_url, exc)
+        return False
