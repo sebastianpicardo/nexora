@@ -46,7 +46,6 @@ async def list_price_catalog(
     search: Optional[str] = Query(default=None),
 ) -> list[Any]:
     try:
-try:
         async with get_pool().connection() as conn:
             rows = await repositories.list_price_catalog(
                 conn, user["org_id"], active_only=active_only, search=search
@@ -69,9 +68,6 @@ try:
             )
             for row in rows
         ]
-    except Exception:
-        # Si la tabla no existe (migración 007 no aplicada), devolver lista vacía
-        return []
     except Exception:
         # Si la tabla no existe (migración 007 no aplicada), devolver lista vacía
         return []
