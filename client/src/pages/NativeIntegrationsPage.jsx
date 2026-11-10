@@ -87,6 +87,37 @@ const PROVIDERS = [
   },
 ];
 
+const HELP_RESPONSES = {
+  hola: "¡Hola! Soy el asistente de NEXORA. Puedo ayudarte con: buscar precios en ChileCompra, validar RUT en SII, crear aprobaciones de compra, exportar a tu ERP, hacer backups y configurar tu marca blanca.",
+  "hola!": "¡Hola! Soy el asistente de NEXORA. ¿En qué puedo ayudarte hoy?",
+  "buenos dias": "¡Buenos días! ¿En qué puedo ayudarte? Puedo guiarte en el uso de NEXORA.",
+  "buenas tardes": "¡Buenas tardes! ¿En qué puedo ayudarte?",
+  precios: "Para buscar precios en ChileCompra, ve a la sección Integraciones y usa 'Buscar precios'. Puedes filtrar por producto o ver los mejores precios (más baratos).",
+  rut: "Para validar un RUT chileno, ve a la sección Integraciones → SII y usa 'Validar RUT'. Ingresa el RUT y te diré si el formato es válido.",
+  sii: "El SII te permite validar RUT de proveedores y obtener facturas electrónicas. Ve a Integraciones → SII para usarlo.",
+  chilecompra: "ChileCompra te permite buscar precios de referencia del mercado público y proveedores registrados. Ve a Integraciones → ChileCompra.",
+  aprobacion: "Para aprobar una compra, ve a la sección Aprobaciones. Allí puedes ver solicitudes pendientes y aprobarlas o rechazarlas.",
+  aprobaciones: "Para aprobar una compra, ve a la sección Aprobaciones. Allí puedes ver solicitudes pendientes y aprobarlas o rechazarlas.",
+  erp: "Para exportar a tu ERP, ve a Integraciones → ERP. Puedes exportar proveedores, enviar aprobaciones e importar facturas en archivos CSV listos para importar.",
+  backup: "Para hacer un backup, ve a Integraciones → Backups. Nota: requiere que el servidor tenga pg_dump instalado. Si no está disponible, puedes exportar documentos individualmente desde Documentos.",
+  drive: "Para guardar en Google Drive, ve a Integraciones → Google Workspace y usa 'Guardar en Drive'.",
+  white: "Para configurar tu marca blanca (logo, colores, nombre), ve a Integraciones → Seguridad y marca (o Enterprise → White-label).",
+  sso: "Para configurar SSO con Google Workspace, ve a Integraciones → Seguridad y marca. Allí puedes habilitar el inicio de sesión con Google y restringir el acceso por dominio.",
+  ayuda: "Pregúntame sobre: precios, RUT, SII, ChileCompra, aprobaciones, ERP, backups, Drive, SSO o white-label. Prueba escribiendo una de esas palabras.",
+  tutorial: "NEXORA tiene módulos de Documentos, Proveedores, Aprobaciones, Integraciones (ChileCompra, SII, ERP, Google Drive, Backups) y Configuración. Cada uno tiene acciones directas.",
+  quienessomos: "NEXORA es una plataforma de auditoría de compras y precios para ferreterías y distribuidores industriales, ayudando a comparar precios, validar RUTs y gestionar documentos.",
+};
+
+function getHelpResponse(text) {
+  const lower = text.toLowerCase().trim();
+  for (const [key, response] of Object.entries(HELP_RESPONSES)) {
+    if (lower.includes(key)) {
+      return response;
+    }
+  }
+  return "No entiendo tu consulta. Puedo ayudarte con: precios, RUT, SII, ChileCompra, aprobaciones, ERP, backups, Drive, SSO o white-label. Prueba escribiendo una de esas palabras.";
+}
+
 function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
   const [running, setRunning] = useState(null);
   const [error, setError] = useState(null);
