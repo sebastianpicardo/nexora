@@ -8,7 +8,6 @@ import DocumentsPage from "./pages/DocumentsPage";
 import ItemsPage from "./pages/ItemsPage";
 import ExceptionsPage from "./pages/ExceptionsPage";
 import TeamPage from "./pages/TeamPage";
-import BillingPage from "./pages/BillingPage";
 import ProfilePage from "./pages/ProfilePage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import SuppliersPage from "./pages/SuppliersPage";
@@ -55,7 +54,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === "admin" && !isSuperAdmin) setView("dashboard");
-    if (["team", "billing", "settings", "enterprise", "integrations", "price-catalog", "pricing"].includes(view) && !canManage) setView("dashboard");
+    if (["team", "billing", "settings", "enterprise", "integrations", "price-catalog"].includes(view) && !canManage) setView("dashboard");
   }, [view, isSuperAdmin, canManage]);
 
   if (loading) return <Splash />;
@@ -81,12 +80,10 @@ export default function App() {
         <NativeIntegrationsPage />
       ) : view === "price-catalog" ? (
         <PriceCatalogPage />
-      ) : view === "pricing" ? (
-        <PricingPage />
       ) : view === "team" ? (
         <TeamPage />
       ) : view === "billing" ? (
-        <BillingPage />
+        <PricingPage />
       ) : view === "settings" ? (
         <SettingsPage />
       ) : view === "profile" ? (

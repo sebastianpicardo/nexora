@@ -52,8 +52,7 @@ const NAV_SECTIONS = [
     label: "Administración",
     items: [
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
-      { id: "billing", label: "Facturación y plan", icon: BillingIcon, admin: true },
-      { id: "pricing", label: "Planes y precios", icon: SparkIcon, admin: true },
+      { id: "billing", label: "Planes y precios", icon: SparkIcon, admin: true },
       { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },
       { id: "profile", label: "Mi perfil", icon: ProfileIcon },
     ],

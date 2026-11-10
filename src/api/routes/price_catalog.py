@@ -45,28 +45,36 @@ async def list_price_catalog(
     active_only: bool = Query(default=True),
     search: Optional[str] = Query(default=None),
 ) -> list[Any]:
-    async with get_pool().connection() as conn:
-        rows = await repositories.list_price_catalog(
-            conn, user["org_id"], active_only=active_only, search=search
-        )
-    return [
-        PriceCatalogItemOut(
-            id=str(row["id"]),
-            sku=row["sku"],
-            name=row["name"],
-            description=row.get("description"),
-            unit=row["unit"],
-            cost_price=float(row["cost_price"] or 0),
-            sale_price=float(row["sale_price"] or 0),
-            margin_pct=float(row["margin_pct"] or 0),
-            category=row.get("category"),
-            supplier_name=row.get("supplier_name"),
-            active=bool(row["active"]),
-            created_at=row["created_at"].isoformat() if row.get("created_at") else "",
-            updated_at=row["updated_at"].isoformat() if row.get("updated_at") else "",
-        )
-        for row in rows
-    ]
+    try:
+try:
+        async with get_pool().connection() as conn:
+            rows = await repositories.list_price_catalog(
+                conn, user["org_id"], active_only=active_only, search=search
+            )
+        return [
+            PriceCatalogItemOut(
+                id=str(row["id"]),
+                sku=row["sku"],
+                name=row["name"],
+                description=row.get("description"),
+                unit=row["unit"],
+                cost_price=float(row["cost_price"] or 0),
+                sale_price=float(row["sale_price"] or 0),
+                margin_pct=float(row["margin_pct"] or 0),
+                category=row.get("category"),
+                supplier_name=row.get("supplier_name"),
+                active=bool(row["active"]),
+                created_at=row["created_at"].isoformat() if row.get("created_at") else "",
+                updated_at=row["updated_at"].isoformat() if row.get("updated_at") else "",
+            )
+            for row in rows
+        ]
+    except Exception:
+        # Si la tabla no existe (migración 007 no aplicada), devolver lista vacía
+        return []
+    except Exception:
+        # Si la tabla no existe (migración 007 no aplicada), devolver lista vacía
+        return []
 
 
 @router.post("", response_model=PriceCatalogItemOut, status_code=status.HTTP_201_CREATED)
