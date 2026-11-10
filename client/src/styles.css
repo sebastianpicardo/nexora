@@ -6436,3 +6436,253 @@ a {
   background: var(--brand);
   color: #fff;
 }
+/* ── Chatbox de ayuda ── */
+.help-chat-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  font-family: inherit;
+}
+
+.help-chat-fab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.help-chat-fab:hover {
+  transform: scale(1.05);
+  background: var(--brand-dark);
+}
+
+.help-chat-fab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.help-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.help-chat-panel {
+  position: absolute;
+  bottom: 80px;
+  right: 0;
+  width: 360px;
+  height: 520px;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: helpSlideIn 0.25s ease;
+}
+
+@keyframes helpSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.help-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.help-chat-title svg {
+  width: 16px;
+  height: 16px;
+  color: var(--brand);
+}
+
+.help-chat-close {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.help-chat-close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.help-chat-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.help-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+}
+
+.help-chat-message {
+  display: flex;
+  gap: 8px;
+  max-width: 85%;
+  animation: helpMsgFade 0.2s ease;
+}
+
+@keyframes helpMsgFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-chat-message.bot {
+  align-self: flex-start;
+}
+
+.help-chat-message.user {
+  align-self: flex-end;
+}
+
+.help-chat-bubble {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.help-chat-message.bot .help-chat-bubble {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 2px;
+}
+
+.help-chat-message.user .help-chat-bubble {
+  background: var(--brand);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.help-chat-input {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.help-chat-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.help-chat-input input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.help-chat-send {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.help-chat-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.help-chat-send svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Estilos adicionales para historial por usuario ── */
+.pending-history {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Mejoras para chips de búsqueda reciente */
+.recent-search-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* Mejoras para resultado guardado */
+.result-save-feedback {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-save-feedback.saved {
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803d;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.result-save-feedback.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}

@@ -5,7 +5,10 @@ import {
   ArrowRightIcon,
   BellIcon,
   CheckIcon,
+  ClockIcon,
   DocumentsIcon,
+  HelpIcon,
+  HistoryIcon,
   LockIcon,
   SearchIcon,
   SuppliersIcon,
@@ -153,7 +156,7 @@ function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
         ))}
         {providerHistory.length > 0 && (
           <div className="recent-searches">
-            <strong>Búsquedas recientes:</strong>
+            <strong>Tus búsquedas recientes:</strong>
             {providerHistory.map((h) => (
               <button
                 key={h.id}
@@ -309,9 +312,44 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
   );
 }
 
-function IntegrationResultModal({ result, onClose, onViewHistory }) {
+function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory }) {
   const resultados = result.results || [];
   const invoices = result.invoices || [];
+
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const config = {
+        query: result.query || "",
+        mode: result.mode || "",
+        name: result.query || "",
+        order_by: result.order_by || "",
+      };
+      const response = await api("/api/user/search-history", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: result.provider,
+          action: result.action,
+          query: result.query || "",
+          result_summary: result.note || result.mensaje || "Ejecutado correctamente.",
+          result_data: result,
+        }),
+      });
+      if (response.saved === false) {
+        setSaved(false);
+        return;
+      }
+      setSaved(true);
+      setSaving(false);
+      if (onSaveHistory) onSaveHistory();
+    } catch {
+      setSaving(false);
+      setSaved(false);
+    }
+  };
 
   return (
     <div className="integration-modal-overlay" onClick={onClose}>
@@ -460,13 +498,36 @@ function IntegrationResultModal({ result, onClose, onViewHistory }) {
           <button type="button" className="button ghost" onClick={onClose}>
             Cerrar
           </button>
+          {!saved && (
+            <button
+              type="button"
+              className="button primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Guardando…" : (
+                <>
+                  <HistoryIcon /> Guardar en mi historial
+                </>
+              )}
+            </button>
+          )}
+          {saved && (
+            <button type="button" className="button ghost" disabled>
+              <>
+                <CheckIcon /> Guardado en tu historial
+              </>
+            </button>
+          )}
           {onViewHistory ? (
             <button
               type="button"
               className="button ghost"
               onClick={onViewHistory}
             >
-              <SearchIcon /> Ver historial
+              <>
+                <HistoryIcon /> Ver historial
+              </>
             </button>
           ) : null}
           <button
@@ -476,7 +537,9 @@ function IntegrationResultModal({ result, onClose, onViewHistory }) {
               window.print();
             }}
           >
-            <DocumentsIcon /> Guardar PDF
+            <>
+              <DocumentsIcon /> Guardar PDF
+            </>
           </button>
         </div>
       </div>
@@ -605,19 +668,23 @@ function BackupSection({ available }) {
   );
 }
 
-function SearchHistoryModal({ history, onClose }) {
+function SearchHistoryModal({ history, onClose, onLoadHistory }) {
   return (
     <div className="integration-modal-overlay" onClick={onClose}>
       <div className="integration-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h3>Historial de búsquedas</h3>
+          <h3>Tu historial de búsquedas</h3>
           <button type="button" className="icon-button" onClick={onClose}>
             <XIcon />
           </button>
         </div>
         <div className="modal-body">
           {history.length === 0 ? (
-            <div className="empty-state">No hay búsquedas guardadas aún.</div>
+            <div className="empty-state">
+              <HistoryIcon />
+              <p>No tienes búsquedas guardadas aún.</p>
+              <small>Busca precios en ChileCompra o valida RUT en SII y luego guarda en tu historial desde el resultado.</small>
+            </div>
           ) : (
             <table className="data-table">
               <thead>
@@ -642,20 +709,10 @@ function SearchHistoryModal({ history, onClose }) {
                         className="button ghost small"
                         onClick={() => {
                           onClose();
-                          // Precargar en el modal de configuración según la acción
-                          if (h.action === "search_items") {
-                            setOpenResult({
-                              provider_name: h.provider,
-                              action: h.action,
-                              query: h.query,
-                              results: (h.result_data && h.result_data.results) || [],
-                              note: h.result_summary,
-                              total: h.result_data && h.result_data.total,
-                            });
-                          }
+                          if (onLoadHistory) onLoadHistory(h);
                         }}
                       >
-                        Ver
+                        Cargar
                       </button>
                     </td>
                   </tr>
@@ -674,6 +731,100 @@ function SearchHistoryModal({ history, onClose }) {
   );
 }
 
+/* ── Chatbox de ayuda ── */
+
+function HelpChat() {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      text: "¡Hola! Soy el asistente de NEXORA. ¿En qué puedo ayudarte hoy?",
+      sender: "bot",
+    },
+  ]);
+
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = { id: Date.now(), text: input, sender: "user" };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+
+    try {
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY || ""}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "Eres un asistente experto de NEXORA, una plataforma de auditoría de compras y precios para ferreterías y distribuidores industriales. Responde en español, de forma breve y práctica. Ayuda con: buscar precios, validar RUT en SII, ChileCompra, aprobaciones de compras, integraciones ERP, backups y white-label." },
+            { role: "user", content: input },
+          ],
+        }),
+      });
+      const data = await resp.json();
+      const botText = data.choices?.[0]?.message?.content || "No pude procesar tu consulta. Intenta de nuevo.";
+      setMessages((prev) => [...prev, { id: Date.now() + 1, text: botText, sender: "bot" }]);
+    } catch {
+      setMessages((prev) => [...prev, { id: Date.now() + 1, text: "El asistente no está disponible ahora. Intenta más tarde.", sender: "bot" }]);
+    }
+  };
+
+  return (
+    <div className="help-chat-container">
+      {!open && (
+        <button
+          type="button"
+          className="help-chat-fab"
+          onClick={() => setOpen(true)}
+          title="Asistente de ayuda"
+          aria-label="Abrir asistente de ayuda"
+        >
+          <HelpIcon />
+          <span className="help-badge">1</span>
+        </button>
+      )}
+      {open && (
+        <div className="help-chat-panel">
+          <div className="help-chat-header">
+            <div className="help-chat-title">
+              <HelpIcon /> Asistencia NEXORA
+            </div>
+            <button type="button" className="help-chat-close" onClick={() => setOpen(false)}>
+              <XIcon />
+            </button>
+          </div>
+          <div className="help-chat-messages">
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={`help-chat-message ${m.sender}`}
+              >
+                <div className="help-chat-bubble">{m.text}</div>
+              </div>
+            ))}
+          </div>
+          <div className="help-chat-input">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              placeholder="Escribe tu consulta…"
+            />
+            <button type="button" className="help-chat-send" onClick={sendMessage} disabled={!input.trim()}>
+              <ArrowRightIcon />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NativeIntegrationsPage() {
   const { user } = useAuth();
   const [providers, setProviders] = useState([]);
@@ -683,6 +834,7 @@ export default function NativeIntegrationsPage() {
   const [openHistory, setOpenHistory] = useState(null);
   const [searchHistory, setSearchHistory] = useState([]);
   const [backupAvailable, setBackupAvailable] = useState(true);
+  const [pendingHistoryId, setPendingHistoryId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -711,7 +863,7 @@ export default function NativeIntegrationsPage() {
   const saveSearch = useCallback(async (providerId, actionId, config, result) => {
     if (!user) return;
     try {
-      await api("/api/user/search-history", {
+      const response = await api("/api/user/search-history", {
         method: "POST",
         body: JSON.stringify({
           provider: providerId,
@@ -721,11 +873,14 @@ export default function NativeIntegrationsPage() {
           result_data: result,
         }),
       });
-      // Recargar historial para mostrarlo actualizado
+      if (response.saved === false) {
+        // Migración no aplicada; silenciar
+        return;
+      }
       const historyData = await api("/api/user/search-history?limit=20");
       setSearchHistory(historyData.items || []);
     } catch {
-      // No fallar la UI si no se puede guardar el historial
+      // No fallar la UI si no se puede guardar
     }
   }, [user]);
 
@@ -818,9 +973,33 @@ export default function NativeIntegrationsPage() {
               )
             )
           }
+          onSaveHistory={() => {
+            setOpenResult(null);
+            load();
+          }}
         />
       )}
-      {openHistory && <SearchHistoryModal history={openHistory} onClose={() => setOpenHistory(null)} />}
+      {openHistory && (
+        <SearchHistoryModal
+          history={openHistory}
+          onClose={() => setOpenHistory(null)}
+          onLoadHistory={(h) => {
+            setOpenHistory(null);
+            setOpenResult({
+              provider_name: h.provider,
+              action: h.action,
+              query: h.query,
+              results: (h.result_data && h.result_data.results) || [],
+              note: h.result_summary,
+              total: h.result_data && h.result_data.total,
+              mode: h.mode,
+              order_by: h.order_by,
+            });
+          }}
+        />
+      )}
+
+      <HelpChat />
     </div>
   );
 }
