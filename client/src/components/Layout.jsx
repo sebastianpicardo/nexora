@@ -37,6 +37,7 @@ const NAV_SECTIONS = [
       { id: "exceptions", label: "Excepciones", icon: ExceptionsIcon },
       { id: "approvals", label: "Aprobaciones", icon: CheckIcon },
       { id: "suppliers", label: "Proveedores", icon: SuppliersIcon },
+      { id: "price-catalog", label: "Catálogo de precios", icon: PricesIcon, admin: true },
     ],
   },
   {

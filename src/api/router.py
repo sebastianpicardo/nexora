@@ -15,6 +15,7 @@ from src.api.routes import (
     items,
     native_integrations,
     organizations,
+    price_catalog,
     profile,
     public_api,
     suppliers,
@@ -39,5 +40,6 @@ api_router.include_router(enterprise.router)
 api_router.include_router(enterprise.inbound_router)
 api_router.include_router(native_integrations.router)
 api_router.include_router(user_search_history.router)
+api_router.include_router(price_catalog.router)
 api_router.include_router(backup.router)
 api_router.include_router(public_api.router)
