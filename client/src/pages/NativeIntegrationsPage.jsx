@@ -809,7 +809,7 @@ function HelpChat() {
       {!open && (
         <button
           type="button"
-          className="help-chat-fab"
+          className="help-chat-fab fixed bottom-0 right-0"
           onClick={() => setOpen(true)}
           title="Asistente de ayuda"
           aria-label="Abrir asistente de ayuda"
