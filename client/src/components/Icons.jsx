@@ -292,6 +292,33 @@ export function InfoIcon() {
   );
 }
 
+export function DollarIcon() {
+  return (
+    <svg {...base}>
+      <path d="M12 1a9 9 0 0 1 9 9c0 2-1 3-2 4s-2 2-4 2-4-2-4-4 0-4 2-4s2-2 4-2" />
+      <path d="M12 12h3" />
+    </svg>
+  );
+}
+
+export function RocketIcon() {
+  return (
+    <svg {...base}>
+      <path d="M12 5l-4 4-4-4-2 2 8 8 8-8-2-2z" />
+      <path d="M16 4l-4 4-4-4-2 2 8 8 8-8-2-2z" opacity="0.3" />
+    </svg>
+  );
+}
+
+export function CrownIcon() {
+  return (
+    <svg {...base}>
+      <path d="M12 2l-4 4v4l-4-4-2 2 8 8 8-8-2-2z" />
+      <path d="M12 10l-4 4-4-4-2 2 8 8 8-8-2-2z" opacity="0.3" />
+    </svg>
+  );
+}
+
 export function ClockIcon() {
   return (
     <svg {...base}>
