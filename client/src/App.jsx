@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { api } from "./lib/api";
+import HelpChat from "./components/HelpChat";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -93,6 +94,8 @@ export default function App() {
       ) : (
         <DashboardPage onNavigate={setView} />
       )}
+    <HelpChat />
+
     </Layout>
   );
 }
