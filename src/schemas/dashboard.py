@@ -32,3 +32,8 @@ class DashboardSummary(BaseModel):
     quota: UsageOut | None = None
     recent_documents: list[DocumentOut]
     pending_exceptions: list[ExceptionOut]
+    total_savings: float = 0.0
+    suppliers_count: int = 0
+    scorecards_count: int = 0
+    approvals_pending: int = 0
+    approvals_amount: float = 0.0

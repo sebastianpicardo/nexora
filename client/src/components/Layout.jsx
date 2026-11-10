@@ -10,6 +10,8 @@ import {
   DashboardIcon,
   DocumentsIcon,
   ExceptionsIcon,
+  HelpIcon,
+  HistoryIcon,
   LogoutIcon,
   PricesIcon,
   ProfileIcon,
@@ -22,30 +24,41 @@ import { formatDate, initials, labelize, percent } from "../lib/format";
 
 const NAV_SECTIONS = [
   {
-    label: "Operación",
+    label: "Inicio",
     items: [
-      { id: "dashboard", label: "Dashboard", icon: DashboardIcon },
+      { id: "dashboard", label: "Resumen del día", icon: DashboardIcon },
+    ],
+  },
+  {
+    label: "Compras",
+    items: [
       { id: "documents", label: "Documentos", icon: DocumentsIcon },
-      { id: "items", label: "Precios", icon: PricesIcon },
+      { id: "items", label: "Precios auditados", icon: PricesIcon },
       { id: "exceptions", label: "Excepciones", icon: ExceptionsIcon },
       { id: "approvals", label: "Aprobaciones", icon: CheckIcon },
       { id: "suppliers", label: "Proveedores", icon: SuppliersIcon },
     ],
   },
   {
-    label: "Organización",
+    label: "Integraciones",
     items: [
-      { id: "enterprise", label: "Enterprise", icon: SparkIcon, admin: true },
-      { id: "integrations", label: "Integraciones", icon: ArrowRightIcon, admin: true },
+      { id: "integrations", label: "ChileCompra / SII / ERP", icon: ArrowRightIcon, admin: true },
+      { id: "enterprise", label: "Seguridad y marca", icon: SparkIcon, admin: true },
+      { id: "backups", label: "Backups", icon: HistoryIcon, admin: true },
+    ],
+  },
+  {
+    label: "Administración",
+    items: [
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
-      { id: "billing", label: "Facturación", icon: BillingIcon, admin: true },
+      { id: "billing", label: "Facturación y plan", icon: BillingIcon, admin: true },
       { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },
       { id: "profile", label: "Mi perfil", icon: ProfileIcon },
     ],
   },
   {
     label: "Plataforma",
-    items: [{ id: "admin", label: "Super admin", icon: AdminIcon, superAdmin: true }],
+    items: [{ id: "admin", label: "Usuarios y auditoría", icon: AdminIcon, superAdmin: true }],
   },
 ];
 
@@ -218,7 +231,7 @@ export default function Layout({ active, onNavigate, children }) {
           <div>
             <div className="topbar-eyebrow">Panel de control</div>
             <h1 className="topbar-title">
-              {ALL_ITEMS.find((item) => item.id === active)?.label || "Dashboard"}
+              {ALL_ITEMS.find((item) => item.id === active)?.label || "Resumen del día"}
             </h1>
           </div>
           <div className="user-area">

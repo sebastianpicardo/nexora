@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatNumber, labelize } from "../lib/format";
 import DocumentsTable from "../components/DocumentsTable";
 import ExceptionsTable from "../components/ExceptionsTable";
 import QuotaCard from "../components/QuotaCard";
 import SpendChart from "../components/SpendChart";
 import StatCard from "../components/StatCard";
 import UploadCard from "../components/UploadCard";
-import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon } from "../components/Icons";
+import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 import WelcomeBanner from "../components/WelcomeBanner";
 
 export default function DashboardPage({ onNavigate }) {
@@ -92,6 +92,11 @@ export default function DashboardPage({ onNavigate }) {
   const showEmpty = !loading && summary && !hasActivity;
   const showLoadError = !loading && !summary && Boolean(error);
 
+  // KPIs principales calculados
+  const totalSpend = Number(primarySpend?.amount || 0);
+  const totalSavings = Number(summary?.total_savings || 0);
+  const savingsRate = totalSpend > 0 ? Math.round((totalSavings / totalSpend) * 100) : 0;
+
   return (
     <div className="page-stack">
       {!summary || !hasActivity ? (
@@ -154,128 +159,131 @@ export default function DashboardPage({ onNavigate }) {
 
       {summary && !showEmpty ? (
         <>
-      <section className="stats-grid">
-        <StatCard
-          label="Documentos"
-          value={loading ? "—" : summary?.documents_total ?? 0}
-          detail={`${summary?.documents_processed ?? 0} procesados · ${
-            summary?.documents_pending ?? 0
-          } en curso`}
-          icon={<DocumentsIcon />}
-        />
-        <StatCard
-          label="Excepciones pendientes"
-          value={loading ? "—" : summary?.exceptions_pending ?? 0}
-          detail={`${summary?.price_alerts_pending ?? 0} alertas de alza`}
-          tone="warning"
-          icon={<ExceptionsIcon />}
-        />
-        <StatCard
-          label="Ítems auditados"
-          value={loading ? "—" : summary?.items_total ?? 0}
-          detail="Histórico normalizado"
-          tone="brand"
-          icon={<PricesIcon />}
-        />
-        <StatCard
-          label="Compra del mes"
-          value={
-            loading
-              ? "—"
-              : formatMoney(primarySpend?.amount ?? 0, activeCurrency)
-          }
-          detail={
-            spendByCurrency.length > 1
-              ? `${spendByCurrency.length} monedas con compras este mes`
-              : primarySpend
-                ? `Moneda ${activeCurrency}`
-                : `Sin compras en ${activeCurrency} este mes`
-          }
-        />
-      </section>
-
-      <div className="dashboard-grid">
-        <section className="card chart-card">
-          <div className="card-head">
-            <div>
-              <h2>Compras y alertas</h2>
-              <p>Últimos 6 meses en {activeCurrency}.</p>
-            </div>
-            <div className="card-head-tools">
-              <label className="page-size">
-                <span>Moneda</span>
-                <select
-                  value={activeCurrency}
-                  onChange={(event) => setCurrency(event.target.value)}
-                >
-                  {currencyOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="soft-chip">Tendencia</span>
-            </div>
-          </div>
-          <SpendChart data={summary?.monthly_purchases || []} currency={activeCurrency} />
-        </section>
-
-        <section className="stack">
-          <QuotaCard quota={quota} planName={planName} />
-          <div className="quick-actions">
-            <button type="button" className="quick-action" onClick={() => onNavigate("items")}>
-              <span className="quick-icon"><PricesIcon /></span>
-              <span>
-                <strong>Precios auditados</strong>
-                <small>Explora el histórico normalizado</small>
-              </span>
-            </button>
-            <button type="button" className="quick-action" onClick={() => onNavigate("exceptions")}>
-              <span className="quick-icon"><ExceptionsIcon /></span>
-              <span>
-                <strong>Bandeja HITL</strong>
-                <small>Resuelve alertas con evidencia</small>
-              </span>
-            </button>
-          </div>
-        </section>
-      </div>
-
-      <div className="two-column">
-        <section className="stack">
-          {canOperate ? <UploadCard onUploaded={retry} /> : null}
-          <section className="card">
-            <div className="card-head">
-              <div>
-                <h2>Documentos recientes</h2>
-                <p>Últimas cotizaciones, facturas y listas cargadas.</p>
-              </div>
-              <button type="button" className="button ghost small" onClick={() => onNavigate("documents")}>
-                Ver todos
-              </button>
-            </div>
-            <DocumentsTable documents={summary?.recent_documents || []} compact />
+          {/* KPIs principales */}
+          <section className="stats-grid">
+            <StatCard
+              label="Compra del mes"
+              value={formatMoney(totalSpend, activeCurrency)}
+              detail={`${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`}
+              icon={<DocumentsIcon />}
+            />
+            <StatCard
+              label="Ahorro estimado"
+              value={formatMoney(totalSavings, activeCurrency)}
+              detail={`${savingsRate}% de la compra auditada`}
+              tone="ok"
+              icon={<SparkIcon />}
+            />
+            <StatCard
+              label="Excepciones pendientes"
+              value={loading ? "—" : summary?.exceptions_pending ?? 0}
+              detail={`${summary?.price_alerts_pending ?? 0} alertas de alza de precio`}
+              tone="warning"
+              icon={<ExceptionsIcon />}
+            />
+            <StatCard
+              label="Aprobaciones pendientes"
+              value={loading ? "—" : summary?.approvals_pending ?? 0}
+              detail={formatMoney(Number(summary?.approvals_amount || 0), activeCurrency)}
+              tone="brand"
+              icon={<CheckIcon />}
+            />
+            <StatCard
+              label="Proveedores activos"
+              value={loading ? "—" : summary?.suppliers_count ?? 0}
+              detail={`${summary?.scorecards_count ?? 0} con score calculado`}
+              icon={<SuppliersIcon />}
+            />
           </section>
-        </section>
 
-        <section className="card">
-          <div className="card-head">
-            <div>
-              <h2>Requiere tu revisión</h2>
-              <p>Ítems con baja confianza o variaciones relevantes.</p>
-            </div>
-            <button type="button" className="button ghost small" onClick={() => onNavigate("exceptions")}>
-              Abrir bandeja
-            </button>
+          <div className="dashboard-grid">
+            <section className="card chart-card">
+              <div className="card-head">
+                <div>
+                  <h2>Compras y alertas mensuales</h2>
+                  <p>Últimos 6 meses en {activeCurrency}.</p>
+                </div>
+                <div className="card-head-tools">
+                  <label className="page-size">
+                    <span>Moneda</span>
+                    <select
+                      value={activeCurrency}
+                      onChange={(event) => setCurrency(event.target.value)}
+                    >
+                      {currencyOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <SpendChart data={summary?.monthly_purchases || []} currency={activeCurrency} />
+            </section>
+
+            <section className="stack">
+              <QuotaCard quota={quota} planName={planName} />
+              <div className="quick-actions">
+                <button type="button" className="quick-action" onClick={() => onNavigate("items")}>
+                  <span className="quick-icon"><PricesIcon /></span>
+                  <span>
+                    <strong>Precios auditados</strong>
+                    <small>Explora el histórico normalizado</small>
+                  </span>
+                </button>
+                <button type="button" className="quick-action" onClick={() => onNavigate("exceptions")}>
+                  <span className="quick-icon"><ExceptionsIcon /></span>
+                  <span>
+                    <strong>Bandeja HITL</strong>
+                    <small>Resuelve alertas con evidencia</small>
+                  </span>
+                </button>
+                <button type="button" className="quick-action" onClick={() => onNavigate("approvals")}>
+                  <span className="quick-icon"><CheckIcon /></span>
+                  <span>
+                    <strong>Aprobaciones</strong>
+                    <small>Compra pendiente de decidir</small>
+                  </span>
+                </button>
+              </div>
+            </section>
           </div>
-          <ExceptionsTable
-            exceptions={summary?.pending_exceptions || []}
-            onResolve={canOperate ? () => onNavigate("exceptions") : undefined}
-            compact
-          />
-        </section>
-      </div>
+
+          <div className="two-column">
+            <section className="stack">
+              {canOperate ? <UploadCard onUploaded={retry} /> : null}
+              <section className="card">
+                <div className="card-head">
+                  <div>
+                    <h2>Documentos recientes</h2>
+                    <p>Últimas cotizaciones, facturas y listas cargadas.</p>
+                  </div>
+                  <button type="button" className="button ghost small" onClick={() => onNavigate("documents")}>
+                    Ver todos
+                  </button>
+                </div>
+                <DocumentsTable documents={summary?.recent_documents || []} compact />
+              </section>
+            </section>
+
+            <section className="card">
+              <div className="card-head">
+                <div>
+                  <h2>Requiere tu revisión</h2>
+                  <p>Ítems con baja confianza o variaciones relevantes.</p>
+                </div>
+                <button type="button" className="button ghost small" onClick={() => onNavigate("exceptions")}>
+                  Abrir bandeja
+                </button>
+              </div>
+              <ExceptionsTable
+                exceptions={summary?.pending_exceptions || []}
+                onResolve={canOperate ? () => onNavigate("exceptions") : undefined}
+                compact
+              />
+            </section>
+          </div>
         </>
       ) : null}
     </div>

@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import uuid
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Query
 
@@ -47,6 +48,59 @@ async def dashboard_summary(
                 (org_id, org_id, org_id, org_id, org_id, org_id),
             )
             counts = await cur.fetchone() or {}
+
+            # Ahorro estimado: suma de ahorro de excepciones resueltas (price_spike aprobadas/resueltas)
+            await cur.execute(
+                """
+                SELECT coalesce(sum(
+                    greatest(coalesce(i.normalized_unit_price, 0) - coalesce(
+                        case when jsonb_typeof(e.evidence->'historical_median') = 'number'
+                             then (e.evidence->>'historical_median')::numeric
+                             else 0 end, 0), 0)
+                    * greatest(coalesce(i.quantity, 0), 0)
+                ), 0) AS total_savings
+                FROM exceptions_log e
+                LEFT JOIN items_history i ON i.id = e.item_id
+                WHERE e.org_id = %s
+                  AND e.type = 'price_spike'
+                  AND e.status IN ('approved', 'resolved')
+                  AND (i.currency = %s OR i.currency IS NULL)
+                """,
+                (org_id, chart_currency),
+            )
+            savings_row = await cur.fetchone() or {}
+
+            # Proveedores activos y con score
+            await cur.execute(
+                """
+                SELECT
+                    count(distinct s.id) AS suppliers_count,
+                    count(distinct case when st.documents > 0 then s.id end) AS scorecards_count
+                FROM suppliers s
+                LEFT JOIN (
+                    select supplier_id, count(distinct document_id) as documents
+                    from items_history
+                    where org_id = %s and review_status <> 'rejected'
+                    group by supplier_id
+                ) st on st.supplier_id = s.id
+                WHERE s.org_id = %s
+                """,
+                (org_id, org_id),
+            )
+            supplier_row = await cur.fetchone() or {}
+
+            # Aprobaciones pendientes y monto
+            await cur.execute(
+                """
+                SELECT
+                    count(*) FILTER (WHERE status = 'pending') AS approvals_pending,
+                    coalesce(sum(amount) FILTER (WHERE status = 'pending'), 0) AS approvals_amount
+                FROM purchase_approvals
+                WHERE org_id = %s
+                """,
+                (org_id,),
+            )
+            approval_row = await cur.fetchone() or {}
 
             await cur.execute(
                 """
@@ -159,6 +213,11 @@ async def dashboard_summary(
         items_total=_int(counts.get("items_total")),
         exceptions_pending=_int(counts.get("exceptions_pending")),
         price_alerts_pending=_int(counts.get("price_alerts_pending")),
+        total_savings=float(savings_row.get("total_savings") or 0),
+        suppliers_count=int(supplier_row.get("suppliers_count") or 0),
+        scorecards_count=int(supplier_row.get("scorecards_count") or 0),
+        approvals_pending=int(approval_row.get("approvals_pending") or 0),
+        approvals_amount=float(approval_row.get("approvals_amount") or 0),
         spend_by_currency=[
             CurrencySpend(currency=row["currency"], amount=float(row.get("amount") or 0)) for row in spend_rows
         ],
