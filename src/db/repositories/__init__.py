@@ -87,6 +87,13 @@ from src.db.repositories.exceptions import (
     resolve_exception,
     summarize_exceptions,
 )
+from src.db.repositories.insights import (
+    analytics_overview,
+    approval_queue,
+    auto_approve_items,
+    consumption_forecast,
+    price_opportunities,
+)
 from src.db.repositories.items import (
     get_item,
     get_price_history,
@@ -132,6 +139,11 @@ from src.db.repositories.users import (
 from src.db.seeding import ensure_default_plans
 
 __all__ = [
+    "analytics_overview",
+    "approval_queue",
+    "auto_approve_items",
+    "consumption_forecast",
+    "price_opportunities",
     "create_api_key",
     "create_approval",
     "create_inbound_token",

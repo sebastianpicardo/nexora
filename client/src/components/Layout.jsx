@@ -7,8 +7,10 @@ import {
   BellIcon,
   BillingIcon,
   CheckIcon,
+  ClockIcon,
   DashboardIcon,
   DocumentsIcon,
+  DollarIcon,
   ExceptionsIcon,
   HelpIcon,
   HistoryIcon,
@@ -27,6 +29,15 @@ const NAV_SECTIONS = [
     label: "Inicio",
     items: [
       { id: "dashboard", label: "Resumen del día", icon: DashboardIcon },
+    ],
+  },
+  {
+    label: "Inteligencia",
+    items: [
+      { id: "analytics", label: "Analítica ejecutiva", icon: SparkIcon },
+      { id: "opportunities", label: "Oportunidades de ahorro", icon: DollarIcon },
+      { id: "forecast", label: "Pronóstico de compras", icon: ClockIcon },
+      { id: "auto-approvals", label: "Aprobación inteligente", icon: CheckIcon },
     ],
   },
   {

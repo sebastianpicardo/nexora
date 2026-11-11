@@ -18,6 +18,10 @@ import EnterprisePage from "./pages/EnterprisePage";
 import NativeIntegrationsPage from "./pages/NativeIntegrationsPage";
 import PriceCatalogPage from "./pages/PriceCatalogPage";
 import PricingPage from "./pages/PricingPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import OpportunitiesPage from "./pages/OpportunitiesPage";
+import ForecastPage from "./pages/ForecastPage";
+import SmartApprovalsPage from "./pages/SmartApprovalsPage";
 
 function Splash() {
   return (
@@ -65,6 +69,14 @@ export default function App() {
     <Layout active={view} onNavigate={setView}>
       {view === "dashboard" ? (
         <DashboardPage onNavigate={setView} />
+      ) : view === "analytics" ? (
+        <AnalyticsPage onNavigate={setView} />
+      ) : view === "opportunities" ? (
+        <OpportunitiesPage />
+      ) : view === "forecast" ? (
+        <ForecastPage />
+      ) : view === "auto-approvals" ? (
+        <SmartApprovalsPage />
       ) : view === "documents" ? (
         <DocumentsPage />
       ) : view === "items" ? (
