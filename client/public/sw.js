@@ -1,7 +1,15 @@
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `nexora-static-${CACHE_VERSION}`;
 const HTML_CACHE = `nexora-html-${CACHE_VERSION}`;
 const SHELL_URLS = ["/manifest.webmanifest", "/icon-192.svg", "/icon-512.svg"];
+
+function offlineResponse() {
+  return new Response("Recurso no disponible sin conexión", {
+    status: 503,
+    statusText: "Offline",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -53,26 +61,22 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => cacheIfOk(HTML_CACHE, "/index.html", response))
-        .catch(async () => {
-          const cached = await caches.match("/index.html");
-          if (cached) return cached;
-          return new Response("Sin conexión", {
-            status: 503,
-            statusText: "Offline",
-            headers: { "Content-Type": "text/plain; charset=utf-8" },
-          });
-        }),
+        .catch(async () => (await caches.match("/index.html")) || offlineResponse()),
     );
     return;
   }
 
-  if (url.pathname.startsWith("/assets/") || request.destination === "style" || request.destination === "script") {
+  if (
+    url.pathname.startsWith("/assets/") ||
+    request.destination === "style" ||
+    request.destination === "script"
+  ) {
     event.respondWith(
       caches.match(request).then((cached) => {
         const network = fetch(request)
           .then((response) => cacheIfOk(STATIC_CACHE, request, response))
-          .catch(() => cached);
-        return cached || network;
+          .catch(() => null);
+        return cached || network.then((response) => response || offlineResponse());
       }),
     );
     return;
@@ -81,6 +85,6 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => cacheIfOk(STATIC_CACHE, request, response))
-      .catch(() => caches.match(request)),
+      .catch(async () => (await caches.match(request)) || offlineResponse()),
   );
 });
