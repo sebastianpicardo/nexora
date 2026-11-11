@@ -14,10 +14,19 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 );
 
 if ("serviceWorker" in navigator) {
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let refreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("/sw.js")
-      .then(() => null)
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((registration) => registration.update())
       .catch(() => null);
   });
 }

@@ -1,46 +1,86 @@
-const CACHE_NAME = "nexora-v1";
-const SHELL_URLS = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/icon-192.svg",
-  "/icon-512.svg",
-];
+const CACHE_VERSION = "v2";
+const STATIC_CACHE = `nexora-static-${CACHE_VERSION}`;
+const HTML_CACHE = `nexora-html-${CACHE_VERSION}`;
+const SHELL_URLS = ["/manifest.webmanifest", "/icon-192.svg", "/icon-512.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      const promises = SHELL_URLS.map((url) =>
-        cache.add(url).catch((err) => {
-          console.warn("[SW] No se pudo cachear:", url, err);
-        }),
-      );
-      return Promise.allSettled(promises).then(() => self.skipWaiting());
-    }),
+    caches.open(STATIC_CACHE).then((cache) =>
+      Promise.allSettled(
+        SHELL_URLS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn("[SW] No se pudo cachear:", url, err);
+          }),
+        ),
+      ),
+    ).then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
-    ).then(() => self.clients.claim()),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== STATIC_CACHE && key !== HTML_CACHE)
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+async function cacheIfOk(cacheName, request, response) {
+  if (!response || !response.ok || response.type === "opaque") return response;
+  const cache = await caches.open(cacheName);
+  await cache.put(request, response.clone());
+  return response;
+}
 
-  if (event.request.method === "GET") {
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
+
+  const isDocument = request.mode === "navigate" || request.destination === "document";
+
+  if (isDocument) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).catch(() => {
-          if (event.request.mode === "navigate") return caches.match("/");
-          return new Response("Sin conexión", { status: 503, statusText: "Offline" });
-        });
+      fetch(request)
+        .then((response) => cacheIfOk(HTML_CACHE, "/index.html", response))
+        .catch(async () => {
+          const cached = await caches.match("/index.html");
+          if (cached) return cached;
+          return new Response("Sin conexión", {
+            status: 503,
+            statusText: "Offline",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          });
+        }),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/assets/") || request.destination === "style" || request.destination === "script") {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const network = fetch(request)
+          .then((response) => cacheIfOk(STATIC_CACHE, request, response))
+          .catch(() => cached);
+        return cached || network;
       }),
     );
+    return;
   }
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => cacheIfOk(STATIC_CACHE, request, response))
+      .catch(() => caches.match(request)),
+  );
 });

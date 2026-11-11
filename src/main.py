@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -46,13 +46,34 @@ class SPAStaticFiles(StaticFiles):
         try:
             response = await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if exc.status_code != 404 or not self._can_fallback(path, scope):
+            if exc.status_code != 404:
                 raise
-            return await super().get_response("index.html", scope)
+            if not self._can_fallback(path, scope):
+                return PlainTextResponse("Not found", status_code=404)
+            response = await super().get_response("index.html", scope)
+            self._apply_cache_headers(response, "index.html")
+            return response
 
-        if response.status_code == 404 and self._can_fallback(path, scope):
-            return await super().get_response("index.html", scope)
+        if response.status_code == 404:
+            if not self._can_fallback(path, scope):
+                return PlainTextResponse("Not found", status_code=404)
+            response = await super().get_response("index.html", scope)
+            self._apply_cache_headers(response, "index.html")
+            return response
+
+        self._apply_cache_headers(response, path)
         return response
+
+    @staticmethod
+    def _apply_cache_headers(response, path: str) -> None:
+        normalized = (path or "").lstrip("/")
+        name = normalized.rsplit("/", 1)[-1].lower()
+        if normalized in {"", "."} or name in {"index.html", "sw.js", "manifest.webmanifest"}:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        elif normalized.startswith("assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
 
     @staticmethod
     def _can_fallback(path: str, scope: dict) -> bool:
