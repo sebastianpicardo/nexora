@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export default function AppBanner({ onNavigate }) {
   const [visible, setVisible] = useState(true);
 
