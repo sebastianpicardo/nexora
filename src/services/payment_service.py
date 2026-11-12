@@ -175,6 +175,11 @@ async def create_checkout_session(plan: dict, *, org_id: str, email: str | None 
         raise ValidationError(f"Proveedor de pagos no soportado: {provider}.")
 
     if provider == "mock":
+        if settings.is_production:
+            raise ValidationError(
+                "El proveedor de pagos mock está deshabilitado en producción. "
+                "Configura Stripe, MercadoPago o Flow."
+            )
         session_id = secrets.token_urlsafe(18)
         checkout_url = _with_query(
             settings.payment_checkout_success_url,

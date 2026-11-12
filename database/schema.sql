@@ -853,3 +853,26 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    document_id UUID REFERENCES documents_log(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('document_extraction', 'assistant')),
+    provider TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    input_tokens INTEGER NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
+    output_tokens INTEGER NOT NULL DEFAULT 0 CHECK (output_tokens >= 0),
+    estimated_cost_usd NUMERIC(12, 6) NOT NULL DEFAULT 0 CHECK (estimated_cost_usd >= 0),
+    status TEXT NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'error')),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ai_usage_org_created_idx
+    ON ai_usage (org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_usage_org_kind_created_idx
+    ON ai_usage (org_id, kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_usage_document_idx
+    ON ai_usage (document_id);

@@ -278,6 +278,11 @@ async def change_plan(
             )
 
         is_paid = float(target["price_monthly"]) > 0
+        if is_paid and settings.is_production:
+            raise HTTPException(
+                status_code=409,
+                detail="Los planes pagados se activan únicamente con el checkout y el pago confirmado.",
+            )
         if is_paid and settings.payment_provider != "mock":
             raise HTTPException(
                 status_code=409,

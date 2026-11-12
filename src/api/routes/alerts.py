@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.deps import CurrentUser, require_roles
+from src.api.deps import require_roles
 from src.db import repositories
 from src.db.pool import get_pool
 from src.services import alert_service
@@ -45,9 +45,19 @@ async def create_or_update_alert_config(
     if not alert_type:
         raise HTTPException(status_code=400, detail="alert_type es obligatorio")
 
-    allowed_types = {"price_spike", "exception_pending", "approval_pending", "document_pending", "quota_warning", "quota_exceeded"}
+    allowed_types = {
+        "price_spike",
+        "exception_pending",
+        "approval_pending",
+        "document_pending",
+        "quota_warning",
+        "quota_exceeded",
+    }
     if alert_type not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"Tipo de alerta no válido. Opciones: {', '.join(sorted(allowed_types))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de alerta no válido. Opciones: {', '.join(sorted(allowed_types))}",
+        )
 
     threshold_pct = payload.get("threshold_pct")
     if threshold_pct is not None:
@@ -56,7 +66,10 @@ async def create_or_update_alert_config(
             if threshold_pct < 0:
                 raise ValueError()
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="threshold_pct debe ser un número mayor o igual a 0")
+            raise HTTPException(
+                status_code=400,
+                detail="threshold_pct debe ser un número mayor o igual a 0",
+            ) from None
 
     async with get_pool().connection() as conn:
         row = await repositories.create_or_update_alert_config(

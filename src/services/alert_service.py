@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Any
-
 from psycopg import AsyncConnection
 
-from src.api.deps import require_roles
+from src.core.logging import get_logger
 from src.db import repositories
 from src.db.pool import get_pool
-from src.core.config import settings
-from src.core.logging import get_logger
 from src.services import notification_service
 
 logger = get_logger(__name__)
@@ -321,7 +315,6 @@ async def send_alert_notifications(
 
 async def evaluate_all_orgs() -> dict:
     """Evalúa alertas para todas las organizaciones. Llamado por worker periódico."""
-    from src.db.pool import get_pool
     async with get_pool().connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute("SELECT DISTINCT org_id FROM organizations")

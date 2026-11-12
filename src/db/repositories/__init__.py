@@ -1,5 +1,10 @@
 """Repositorios por agregado. Todas las consultas de negocio exigen org_id."""
 
+from src.db.repositories.ai_usage import (
+    count_ai_usage_this_month,
+    record_ai_usage,
+    summarize_ai_usage,
+)
 from src.db.repositories.audit import list_audit_events, record_audit_event
 from src.db.repositories.auth_tokens import (
     consume_auth_token,
@@ -144,6 +149,9 @@ __all__ = [
     "auto_approve_items",
     "consumption_forecast",
     "price_opportunities",
+    "count_ai_usage_this_month",
+    "record_ai_usage",
+    "summarize_ai_usage",
     "create_api_key",
     "create_approval",
     "create_inbound_token",

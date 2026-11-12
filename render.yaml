@@ -1,4 +1,4 @@
-services:
+﻿services:
   - type: web
     name: nexora-web
     runtime: docker
@@ -58,7 +58,7 @@ services:
       - key: RECAPTCHA_MIN_SCORE
         value: "0.5"
       - key: PAYMENT_PROVIDER
-        value: mock
+        value: stripe
       - key: PAYMENT_WEBHOOK_SECRET
         sync: false
       - key: PAYMENT_SUCCESS_URL

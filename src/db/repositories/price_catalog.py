@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from psycopg import AsyncConnection
-from psycopg.types.json import Jsonb
 
 
 async def list_price_catalog(

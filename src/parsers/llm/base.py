@@ -67,6 +67,10 @@ async def with_retries[T](
 class LLMProvider(ABC):
     name: str
     model: str
+    last_usage: dict[str, int] | None = None
+
+    def __init__(self) -> None:
+        self.last_usage = None
 
     @abstractmethod
     async def extract_document(

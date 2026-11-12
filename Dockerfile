@@ -18,6 +18,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system nexora \
     && adduser --system --uid 10001 --ingroup nexora nexora
 

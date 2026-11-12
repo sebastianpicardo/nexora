@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:no-reply@nexora.app"
 
+    ai_usage_tracking_enabled: bool = True
+    ai_document_monthly_limit: int = Field(default=1000, ge=0)
+    ai_assistant_monthly_limit: int = Field(default=300, ge=0)
+    ai_input_cost_per_million_usd: float = Field(default=0.5, ge=0)
+    ai_output_cost_per_million_usd: float = Field(default=1.5, ge=0)
+    assistant_rate_limit_per_minute: int = Field(default=20, ge=1)
+    auto_approve_max_amount: float = Field(default=500000.0, ge=0)
+
     payment_provider: str = "mock"
     payment_webhook_secret: str = ""
     payment_success_url: str = ""
@@ -241,6 +249,10 @@ class Settings(BaseSettings):
                 raise RuntimeError("SESSION_SECRET debe tener al menos 32 caracteres en producción.")
             if not self.cookie_secure:
                 raise RuntimeError("COOKIE_SECURE debe ser true en producción.")
+            if self.payment_provider.strip().lower() == "mock":
+                raise RuntimeError(
+                    "PAYMENT_PROVIDER=mock está prohibido en producción. Configura Stripe, MercadoPago o Flow."
+                )
         if self.storage_backend not in {"local", "supabase"}:
             raise RuntimeError("STORAGE_BACKEND debe ser 'local' o 'supabase'.")
         if self.storage_backend == "supabase" and not (self.supabase_url and self.supabase_service_role_key):

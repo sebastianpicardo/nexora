@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 
 from src.core.config import settings
+from src.db.pool import get_pool
+from src.services import ai_usage_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +59,9 @@ def _history_block(history: list[dict] | None) -> str:
     return "\n\nConversación previa:\n" + "\n".join(lines)
 
 
-async def _ask_gemini(question: str, history: list[dict] | None) -> str | None:
+async def _ask_gemini(question: str, history: list[dict] | None) -> tuple[str | None, dict[str, int] | None]:
     if not settings.gemini_api_key:
-        return None
+        return None, None
     from google import genai
     from google.genai import types
 
@@ -75,12 +77,18 @@ async def _ask_gemini(question: str, history: list[dict] | None) -> str | None:
         ),
     )
     text = (response.text or "").strip()
-    return text or None
+    usage = None
+    if getattr(response, "usage_metadata", None):
+        usage = {
+            "input_tokens": int(getattr(response.usage_metadata, "prompt_token_count", 0) or 0),
+            "output_tokens": int(getattr(response.usage_metadata, "candidates_token_count", 0) or 0),
+        }
+    return (text or None, usage)
 
 
-async def _ask_openai(question: str, history: list[dict] | None) -> str | None:
+async def _ask_openai(question: str, history: list[dict] | None) -> tuple[str | None, dict[str, int] | None]:
     if not settings.openai_api_key:
-        return None
+        return None, None
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.llm_timeout_seconds)
@@ -102,12 +110,18 @@ async def _ask_openai(question: str, history: list[dict] | None) -> str | None:
         max_tokens=900,
     )
     text = (completion.choices[0].message.content or "").strip()
-    return text or None
+    usage = None
+    if completion.usage:
+        usage = {
+            "input_tokens": int(completion.usage.prompt_tokens or 0),
+            "output_tokens": int(completion.usage.completion_tokens or 0),
+        }
+    return (text or None, usage)
 
 
-async def _ask_anthropic(question: str, history: list[dict] | None) -> str | None:
+async def _ask_anthropic(question: str, history: list[dict] | None) -> tuple[str | None, dict[str, int] | None]:
     if not settings.anthropic_api_key:
-        return None
+        return None, None
     from anthropic import AsyncAnthropic
 
     client = AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=settings.llm_timeout_seconds)
@@ -132,13 +146,21 @@ async def _ask_anthropic(question: str, history: list[dict] | None) -> str | Non
     text = "\n".join(
         getattr(block, "text", "") for block in response.content if getattr(block, "type", None) == "text"
     ).strip()
-    return text or None
+    usage = None
+    if getattr(response, "usage", None):
+        usage = {
+            "input_tokens": int(getattr(response.usage, "input_tokens", 0) or 0),
+            "output_tokens": int(getattr(response.usage, "output_tokens", 0) or 0),
+        }
+    return (text or None, usage)
 
 
 async def answer_question(
     question: str,
     *,
     history: list[dict] | None = None,
+    org_id: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[str | None, str | None]:
     order = [
         name.strip().lower()
@@ -150,15 +172,36 @@ async def answer_question(
         "anthropic": _ask_anthropic,
         "gemini": _ask_gemini,
     }
+    models = {
+        "openai": settings.llm_model,
+        "anthropic": settings.anthropic_model,
+        "gemini": settings.gemini_model,
+    }
     for name in order:
         handler = handlers.get(name)
         if handler is None:
             continue
         try:
-            answer = await handler(question, history)
+            answer, usage = await handler(question, history)
         except Exception as exc:
             logger.warning("Asistente IA: proveedor %s falló: %s", name, str(exc)[:300])
             continue
         if answer:
+            if org_id:
+                try:
+                    async with get_pool().connection() as conn:
+                        await ai_usage_service.record_usage(
+                            conn,
+                            org_id=org_id,
+                            kind="assistant",
+                            provider=name,
+                            model=models.get(name, ""),
+                            input_tokens=(usage or {}).get("input_tokens", 0),
+                            output_tokens=(usage or {}).get("output_tokens", 0),
+                            user_id=user_id,
+                            status="success",
+                        )
+                except Exception as exc:
+                    logger.warning("No se pudo registrar uso de IA del asistente: %s", str(exc)[:300])
             return answer, name
     return None, None

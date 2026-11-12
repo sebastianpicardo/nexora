@@ -862,7 +862,12 @@ story += [
         [
             ["Free", "USD 0", "25", "Auditoria de precios, dashboard mensual, exportaciones basicas."],
             ["Pro", "USD 49", "500", "Equipo con roles, alertas de cuota, PDF y Excel, historial 6 meses."],
-            ["Enterprise", "USD 199", "Ilimitados", "Multi-tenant, auditoria avanzada, exportaciones masivas, gestion centralizada."],
+            [
+                "Enterprise",
+                "USD 199",
+                "Ilimitados",
+                "Multi-tenant, auditoria avanzada, exportaciones masivas, gestion centralizada.",
+            ],
         ],
         [30 * mm, 34 * mm, 30 * mm, 76 * mm],
     ),
@@ -897,11 +902,26 @@ story += [
     table(
         ["Objecion", "Respuesta"],
         [
-            ["Ya tenemos ERP.", "NEXORA no reemplaza el ERP: limpia y audita la informacion de compras antes de cargarla."],
-            ["Es mucho trabajo implementar.", "La carga es la misma que ya hacen; la extraccion y normalizacion son automaticas."],
-            ["No confio en la IA.", "Hay revision humana, confianza por item y auditoria; la IA propone, el equipo decide."],
-            ["Es caro.", "El plan se paga con un solo sobreprecio evitado; el ROI se mide con el ahorro detectado."],
-            ["Nuestros documentos son distintos.", "Soportamos PDF, Excel, CSV e imagenes, con normalizacion de unidades."],
+            [
+                "Ya tenemos ERP.",
+                "NEXORA no reemplaza el ERP: limpia y audita la informacion de compras antes de cargarla.",
+            ],
+            [
+                "Es mucho trabajo implementar.",
+                "La carga es la misma que ya hacen; la extraccion y normalizacion son automaticas.",
+            ],
+            [
+                "No confio en la IA.",
+                "Hay revision humana, confianza por item y auditoria; la IA propone, el equipo decide.",
+            ],
+            [
+                "Es caro.",
+                "El plan se paga con un solo sobreprecio evitado; el ROI se mide con el ahorro detectado.",
+            ],
+            [
+                "Nuestros documentos son distintos.",
+                "Soportamos PDF, Excel, CSV e imagenes, con normalizacion de unidades.",
+            ],
         ],
         [52 * mm, 118 * mm],
     ),
@@ -926,7 +946,11 @@ story += [
     table(
         ["Sintoma", "Revision", "Accion"],
         [
-            ["Pantalla en blanco o error MIME", "Service worker y /index.html", "Confirmar SW v3 y recargar; purgar cache."],
+            [
+                "Pantalla en blanco o error MIME",
+                "Service worker y /index.html",
+                "Confirmar SW v3 y recargar; purgar cache.",
+            ],
             ["500 en Inteligencia", "Logs SQL y percentile_cont", "Verificar cast a double precision y datos."],
             ["503 al procesar", "Proveedor de IA", "Esperar reintentos o cambiar LLM_PROVIDER_ORDER."],
             ["Documento en cola", "Worker y cuota", "Re-procesar o revisar limite del plan."],
@@ -970,9 +994,11 @@ story += [
 story += [p("20. Brechas conocidas y proximos pasos", "H1")]
 story += bullets(
     [
-        "<b>Validacion en base real:</b> ejecutar /api/insights/overview, opportunities, forecast, analytics y approvals contra Supabase para confirmar resultados.",
+        "<b>Validacion en base real:</b> ejecutar /api/insights/overview, opportunities, forecast, "
+        "analytics y approvals contra Supabase para confirmar resultados.",
         "<b>Redeploy:</b> publicar el service worker v3 y los modulos nuevos en Render.",
-        "<b>Pruebas automatizadas:</b> los 92 tests actuales pasan; ampliar la suite con pruebas de insights y assistant.",
+        "<b>Pruebas automatizadas:</b> los 92 tests actuales pasan; ampliar la suite con pruebas de "
+        "insights y assistant.",
         "<b>E2E:</b> correr Playwright contra el entorno desplegado para login, carga y navegacion.",
         "<b>Cuota de IA:</b> monitorear errores 503 y evaluar un segundo proveedor configurado.",
         "<b>Rate limiting:</b> proteger /api/assistant/chat si se expone a muchos usuarios.",

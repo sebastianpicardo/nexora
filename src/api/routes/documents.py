@@ -22,7 +22,7 @@ from src.schemas.documents import (
     DocumentOut,
     ReprocessResponse,
 )
-from src.services import document_service, storage_service
+from src.services import ai_usage_service, document_service, storage_service
 from src.services.export_service import build_excel, build_pdf
 
 logger = get_logger(__name__)
@@ -112,6 +112,13 @@ async def ingest_document(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alcanzaste el límite de documentos de tu plan. Actualiza tu suscripción para continuar.",
         )
+
+    async with get_pool().connection() as conn:
+        if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
+            )
 
     document_id = uuid4()
     storage_path = await storage_service.save_document(
@@ -309,6 +316,11 @@ async def reprocess_document(
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         if existing["status"] == "processing":
             raise HTTPException(status_code=409, detail="El documento ya se está procesando")
+        if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
+            )
         row = await repositories.reset_document_for_reprocess(
             conn,
             org_id=user["org_id"],

@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from src.api.deps import CurrentUser, require_roles
+from src.core.config import settings
 from src.db import repositories
 from src.db.pool import get_pool
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/api/insights", tags=["insights"])
 
 class AutoApproveRequest(BaseModel):
     threshold: float = Field(default=0.9, ge=0.0, le=1.0)
+    max_amount: float | None = Field(default=None, ge=0.0)
     item_ids: list[str] | None = None
 
 
@@ -36,6 +38,7 @@ async def insights_overview(
             currency=active_currency,
             days=90,
             min_overprice_pct=10.0,
+            min_samples=settings.min_history_samples,
             limit=5,
         )
         forecast = await repositories.consumption_forecast(
@@ -52,6 +55,7 @@ async def insights_overview(
             currency=active_currency,
             threshold=0.9,
             days=120,
+            max_amount=settings.auto_approve_max_amount,
         )
     return {
         "currency": active_currency,
@@ -88,6 +92,7 @@ async def price_opportunities(
             currency=active_currency,
             days=days,
             min_overprice_pct=min_overprice_pct,
+            min_samples=settings.min_history_samples,
             limit=limit,
         )
 
@@ -140,6 +145,7 @@ async def approval_queue(
             currency=active_currency,
             threshold=threshold,
             days=days,
+            max_amount=settings.auto_approve_max_amount,
         )
 
 
@@ -148,11 +154,15 @@ async def auto_approve(
     payload: AutoApproveRequest,
     user: dict = Depends(require_roles("owner", "admin", "analyst")),
 ):
+    max_amount = settings.auto_approve_max_amount
+    if payload.max_amount is not None:
+        max_amount = min(max_amount, payload.max_amount)
     async with get_pool().connection() as conn:
         approved = await repositories.auto_approve_items(
             conn,
             user["org_id"],
             threshold=payload.threshold,
+            max_amount=max_amount,
             item_ids=payload.item_ids,
         )
         await repositories.record_audit_event(
@@ -162,6 +172,10 @@ async def auto_approve(
             action="insights.auto_approve",
             entity_type="items_history",
             entity_id=str(user["org_id"]),
-            metadata={"approved": len(approved), "threshold": payload.threshold},
+            metadata={
+                "approved": len(approved),
+                "threshold": payload.threshold,
+                "max_amount": max_amount,
+            },
         )
     return {"approved": len(approved), "item_ids": approved}

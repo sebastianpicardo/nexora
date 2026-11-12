@@ -3,7 +3,6 @@ from __future__ import annotations
 import calendar
 import uuid
 from datetime import date
-from decimal import Decimal
 
 from fastapi import APIRouter, Query
 

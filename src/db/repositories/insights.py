@@ -20,6 +20,11 @@ def _round(value: float, digits: int = 2) -> float:
     return round(value, digits)
 
 
+def _add_months(value: date, months: int) -> date:
+    month_index = value.year * 12 + value.month - 1 + months
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
 async def price_opportunities(
     conn: AsyncConnection,
     org_id: UUID | str,
@@ -27,10 +32,12 @@ async def price_opportunities(
     currency: str,
     days: int = 90,
     min_overprice_pct: float = 10.0,
+    min_samples: int = 2,
     limit: int = 100,
 ) -> dict:
     days = max(1, min(int(days), 730))
     min_overprice_pct = max(0.0, min(float(min_overprice_pct), 1000.0))
+    min_samples = max(1, int(min_samples))
     limit = max(1, min(int(limit), 500))
 
     query = """
@@ -60,7 +67,7 @@ async def price_opportunities(
             SELECT
                 i.*,
                 s.name AS supplier_name,
-                COALESCE(i.sku, i.normalized_description) AS product_key
+                COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key
             FROM items_history i
             LEFT JOIN suppliers s ON s.id = i.supplier_id
             WHERE i.org_id = %s
@@ -68,6 +75,7 @@ async def price_opportunities(
               AND i.review_status <> 'rejected'
               AND i.normalized_unit_price IS NOT NULL
               AND i.normalized_unit_price > 0
+              AND i.price_date <= current_date
               AND i.price_date >= (current_date - (%s * interval '1 day'))
         ) r
         CROSS JOIN LATERAL (
@@ -83,8 +91,17 @@ async def price_opportunities(
               AND h.normalized_unit_price IS NOT NULL
               AND h.normalized_unit_price > 0
               AND h.document_id <> r.document_id
-              AND COALESCE(h.sku, h.normalized_description) = r.product_key
               AND h.base_unit IS NOT DISTINCT FROM r.base_unit
+              AND h.price_date <= r.price_date
+              AND h.price_date >= (r.price_date - (%s * interval '1 day'))
+              AND (
+                  h.normalized_description = r.normalized_description
+                  OR (
+                      h.supplier_id IS NOT DISTINCT FROM r.supplier_id
+                      AND r.sku IS NOT NULL
+                      AND h.sku = r.sku
+                  )
+              )
         ) hist
         LEFT JOIN LATERAL (
             SELECT s2.name AS supplier_name
@@ -94,12 +111,21 @@ async def price_opportunities(
               AND h2.currency = %s
               AND h2.review_status <> 'rejected'
               AND h2.normalized_unit_price = hist.best_price
-              AND COALESCE(h2.sku, h2.normalized_description) = r.product_key
               AND h2.base_unit IS NOT DISTINCT FROM r.base_unit
+              AND h2.price_date <= r.price_date
+              AND h2.price_date >= (r.price_date - (%s * interval '1 day'))
+              AND (
+                  h2.normalized_description = r.normalized_description
+                  OR (
+                      h2.supplier_id IS NOT DISTINCT FROM r.supplier_id
+                      AND r.sku IS NOT NULL
+                      AND h2.sku = r.sku
+                  )
+              )
             ORDER BY s2.name
             LIMIT 1
         ) best ON TRUE
-        WHERE hist.samples >= 1
+        WHERE hist.samples >= %s
           AND hist.median_price > 0
           AND ((r.normalized_unit_price - hist.median_price) / hist.median_price) * 100 >= %s
         ORDER BY potential_savings DESC, overprice_pct DESC
@@ -114,8 +140,11 @@ async def price_opportunities(
                 days,
                 str(org_id),
                 currency,
+                days,
                 str(org_id),
                 currency,
+                days,
+                min_samples,
                 min_overprice_pct,
                 limit,
             ),
@@ -124,12 +153,15 @@ async def price_opportunities(
 
     items = []
     total_savings = 0.0
+    total_savings_min = 0.0
     total_excess = 0.0
     suppliers: dict[str, float] = {}
     for row in rows:
         savings = _num(row.get("potential_savings"))
+        savings_min = _num(row.get("excess_cost"))
         total_savings += savings
-        total_excess += _num(row.get("excess_cost"))
+        total_savings_min += savings_min
+        total_excess += savings_min
         supplier_name = row.get("supplier_name") or "Sin proveedor"
         suppliers[supplier_name] = suppliers.get(supplier_name, 0.0) + savings
         items.append(
@@ -149,7 +181,9 @@ async def price_opportunities(
                 "best_price": _num(row.get("best_price")),
                 "best_supplier_name": row.get("best_supplier_name"),
                 "overprice_pct": _num(row.get("overprice_pct")),
-                "excess_cost": _num(row.get("excess_cost")),
+                "excess_cost": savings_min,
+                "savings_min": savings_min,
+                "savings_max": savings,
                 "potential_savings": savings,
                 "samples": int(row.get("samples") or 0),
                 "price_date": row["price_date"].isoformat() if row.get("price_date") else None,
@@ -170,9 +204,11 @@ async def price_opportunities(
         "currency": currency,
         "days": days,
         "min_overprice_pct": min_overprice_pct,
+        "min_samples": min_samples,
         "summary": {
             "opportunities": len(items),
             "total_potential_savings": _round(total_savings),
+            "total_conservative_savings": _round(total_savings_min),
             "total_excess_cost": _round(total_excess),
             "suppliers_affected": len([value for value in suppliers.values() if value > 0]),
         },
@@ -196,7 +232,7 @@ async def consumption_forecast(
 
     query = """
         SELECT
-            COALESCE(i.sku, i.normalized_description) AS product_key,
+            COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key,
             (array_agg(i.original_description ORDER BY i.price_date DESC))[1] AS description,
             i.base_unit,
             i.currency,
@@ -208,6 +244,7 @@ async def consumption_forecast(
         WHERE i.org_id = %s
           AND i.currency = %s
           AND i.review_status <> 'rejected'
+          AND i.price_date <= current_date
           AND i.price_date >= (date_trunc('month', current_date) - (%s * interval '1 month'))
         GROUP BY 1, 3, 4, 5
         ORDER BY 1, 5
@@ -242,22 +279,45 @@ async def consumption_forecast(
         }
 
     items = []
+    skipped_low_history = 0
     for bucket in grouped.values():
         months_sorted = sorted(bucket["months"].items())
         if not months_sorted:
             continue
-        quantities = [entry[1]["quantity"] for entry in months_sorted]
-        spends = [entry[1]["spend"] for entry in months_sorted]
-        active_months = [entry[0] for entry in months_sorted if entry[1]["quantity"] > 0]
-        if not quantities or sum(quantities) <= 0:
+        months_with_data = len(months_sorted)
+        if months_with_data < 3:
+            skipped_low_history += 1
+            continue
+
+        first_month = months_sorted[0][0]
+        last_month = months_sorted[-1][0]
+        span = (last_month.year - first_month.year) * 12 + (last_month.month - first_month.month) + 1
+        quantities: list[float] = []
+        spends: list[float] = []
+        active_months: list[date] = []
+        for offset in range(span):
+            month = _add_months(first_month, offset)
+            entry = bucket["months"].get(month)
+            quantity = _num(entry.get("quantity")) if entry else 0.0
+            spend = _num(entry.get("spend")) if entry else 0.0
+            quantities.append(quantity)
+            spends.append(spend)
+            if entry:
+                active_months.append(month)
+
+        if sum(quantities) <= 0:
             continue
 
         avg_qty = mean(quantities)
         last_three = quantities[-3:]
-        prev_three = quantities[-6:-3] if len(quantities) > 3 else quantities[:-3]
+        prev_three = quantities[-6:-3] if len(quantities) >= 6 else []
         recent_avg = mean(last_three)
-        baseline_avg = mean(prev_three) if prev_three else recent_avg
-        trend_pct = ((recent_avg - baseline_avg) / baseline_avg * 100) if baseline_avg > 0 else 0.0
+        baseline_avg = mean(prev_three) if len(prev_three) == 3 else recent_avg
+        trend_pct = (
+            ((recent_avg - baseline_avg) / baseline_avg * 100)
+            if len(prev_three) == 3 and baseline_avg > 0
+            else 0.0
+        )
         trend_factor = max(-0.3, min(0.3, trend_pct / 100))
         projected_monthly = max(0.0, recent_avg * (1 + trend_factor))
         projected_qty = projected_monthly * horizon
@@ -284,7 +344,9 @@ async def consumption_forecast(
                 "description": bucket["description"],
                 "base_unit": bucket["base_unit"],
                 "currency": bucket["currency"],
-                "months_with_data": len(months_sorted),
+                "months_with_data": months_with_data,
+                "months_analyzed": span,
+                "trend_confidence": "alta" if months_with_data >= 6 else "media",
                 "avg_monthly_quantity": _round(avg_qty, 2),
                 "recent_monthly_quantity": _round(recent_avg, 2),
                 "trend_pct": _round(trend_pct, 2),
@@ -310,6 +372,7 @@ async def consumption_forecast(
             "projected_spend": _round(total_projected),
             "products_rising": rising,
             "products_falling": len([entry for entry in items if entry["trend"] in {"baja", "baja_fuerte"}]),
+            "skipped_low_history": skipped_low_history,
         },
         "items": top_items,
     }
@@ -334,6 +397,7 @@ async def analytics_overview(
         WHERE i.org_id = %s
           AND i.currency = %s
           AND i.review_status <> 'rejected'
+          AND i.price_date <= current_date
           AND i.price_date >= (date_trunc('month', current_date) - (%s * interval '1 month'))
         GROUP BY 1
         ORDER BY 1
@@ -341,7 +405,7 @@ async def analytics_overview(
     increases_query = """
         WITH recent AS (
             SELECT
-                COALESCE(i.sku, i.normalized_description) AS product_key,
+                COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key,
                 (array_agg(i.original_description ORDER BY i.price_date DESC))[1] AS description,
                 i.base_unit,
                 AVG(i.normalized_unit_price) AS avg_price,
@@ -352,12 +416,13 @@ async def analytics_overview(
               AND i.currency = %s
               AND i.review_status <> 'rejected'
               AND i.normalized_unit_price IS NOT NULL
+              AND i.price_date <= current_date
               AND i.price_date >= (current_date - interval '30 days')
             GROUP BY 1, 3
         ),
         baseline AS (
             SELECT
-                COALESCE(i.sku, i.normalized_description) AS product_key,
+                COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key,
                 i.base_unit,
                 AVG(i.normalized_unit_price) AS avg_price
             FROM items_history i
@@ -388,6 +453,53 @@ async def analytics_overview(
         ORDER BY change_pct DESC
         LIMIT 10
     """
+    basket_query = """
+        WITH monthly_products AS (
+            SELECT
+                COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key,
+                i.base_unit,
+                date_trunc('month', i.price_date)::date AS month,
+                AVG(i.normalized_unit_price) AS avg_price,
+                SUM(COALESCE(i.normalized_unit_price, 0) * COALESCE(i.quantity, 0)) AS spend
+            FROM items_history i
+            WHERE i.org_id = %s
+              AND i.currency = %s
+              AND i.review_status <> 'rejected'
+              AND i.normalized_unit_price IS NOT NULL
+              AND i.normalized_unit_price > 0
+              AND i.price_date <= current_date
+              AND i.price_date >= (date_trunc('month', current_date) - (%s * interval '1 month'))
+            GROUP BY 1, 2, 3
+        ),
+        bounds AS (
+            SELECT MIN(month) AS first_month, MAX(month) AS last_month
+            FROM monthly_products
+        ),
+        matched AS (
+            SELECT
+                b.product_key,
+                b.base_unit,
+                b.avg_price AS base_price,
+                r.avg_price AS last_price,
+                GREATEST(b.spend, r.spend, 1) AS weight
+            FROM monthly_products b
+            JOIN bounds p ON b.month = p.first_month
+            JOIN monthly_products r
+              ON r.product_key = b.product_key
+             AND r.base_unit IS NOT DISTINCT FROM b.base_unit
+             AND r.month = p.last_month
+            WHERE p.first_month < p.last_month
+              AND b.avg_price > 0
+              AND r.avg_price > 0
+        )
+        SELECT
+            COALESCE(
+                SUM((last_price / base_price) * weight) / NULLIF(SUM(weight), 0) * 100,
+                100
+            ) AS price_index,
+            COUNT(*) AS products
+        FROM matched
+    """
     async with conn.cursor() as cur:
         await cur.execute(monthly_query, (str(org_id), currency, months))
         monthly_rows = list(await cur.fetchall())
@@ -395,10 +507,13 @@ async def analytics_overview(
         await cur.execute(increases_query, (str(org_id), currency, str(org_id), currency))
         increase_rows = list(await cur.fetchall())
 
+        await cur.execute(basket_query, (str(org_id), currency, months))
+        basket = await cur.fetchone() or {}
+
         await cur.execute(
             """
             SELECT
-                COUNT(DISTINCT COALESCE(sku, normalized_description)) AS products,
+                COUNT(DISTINCT COALESCE(NULLIF(normalized_description, ''), sku)) AS products,
                 COUNT(DISTINCT supplier_id) FILTER (WHERE supplier_id IS NOT NULL) AS suppliers,
                 COUNT(*) AS items,
                 AVG(confidence) AS avg_confidence
@@ -406,6 +521,7 @@ async def analytics_overview(
             WHERE org_id = %s
               AND currency = %s
               AND review_status <> 'rejected'
+              AND price_date <= current_date
               AND price_date >= (date_trunc('month', current_date) - (%s * interval '1 month'))
             """,
             (str(org_id), currency, months),
@@ -422,13 +538,12 @@ async def analytics_overview(
         for row in monthly_rows
     ]
 
-    price_index = 100.0
-    if len(monthly) >= 2 and monthly[0]["avg_price"] > 0:
-        price_index = round((monthly[-1]["avg_price"] / monthly[0]["avg_price"]) * 100, 2)
-
-    change_pct = 0.0
-    if len(monthly) >= 2 and monthly[0]["avg_price"] > 0:
-        change_pct = round(((monthly[-1]["avg_price"] - monthly[0]["avg_price"]) / monthly[0]["avg_price"]) * 100, 2)
+    price_index = _round(_num(basket.get("price_index")) or 100.0)
+    price_index_products = int(basket.get("products") or 0)
+    change_pct = _round(price_index - 100.0)
+    if price_index_products == 0:
+        price_index = 100.0
+        change_pct = 0.0
 
     top_increases = [
         {
@@ -453,6 +568,8 @@ async def analytics_overview(
             "items": int(totals.get("items") or 0),
             "avg_confidence": _round(_num(totals.get("avg_confidence")), 4),
             "price_index": price_index,
+            "price_index_products": price_index_products,
+            "price_index_basis": "canasta comparable ponderada por gasto",
             "price_change_pct": change_pct,
         },
         "monthly": monthly,
@@ -467,9 +584,11 @@ async def approval_queue(
     currency: str,
     threshold: float = 0.9,
     days: int = 120,
+    max_amount: float = 500000.0,
 ) -> dict:
     threshold = max(0.0, min(float(threshold), 1.0))
     days = max(1, min(int(days), 730))
+    max_amount = max(0.0, float(max_amount))
 
     query = """
         SELECT
@@ -487,7 +606,7 @@ async def approval_queue(
             i.currency,
             i.confidence,
             i.price_date,
-            d.original_filename,
+            d.original_filename AS document_filename,
             COUNT(e.id) FILTER (WHERE e.status = 'pending') AS pending_exceptions,
             COUNT(e.id) FILTER (
                 WHERE e.status = 'pending' AND e.severity IN ('high', 'critical')
@@ -499,6 +618,7 @@ async def approval_queue(
         WHERE i.org_id = %s
           AND i.currency = %s
           AND i.review_status = 'pending'
+          AND i.price_date <= current_date
           AND i.price_date >= (current_date - (%s * interval '1 day'))
         GROUP BY i.id, s.name, d.original_filename
         ORDER BY i.confidence DESC, i.price_date DESC
@@ -519,7 +639,7 @@ async def approval_queue(
         amount = _num(row.get("normalized_unit_price") or row.get("original_unit_price")) * _num(
             row.get("quantity")
         )
-        eligible = confidence >= threshold and high_severity == 0
+        eligible = confidence >= threshold and high_severity == 0 and amount <= max_amount
         if eligible:
             auto_eligible += 1
             auto_amount += amount
@@ -550,6 +670,7 @@ async def approval_queue(
         "currency": currency,
         "threshold": threshold,
         "days": days,
+        "max_amount": max_amount,
         "summary": {
             "pending": len(items),
             "auto_eligible": auto_eligible,
@@ -566,13 +687,19 @@ async def auto_approve_items(
     org_id: UUID | str,
     *,
     threshold: float,
+    max_amount: float = 500000.0,
     item_ids: list[str] | None = None,
 ) -> list[str]:
     threshold = max(0.0, min(float(threshold), 1.0))
+    max_amount = max(0.0, float(max_amount))
     filters = [
         "i.org_id = %s",
         "i.review_status = 'pending'",
         "i.confidence >= %s",
+        """(
+            COALESCE(i.normalized_unit_price, i.original_unit_price, 0)
+            * COALESCE(i.quantity, 0)
+        ) <= %s""",
         """
         NOT EXISTS (
             SELECT 1 FROM exceptions_log e
@@ -582,7 +709,7 @@ async def auto_approve_items(
         )
         """,
     ]
-    values: list = [str(org_id), threshold]
+    values: list = [str(org_id), threshold, max_amount]
 
     if item_ids:
         placeholders = ", ".join(["%s"] * len(item_ids))

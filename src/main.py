@@ -105,6 +105,16 @@ async def lifespan(app: FastAPI):
             settings.storage_backend,
             settings.llm_provider,
         )
+        if settings.is_production:
+            try:
+                from src.services import backup_service
+
+                if not backup_service.is_backup_available():
+                    logger.warning(
+                        "pg_dump no está disponible: los backups de base de datos están deshabilitados."
+                    )
+            except Exception:
+                logger.exception("No se pudo verificar la disponibilidad de pg_dump.")
     else:
         logger.info("Modo test: pool de base de datos no inicializado")
     try:

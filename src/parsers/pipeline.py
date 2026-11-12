@@ -110,6 +110,7 @@ async def run_pipeline(
     provider: Any = None,
 ) -> NormalizationResult:
     extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
+    usage: dict[str, int] | None = None
     if provider is not None:
         extraction: ExtractedDocument = await provider.extract_document(
             extracted,
@@ -118,8 +119,9 @@ async def run_pipeline(
         )
         provider_name = provider.name
         model_name = provider.model
+        usage = getattr(provider, "last_usage", None)
     else:
-        extraction, provider_name = await extract_with_fallback(
+        extraction, provider_name, usage = await extract_with_fallback(
             extracted,
             filename=filename,
             doc_type_hint=doc_type_hint,
@@ -207,4 +209,5 @@ async def run_pipeline(
         raw_text=extracted.combined_text[:200_000],
         provider=provider_name,
         model=model_name,
+        usage=usage,
     )

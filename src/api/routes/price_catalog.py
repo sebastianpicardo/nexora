@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
@@ -15,25 +15,25 @@ router = APIRouter(prefix="/api/price-catalog", tags=["price-catalog"])
 class PriceCatalogItemIn(BaseModel):
     sku: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     unit: str = "unidad"
     cost_price: float = 0
     sale_price: float = 0
-    category: Optional[str] = None
-    supplier_name: Optional[str] = None
+    category: str | None = None
+    supplier_name: str | None = None
 
 
 class PriceCatalogItemOut(BaseModel):
     id: str
     sku: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     unit: str
     cost_price: float
     sale_price: float
     margin_pct: float
-    category: Optional[str] = None
-    supplier_name: Optional[str] = None
+    category: str | None = None
+    supplier_name: str | None = None
     active: bool
     created_at: str
     updated_at: str
@@ -43,7 +43,7 @@ class PriceCatalogItemOut(BaseModel):
 async def list_price_catalog(
     user: CurrentUser,
     active_only: bool = Query(default=True),
-    search: Optional[str] = Query(default=None),
+    search: str | None = Query(default=None),
 ) -> list[Any]:
     try:
         async with get_pool().connection() as conn:

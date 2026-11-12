@@ -11,7 +11,7 @@ from src.db import repositories
 from src.db.pool import get_pool
 from src.parsers.normalization.dates import parse_flexible_date
 from src.parsers.pipeline import run_pipeline
-from src.services import audit_service, storage_service
+from src.services import ai_usage_service, audit_service, storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,21 @@ async def _process_claimed_document(doc: dict) -> None:
 
     try:
         async with get_pool().connection() as conn:
+            try:
+                await ai_usage_service.record_usage(
+                    conn,
+                    org_id=org_id,
+                    kind="document_extraction",
+                    provider=getattr(result, "provider", ""),
+                    model=getattr(result, "model", ""),
+                    input_tokens=(getattr(result, "usage", None) or {}).get("input_tokens", 0),
+                    output_tokens=(getattr(result, "usage", None) or {}).get("output_tokens", 0),
+                    document_id=document_id,
+                    user_id=doc.get("uploaded_by"),
+                    status="success",
+                )
+            except Exception as exc:
+                logger.warning("No se pudo registrar uso de IA del documento %s: %s", document_id, str(exc)[:300])
             await repositories.reset_document_children(
                 conn,
                 org_id=org_id,

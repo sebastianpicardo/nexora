@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import logging
@@ -19,6 +19,7 @@ class OpenAIProvider(LLMProvider):
     name = "openai"
 
     def __init__(self) -> None:
+        super().__init__()
         self.model = settings.llm_model
         self.client = AsyncOpenAI(
             api_key=settings.openai_api_key,
@@ -61,11 +62,17 @@ class OpenAIProvider(LLMProvider):
             logger.exception("OpenAI extraction failed")
             raise LLMError(f"Error llamando a OpenAI: {exc}") from exc
 
+        if completion.usage:
+            self.last_usage = {
+                "input_tokens": int(completion.usage.prompt_tokens or 0),
+                "output_tokens": int(completion.usage.completion_tokens or 0),
+            }
+
         message = completion.choices[0].message
         if getattr(message, "refusal", None):
-            raise LLMError(f"OpenAI rechazó la extracción: {message.refusal}")
+            raise LLMError(f"OpenAI rechazÃ³ la extracciÃ³n: {message.refusal}")
         if message.parsed is None:
-            raise LLMError("OpenAI no devolvió una extracción estructurada válida.")
+            raise LLMError("OpenAI no devolviÃ³ una extracciÃ³n estructurada vÃ¡lida.")
 
         if completion.usage:
             logger.info(

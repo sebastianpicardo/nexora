@@ -56,10 +56,10 @@ async def extract_with_fallback(
     *,
     filename: str,
     doc_type_hint: str | None = None,
-) -> tuple[Any, str]:
+) -> tuple[Any, str, dict[str, int] | None]:
     """Intenta extraer con el primer proveedor disponible y hace fallback si falla.
 
-    Retorna una tupla (resultado, nombre_proveedor_usado).
+    Retorna (resultado, nombre_proveedor_usado, uso_de_tokens).
     """
     providers = get_llm_providers()
     last_error: str | None = None
@@ -71,7 +71,7 @@ async def extract_with_fallback(
                 filename=filename,
                 doc_type_hint=doc_type_hint,
             )
-            return result, provider.name
+            return result, provider.name, getattr(provider, "last_usage", None)
         except LLMError as exc:
             last_error = str(exc)
             continue

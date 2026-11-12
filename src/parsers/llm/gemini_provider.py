@@ -19,6 +19,7 @@ class GeminiProvider(LLMProvider):
     name = "gemini"
 
     def __init__(self) -> None:
+        super().__init__()
         self.model = settings.gemini_model
         self.client = genai.Client(api_key=settings.gemini_api_key)
 
@@ -58,6 +59,12 @@ class GeminiProvider(LLMProvider):
                     "o configura otro proveedor en LLM_PROVIDER_ORDER."
                 ) from exc
             raise LLMError(f"Error llamando a Gemini: {exc}") from exc
+
+        if getattr(response, "usage_metadata", None):
+            self.last_usage = {
+                "input_tokens": int(getattr(response.usage_metadata, "prompt_token_count", 0) or 0),
+                "output_tokens": int(getattr(response.usage_metadata, "candidates_token_count", 0) or 0),
+            }
 
         if not response.text:
             raise LLMError("Gemini no devolvió contenido.")

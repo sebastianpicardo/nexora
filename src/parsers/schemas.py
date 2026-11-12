@@ -150,3 +150,16 @@ class NormalizationResult:
     raw_text: str = ""
     provider: str = ""
     model: str = ""
+    usage: dict[str, int] | None = None
+
+    @property
+    def token_usage(self) -> dict[str, int] | None:
+        return self.usage
+
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        return self.usage
+
+    @property
+    def ai_usage(self) -> dict[str, int] | None:
+        return self.usage

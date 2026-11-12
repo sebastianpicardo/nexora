@@ -15,11 +15,10 @@ BACKUP_DIR = Path("./backups")
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def is_backup_available() -> bool:
-    """Indica si pg_dump está instalado en el servidor."""
+def _tool_available(name: str) -> bool:
     try:
         subprocess.run(
-            ["pg_dump", "--version"],
+            [name, "--version"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -29,6 +28,16 @@ def is_backup_available() -> bool:
         return False
     except Exception:
         return False
+
+
+def is_backup_available() -> bool:
+    """Indica si pg_dump está instalado en el servidor."""
+    return _tool_available("pg_dump")
+
+
+def is_restore_available() -> bool:
+    """Indica si psql está instalado para restaurar backups."""
+    return _tool_available("psql")
 
 
 def _database_name(database_url: str) -> str:

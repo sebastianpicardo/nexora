@@ -22,6 +22,7 @@ class AnthropicProvider(LLMProvider):
     name = "anthropic"
 
     def __init__(self) -> None:
+        super().__init__()
         self.model = settings.anthropic_model
         self.client = AsyncAnthropic(
             api_key=settings.anthropic_api_key,
@@ -72,6 +73,12 @@ class AnthropicProvider(LLMProvider):
         except Exception as exc:
             logger.exception("Anthropic extraction failed")
             raise LLMError(f"Error llamando a Anthropic: {exc}") from exc
+
+        if getattr(response, "usage", None):
+            self.last_usage = {
+                "input_tokens": int(getattr(response.usage, "input_tokens", 0) or 0),
+                "output_tokens": int(getattr(response.usage, "output_tokens", 0) or 0),
+            }
 
         for block in response.content:
             if getattr(block, "type", None) == "tool_use" and block.name == "extract_document":
