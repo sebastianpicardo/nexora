@@ -129,7 +129,7 @@ export default function Layout({ active, onNavigate, children }) {
       </aside>
 
       <div className="main-shell">
-        <AppBanner />
+        <AppBanner onNavigate={onNavigate} />
         <header className="topbar">
           <div>
             <div className="topbar-eyebrow">Panel de control</div>
