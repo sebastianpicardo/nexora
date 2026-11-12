@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -173,6 +174,21 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(api_router)
+
+    @app.get("/version", include_in_schema=False)
+    async def app_version():
+        commit = (
+            os.getenv("RENDER_GIT_COMMIT")
+            or os.getenv("GIT_COMMIT")
+            or os.getenv("COMMIT_SHA")
+            or "dev"
+        )
+        return {
+            "app": settings.app_name,
+            "version": settings.app_version,
+            "commit": commit[:12],
+            "environment": settings.app_env,
+        }
 
     @app.api_route(
         "/api/{path:path}",

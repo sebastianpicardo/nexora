@@ -1,4 +1,6 @@
 import { useAuth } from "../context/AuthContext";
+import AppBanner from "./AppBanner";
+import AppFooter from "./AppFooter";
 import {
   AdminIcon,
   BillingIcon,
@@ -127,6 +129,7 @@ export default function Layout({ active, onNavigate, children }) {
       </aside>
 
       <div className="main-shell">
+        <AppBanner />
         <header className="topbar">
           <div>
             <div className="topbar-eyebrow">Panel de control</div>
@@ -149,6 +152,7 @@ export default function Layout({ active, onNavigate, children }) {
         </header>
 
         <main className="content">{children}</main>
+        <AppFooter />
       </div>
     </div>
   );
