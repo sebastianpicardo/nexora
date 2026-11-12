@@ -1,11 +1,11 @@
-FROM node:24-alpine AS client-build
+﻿FROM node:24-alpine AS client-build
 
-WORKDIR /app/client
+WORKDIR /app
 
-COPY client/package.json client/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm install
 
-COPY client/ ./
+COPY . .
 RUN npm run build
 
 
@@ -32,7 +32,7 @@ RUN python -m pip install --upgrade pip \
 COPY src ./src
 COPY scripts ./scripts
 COPY database ./database
-COPY --from=client-build /app/client/dist ./client/dist
+COPY --from=client-build /app/dist ./client/dist
 
 RUN mkdir -p /app/uploads \
     && chown -R nexora:nexora /app

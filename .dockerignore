@@ -18,3 +18,4 @@ client/dist
 tests
 *.log
 README.md
+node_modules
