@@ -8,7 +8,7 @@ from google.genai import types
 from src.core.config import settings
 from src.core.errors import LLMError
 from src.parsers.extractors.base import ExtractedContent
-from src.parsers.llm.base import LLMProvider
+from src.parsers.llm.base import LLMProvider, with_retries
 from src.parsers.llm.prompts import SYSTEM_PROMPT
 from src.parsers.schemas import ExtractedDocument
 
@@ -42,13 +42,21 @@ class GeminiProvider(LLMProvider):
         )
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model,
-                contents=parts,
-                config=config,
+            response = await with_retries(
+                lambda: self.client.aio.models.generate_content(
+                    model=self.model,
+                    contents=parts,
+                    config=config,
+                ),
+                label="Gemini",
             )
         except Exception as exc:
             logger.exception("Gemini extraction failed")
+            if "503" in str(exc) or "UNAVAILABLE" in str(exc):
+                raise LLMError(
+                    "Gemini está temporalmente saturado (503). Reintenta en unos minutos "
+                    "o configura otro proveedor en LLM_PROVIDER_ORDER."
+                ) from exc
             raise LLMError(f"Error llamando a Gemini: {exc}") from exc
 
         if not response.text:

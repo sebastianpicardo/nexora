@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 from src.core.config import settings
 from src.core.errors import LLMError
 from src.parsers.extractors.base import ExtractedContent
-from src.parsers.llm.base import LLMProvider
+from src.parsers.llm.base import LLMProvider, with_retries
 from src.parsers.llm.prompts import SYSTEM_PROMPT
 from src.parsers.schemas import ExtractedDocument
 
@@ -44,15 +44,18 @@ class OpenAIProvider(LLMProvider):
             )
 
         try:
-            completion = await self.client.beta.chat.completions.parse(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                response_format=ExtractedDocument,
-                temperature=0,
-                max_completion_tokens=8192,
+            completion = await with_retries(
+                lambda: self.client.beta.chat.completions.parse(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ],
+                    response_format=ExtractedDocument,
+                    temperature=0,
+                    max_completion_tokens=8192,
+                ),
+                label="OpenAI",
             )
         except Exception as exc:
             logger.exception("OpenAI extraction failed")

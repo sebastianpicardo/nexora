@@ -72,7 +72,8 @@ async def price_opportunities(
         ) r
         CROSS JOIN LATERAL (
             SELECT
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY h.normalized_unit_price) AS median_price,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY h.normalized_unit_price::double precision)::numeric
+                    AS median_price,
                 MIN(h.normalized_unit_price) AS best_price,
                 COUNT(*) AS samples
             FROM items_history h

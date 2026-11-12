@@ -23,6 +23,7 @@ import {
   TeamIcon,
 } from "./Icons";
 import { formatDate, initials, labelize, percent } from "../lib/format";
+import ModuleHelp from "./ModuleHelp";
 
 const NAV_SECTIONS = [
   {
@@ -80,6 +81,7 @@ export default function Layout({ active, onNavigate, children }) {
   const { user, organization, billing, branding, canManage, isSuperAdmin, logout } = useAuth();
   const [summary, setSummary] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const notificationRef = useRef(null);
   const quota = billing?.usage;
   const subscription = billing?.subscription;
@@ -242,9 +244,20 @@ export default function Layout({ active, onNavigate, children }) {
         <header className="topbar">
           <div>
             <div className="topbar-eyebrow">Panel de control</div>
-            <h1 className="topbar-title">
-              {ALL_ITEMS.find((item) => item.id === active)?.label || "Resumen del día"}
-            </h1>
+            <div className="topbar-title-row">
+              <h1 className="topbar-title">
+                {ALL_ITEMS.find((item) => item.id === active)?.label || "Resumen del día"}
+              </h1>
+              <button
+                type="button"
+                className="icon-button topbar-help-button"
+                title="Guía rápida de este módulo"
+                aria-label="Guía rápida de este módulo"
+                onClick={() => setHelpOpen(true)}
+              >
+                <HelpIcon />
+              </button>
+            </div>
           </div>
           <div className="user-area">
             <div className="notification-area" ref={notificationRef}>
@@ -307,6 +320,10 @@ export default function Layout({ active, onNavigate, children }) {
 
         <main className="content">{children}</main>
       </div>
+
+      {helpOpen ? (
+        <ModuleHelp view={active} onClose={() => setHelpOpen(false)} onNavigate={onNavigate} />
+      ) : null}
     </div>
   );
 }

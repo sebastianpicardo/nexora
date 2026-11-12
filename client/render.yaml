@@ -53,6 +53,8 @@ services:
         sync: false
       - key: LLM_PROVIDER
         value: gemini
+      - key: LLM_PROVIDER_ORDER
+        value: gemini,openai,anthropic
       - key: LLM_MODEL
         value: gpt-4.1-mini
       - key: OPENAI_API_KEY

@@ -250,16 +250,16 @@ export default function SmartApprovalsPage() {
         <div className="card-head">
           <div>
             <h2>Cómo funciona</h2>
-            <p>Regla aplicada a los ítems pendientes de los últimos 180 días.</p>
+            <p>
+              NEXORA aprueba solo lo seguro: confianza de extracción ≥ {Math.round(threshold * 100)}%
+              y sin alertas de severidad alta. Todo lo demás lo decides tú.
+            </p>
           </div>
         </div>
         <ul className="stack" style={{ paddingLeft: 18, margin: 0 }}>
-          <li>
-            Se auto-aprueban los ítems con confianza de extracción ≥ {Math.round(threshold * 100)}%.
-          </li>
-          <li>No deben tener excepciones pendientes de severidad alta o crítica.</li>
-          <li>Los ítems con alertas o baja confianza permanecen en revisión manual.</li>
-          <li>Cada auto-aprobación queda registrada en la auditoría de la organización.</li>
+          <li>Confianza alta y sin alertas críticas → se aprueba automáticamente.</li>
+          <li>Baja confianza o alguna alerta crítica → queda para revisión manual.</li>
+          <li>Cada auto-aprobación se guarda en la auditoría de la organización.</li>
         </ul>
       </section>
     </div>

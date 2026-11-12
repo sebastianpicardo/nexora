@@ -10,7 +10,7 @@ from anthropic import AsyncAnthropic
 from src.core.config import settings
 from src.core.errors import LLMError
 from src.parsers.extractors.base import ExtractedContent
-from src.parsers.llm.base import LLMProvider
+from src.parsers.llm.base import LLMProvider, with_retries
 from src.parsers.llm.prompts import SYSTEM_PROMPT
 from src.parsers.llm.schema_utils import clean_schema
 from src.parsers.schemas import ExtractedDocument
@@ -57,14 +57,17 @@ class AnthropicProvider(LLMProvider):
         }
 
         try:
-            response = await self.client.messages.create(
-                model=self.model,
-                max_tokens=8192,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": blocks}],
-                tools=[tool],
-                tool_choice={"type": "tool", "name": "extract_document"},
-                temperature=0,
+            response = await with_retries(
+                lambda: self.client.messages.create(
+                    model=self.model,
+                    max_tokens=8192,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": blocks}],
+                    tools=[tool],
+                    tool_choice={"type": "tool", "name": "extract_document"},
+                    temperature=0,
+                ),
+                label="Anthropic",
             )
         except Exception as exc:
             logger.exception("Anthropic extraction failed")

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from src.api.routes import (
     admin,
     alerts,
+    assistant,
     auth,
     backup,
     billing,
@@ -45,5 +46,6 @@ api_router.include_router(user_search_history.router)
 api_router.include_router(price_catalog.router)
 api_router.include_router(alerts.router)
 api_router.include_router(insights.router)
+api_router.include_router(assistant.router)
 api_router.include_router(backup.router)
 api_router.include_router(public_api.router)
