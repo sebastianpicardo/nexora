@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 from collections import deque
@@ -29,7 +29,7 @@ async def get_current_user(request: Request) -> dict:
         payload = decode_access_token(token)
         user_id = UUID(payload["sub"])
     except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="SesiÃ³n invÃ¡lida") from exc
 
     async with get_pool().connection() as conn:
         user = await repositories.get_user_with_org(conn, user_id)
@@ -71,7 +71,7 @@ def require_roles(*roles: str):
             return user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permisos para esta acción",
+            detail="No tienes permisos para esta acciÃ³n",
         )
 
     return dependency
@@ -150,8 +150,38 @@ class RateLimitMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
+class SpecificRateLimiter:
+    """Rate limiting en memoria por usuario/organizacion para rutas costosas."""
+
+    def __init__(self, scope: str, setting_name: str, window_seconds: int = 60):
+        self.scope = scope
+        self.setting_name = setting_name
+        self.window_seconds = max(int(window_seconds), 1)
+        self._hits: dict[str, deque[float]] = {}
+
+    async def __call__(self, request: Request, user: CurrentUser) -> None:
+        limit = max(int(getattr(settings, self.setting_name, 1) or 1), 1)
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        key = f"{self.scope}:{user.get('org_id')}:{user.get('id')}"
+        bucket = self._hits.setdefault(key, deque())
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            retry_after = max(int(self.window_seconds - (now - bucket[0])) if bucket else self.window_seconds, 1)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiadas solicitudes. Intenta nuevamente en unos segundos.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        bucket.append(now)
+
+
+def rate_limit(scope: str, setting_name: str, window_seconds: int = 60) -> SpecificRateLimiter:
+    return SpecificRateLimiter(scope, setting_name, window_seconds)
+
 class SecurityHeadersMiddleware:
-    """Añade encabezados de seguridad a todas las respuestas HTTP."""
+    """AÃ±ade encabezados de seguridad a todas las respuestas HTTP."""
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -168,12 +198,12 @@ class SecurityHeadersMiddleware:
                 headers["X-Frame-Options"] = "DENY"
                 # Prevenir MIME sniffing
                 headers["X-Content-Type-Options"] = "nosniff"
-                # Política de remitente
+                # PolÃ­tica de remitente
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-                # HSTS solo en producción (HTTPS)
+                # HSTS solo en producciÃ³n (HTTPS)
                 if settings.is_production:
                     headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-                # Content Security Policy básica
+                # Content Security Policy bÃ¡sica
                 headers["Content-Security-Policy"] = (
                     "default-src 'self'; "
                     "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "

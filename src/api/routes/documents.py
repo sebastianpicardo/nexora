@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 from datetime import date
@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from fastapi.responses import Response
 from psycopg.errors import UniqueViolation
 
-from src.api.deps import CurrentUser, require_roles
+from src.api.deps import CurrentUser, rate_limit, require_roles
 from src.core.config import settings
 from src.core.logging import get_logger
 from src.db import repositories
@@ -57,6 +57,7 @@ async def ingest_document(
     doc_type: str = Form(default="quote"),
     document_date: str | None = Form(default=None, max_length=40),
     user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
+    _: None = Depends(rate_limit("document_ingest", "document_ingest_rate_limit_per_minute")),
 ):
     if doc_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=422, detail="doc_type debe ser quote, invoice o price_list")
@@ -66,16 +67,16 @@ async def ingest_document(
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Formato no permitido: {suffix or 'sin extensión'}",
+            detail=f"Formato no permitido: {suffix or 'sin extensiÃ³n'}",
         )
 
     content = await file.read(settings.max_upload_bytes + 1)
     if not content:
-        raise HTTPException(status_code=400, detail="El archivo está vacío")
+        raise HTTPException(status_code=400, detail="El archivo estÃ¡ vacÃ­o")
     if len(content) > settings.max_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"El archivo supera el límite de {settings.max_upload_mb} MB",
+            detail=f"El archivo supera el lÃ­mite de {settings.max_upload_mb} MB",
         )
 
     kind = filetype.guess(content)
@@ -110,14 +111,14 @@ async def ingest_document(
     if billing["usage"]["exceeded"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Alcanzaste el límite de documentos de tu plan. Actualiza tu suscripción para continuar.",
+            detail="Alcanzaste el lÃ­mite de documentos de tu plan. Actualiza tu suscripciÃ³n para continuar.",
         )
 
     async with get_pool().connection() as conn:
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
+                detail="Alcanzaste el lÃ­mite mensual de uso de IA. Actualiza tu suscripciÃ³n para continuar.",
             )
 
     document_id = uuid4()
@@ -257,7 +258,7 @@ async def export_processed_document(
         "Fecha",
         "Proveedor",
         "SKU",
-        "Descripción",
+        "DescripciÃ³n",
         "Unidad original",
         "Cantidad",
         "Precio original",
@@ -283,8 +284,8 @@ async def export_processed_document(
         for row in result["items"]
     ]
     subtitle = (
-        f"NEXORA · {document.get('original_filename') or document_id} · "
-        f"{len(rows)} ítems · Generado el {date.today().isoformat()}"
+        f"NEXORA Â· {document.get('original_filename') or document_id} Â· "
+        f"{len(rows)} Ã­tems Â· Generado el {date.today().isoformat()}"
     )
     if fmt == "pdf":
         content = build_pdf("Documento procesado", subtitle, headers, rows)
@@ -309,17 +310,18 @@ async def reprocess_document(
     document_id: UUID,
     background_tasks: BackgroundTasks,
     user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
+    _: None = Depends(rate_limit("document_reprocess", "document_reprocess_rate_limit_per_minute")),
 ):
     async with get_pool().connection() as conn:
         existing = await repositories.get_document(conn, user["org_id"], document_id)
         if existing is None:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         if existing["status"] == "processing":
-            raise HTTPException(status_code=409, detail="El documento ya se está procesando")
+            raise HTTPException(status_code=409, detail="El documento ya se estÃ¡ procesando")
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
+                detail="Alcanzaste el lÃ­mite mensual de uso de IA. Actualiza tu suscripciÃ³n para continuar.",
             )
         row = await repositories.reset_document_for_reprocess(
             conn,

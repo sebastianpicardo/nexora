@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.deps import CurrentUser
+from src.api.deps import CurrentUser, rate_limit
 from src.db.pool import get_pool
 from src.services import ai_usage_service, assistant_service
 
@@ -23,12 +23,16 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def assistant_chat(payload: ChatRequest, user: CurrentUser):
+async def assistant_chat(
+    payload: ChatRequest,
+    user: CurrentUser,
+    _: None = Depends(rate_limit("assistant", "assistant_rate_limit_per_minute")),
+):
     async with get_pool().connection() as conn:
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="assistant"):
             raise HTTPException(
                 status_code=403,
-                detail="Alcanzaste el límite mensual de uso de IA del asistente. Actualiza tu plan.",
+                detail="Alcanzaste el lÃ­mite mensual de uso de IA del asistente. Actualiza tu plan.",
             )
     answer, provider = await assistant_service.answer_question(
         payload.message.strip(),

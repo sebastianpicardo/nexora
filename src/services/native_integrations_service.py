@@ -76,12 +76,21 @@ CHILECOMPRA_PROVEEDORES = [
 async def list_native_integrations(user: dict) -> dict[str, Any]:
     """Estado de integraciones nativas. Siempre disponibles, sin configuración técnica."""
     providers: list[dict[str, Any]] = []
+    integration_status = {
+        "chilecompra": (True, "Referencia"),
+        "sii": (True, "Validación local"),
+        "erp": (True, "Exportación manual / Beta"),
+        "slack": (False, "Próximamente"),
+        "webhook": (False, "Próximamente"),
+        "google_workspace": (False, "Próximamente"),
+    }
     for provider in PROVIDERS:
+        available, status = integration_status[provider]
         providers.append(
             {
                 "provider": provider,
-                "available": True,
-                "status": "Disponible",
+                "available": available,
+                "status": status,
                 "actions": _default_actions(provider),
             }
         )
@@ -117,8 +126,14 @@ def _default_actions(provider: str) -> list[dict]:
             {"id": "sso_login", "label": "Iniciar sesión con Google", "icon": "LockIcon"},
         ],
     }.get(provider, [])
+    disabled_actions = {
+        "sii": {"fetch_invoices", "reconcile"},
+        "slack": {"notify", "approve_from_slack"},
+        "webhook": {"send_event"},
+        "google_workspace": {"save_drive", "sso_login"},
+    }
     for action in base:
-        action["enabled"] = True
+        action["enabled"] = action["id"] not in disabled_actions.get(provider, set())
     return base
 
 

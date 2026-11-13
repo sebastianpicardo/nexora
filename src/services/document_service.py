@@ -123,6 +123,17 @@ async def _process_claimed_document(doc: dict) -> None:
                     min_history_samples=settings.min_history_samples,
                 )
                 review_status = "pending" if flags else "auto_approved"
+                canonical_product_id, match_confidence, match_confirmed = await repositories.resolve_product_alias(
+                    conn,
+                    org_id=org_id,
+                    supplier_id=supplier_id,
+                    sku=item.sku,
+                    alias_name=item.original_description,
+                    normalized_alias=item.normalized_description,
+                    base_unit=item.base_unit,
+                    confidence=1.0,
+                    confirmed=True,
+                )
                 row = await repositories.insert_item(
                     conn,
                     org_id=org_id,
@@ -145,6 +156,9 @@ async def _process_claimed_document(doc: dict) -> None:
                     source_page=item.source_page,
                     source_text=item.source_text,
                     metadata=item.metadata,
+                    canonical_product_id=canonical_product_id,
+                    product_match_confidence=match_confidence,
+                    product_match_confirmed=match_confirmed,
                 )
                 inserted.append((row, flags))
 

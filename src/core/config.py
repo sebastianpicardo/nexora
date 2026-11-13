@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     ai_input_cost_per_million_usd: float = Field(default=0.5, ge=0)
     ai_output_cost_per_million_usd: float = Field(default=1.5, ge=0)
     assistant_rate_limit_per_minute: int = Field(default=20, ge=1)
+    document_ingest_rate_limit_per_minute: int = Field(default=30, ge=1)
+    document_reprocess_rate_limit_per_minute: int = Field(default=20, ge=1)
+    export_rate_limit_per_minute: int = Field(default=30, ge=1)
     auto_approve_max_amount: float = Field(default=500000.0, ge=0)
 
     payment_provider: str = "mock"

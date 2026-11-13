@@ -41,6 +41,9 @@ async def insert_item(
     source_page: int | None,
     source_text: str | None,
     metadata: dict | None = None,
+    canonical_product_id: UUID | str | None = None,
+    product_match_confidence: float | None = None,
+    product_match_confirmed: bool = False,
 ) -> dict:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -50,14 +53,16 @@ async def insert_item(
                 normalized_description, original_unit, base_unit, unit_factor,
                 quantity, package_size, original_unit_price, normalized_unit_price,
                 currency, price_date, confidence, review_status, source_page,
-                source_text, metadata
+                source_text, metadata, canonical_product_id, product_match_confidence,
+                product_match_confirmed
             )
             VALUES (
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
-                %s, %s
+                %s, %s, %s, %s,
+                %s
             )
             RETURNING *
             """,
@@ -82,6 +87,9 @@ async def insert_item(
                 source_page,
                 source_text,
                 Jsonb(metadata or {}),
+                str(canonical_product_id) if canonical_product_id else None,
+                product_match_confidence,
+                bool(product_match_confirmed),
             ),
         )
         row = await cur.fetchone()
@@ -186,6 +194,9 @@ async def update_item_fields(
         "confidence",
         "review_status",
         "metadata",
+        "canonical_product_id",
+        "product_match_confidence",
+        "product_match_confirmed",
     }
     updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
     if not updates:

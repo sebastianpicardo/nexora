@@ -29,6 +29,11 @@ from src.db.repositories.billing import (
     list_plans,
     record_payment_event,
 )
+from src.db.repositories.canonical_products import (
+    canonical_product_name,
+    get_or_create_canonical_product,
+    resolve_product_alias,
+)
 from src.db.repositories.documents import (
     claim_document_by_id,
     claim_next_queued,
@@ -108,6 +113,11 @@ from src.db.repositories.items import (
     update_item_fields,
 )
 from src.db.repositories.organizations import delete_organization, get_organization, update_organization
+from src.db.repositories.savings_tracking import (
+    list_savings_tracking,
+    record_savings_tracking,
+    summarize_savings_tracking,
+)
 from src.db.repositories.suppliers import (
     delete_supplier,
     get_or_create_supplier,
@@ -147,10 +157,19 @@ __all__ = [
     "analytics_overview",
     "approval_queue",
     "auto_approve_items",
+    "canonical_product_name",
+    "get_or_create_canonical_product",
+    "resolve_product_alias",
+    "canonical_product_name",
+    "get_or_create_canonical_product",
+    "resolve_product_alias",
     "consumption_forecast",
     "price_opportunities",
     "count_ai_usage_this_month",
     "record_ai_usage",
+    "record_savings_tracking",
+    "summarize_savings_tracking",
+    "list_savings_tracking",
     "summarize_ai_usage",
     "create_api_key",
     "create_approval",

@@ -1,13 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from src.api.deps import CurrentUser
+from src.api.deps import CurrentUser, rate_limit
+from src.core.config import settings
 from src.db import repositories
 from src.db.pool import get_pool
 from src.services.export_service import build_excel, build_pdf
@@ -20,7 +22,7 @@ EXCEPTION_LABELS = {
     "unit_mismatch": "Unidad inconsistente",
     "price_mismatch": "Total inconsistente",
     "missing_price": "Precio faltante",
-    "extraction_failed": "Extracción fallida",
+    "extraction_failed": "ExtracciÃ³n fallida",
     "pending": "Pendiente",
     "approved": "Aprobado",
     "rejected": "Rechazado",
@@ -28,7 +30,7 @@ EXCEPTION_LABELS = {
     "low": "Baja",
     "medium": "Media",
     "high": "Alta",
-    "critical": "Crítica",
+    "critical": "CrÃ­tica",
 }
 
 ITEM_LABELS = {
@@ -75,6 +77,7 @@ async def export_exceptions(
     status_filter: str | None = Query(default=None, alias="status"),
     type_filter: str | None = Query(default=None, alias="type"),
     severity: str | None = Query(default=None),
+    _: None = Depends(rate_limit("export", "export_rate_limit_per_minute")),
 ):
     async with get_pool().connection() as conn:
         result = await repositories.list_exceptions(
@@ -87,7 +90,7 @@ async def export_exceptions(
             page_size=2000,
         )
 
-    headers = ["Severidad", "Tipo", "Proveedor", "Documento", "Ítem", "SKU", "Motivo", "Estado", "Fecha"]
+    headers = ["Severidad", "Tipo", "Proveedor", "Documento", "Ãtem", "SKU", "Motivo", "Estado", "Fecha"]
     rows = [
         [
             EXCEPTION_LABELS.get(row["severity"], row["severity"]),
@@ -105,8 +108,8 @@ async def export_exceptions(
 
     if fmt == "pdf":
         content = build_pdf(
-            "Excepciones de auditoría",
-            f"NEXORA · {len(rows)} registros · Generado el {date.today().isoformat()}",
+            "Excepciones de auditorÃ­a",
+            f"NEXORA Â· {len(rows)} registros Â· Generado el {date.today().isoformat()}",
             headers,
             rows,
             column_widths=[20 * 2.5, 32 * 2.5, 34 * 2.5, 38 * 2.5, 48 * 2.5, 18 * 2.5, 70 * 2.5, 22 * 2.5, 22 * 2.5],
@@ -125,6 +128,7 @@ async def export_items(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     search: str | None = Query(default=None, max_length=100),
+    _: None = Depends(rate_limit("export", "export_rate_limit_per_minute")),
 ):
     async with get_pool().connection() as conn:
         result = await repositories.list_items(
@@ -143,7 +147,7 @@ async def export_items(
         "Fecha",
         "Proveedor",
         "SKU",
-        "Descripción",
+        "DescripciÃ³n",
         "Unidad original",
         "Cantidad",
         "Precio original",
@@ -172,7 +176,7 @@ async def export_items(
     if fmt == "pdf":
         content = build_pdf(
             "Precios auditados",
-            f"NEXORA · {len(rows)} registros · Generado el {date.today().isoformat()}",
+            f"NEXORA Â· {len(rows)} registros Â· Generado el {date.today().isoformat()}",
             headers,
             rows,
             column_widths=[
@@ -192,3 +196,184 @@ async def export_items(
     else:
         content = build_excel("Precios", headers, rows)
     return _file_response(content, fmt, "precios")
+
+
+@router.get("/opportunities")
+async def export_opportunities(
+    user: CurrentUser,
+    fmt: Literal["pdf", "xlsx"] = Query(default="xlsx", alias="format"),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    days: int = Query(default=90, ge=1, le=730),
+    min_overprice_pct: float = Query(default=10.0, ge=0, le=1000),
+    limit: int = Query(default=100, ge=1, le=500),
+    _: None = Depends(rate_limit("export", "export_rate_limit_per_minute")),
+):
+    active_currency = (currency or user["default_currency"] or "CLP").strip().upper()
+    async with get_pool().connection() as conn:
+        result = await repositories.price_opportunities(
+            conn,
+            user["org_id"],
+            currency=active_currency,
+            days=days,
+            min_overprice_pct=min_overprice_pct,
+            min_samples=settings.min_history_samples,
+            limit=limit,
+        )
+
+    headers = [
+        "Producto comparable",
+        "Proveedor",
+        "Precio actual",
+        "Mediana",
+        "Mejor precio",
+        "Mejor proveedor",
+        "Sobreprecio %",
+        "Ahorro conservador",
+        "Ahorro potencial",
+        "Muestras",
+        "Fecha",
+    ]
+    rows = [
+        [
+            row.get("comparable_product") or row.get("normalized_description") or row.get("sku") or "",
+            row.get("supplier_name") or "Sin proveedor",
+            _money(row.get("current_price"), active_currency),
+            _money(row.get("median_price"), active_currency),
+            _money(row.get("best_price"), active_currency),
+            row.get("best_supplier_name") or "",
+            f"{float(row.get('overprice_pct') or 0):.1f}%",
+            _money(row.get("savings_min"), active_currency),
+            _money(row.get("potential_savings"), active_currency),
+            row.get("samples") or 0,
+            _date_value(row.get("price_date")),
+        ]
+        for row in result.get("items", [])
+    ]
+
+    if fmt == "pdf":
+        content = build_pdf(
+            "Oportunidades de ahorro",
+            f"NEXORA · {len(rows)} oportunidades · Generado el {date.today().isoformat()}",
+            headers,
+            rows,
+            column_widths=[
+                42 * 2.5,
+                34 * 2.5,
+                24 * 2.5,
+                24 * 2.5,
+                24 * 2.5,
+                34 * 2.5,
+                20 * 2.5,
+                26 * 2.5,
+                26 * 2.5,
+                16 * 2.5,
+                22 * 2.5,
+            ],
+        )
+    else:
+        content = build_excel("Oportunidades", headers, rows)
+    return _file_response(content, fmt, "oportunidades")
+
+
+@router.post("/opportunities/share")
+async def share_opportunities(
+    user: CurrentUser,
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    days: int = Query(default=90, ge=1, le=730),
+    min_overprice_pct: float = Query(default=10.0, ge=0, le=1000),
+    limit: int = Query(default=100, ge=1, le=500),
+    expires_hours: int = Query(default=168, ge=1, le=720),
+):
+    serializer = URLSafeTimedSerializer(settings.session_secret or settings.jwt_secret)
+    token = serializer.dumps(
+        {
+            "org_id": str(user["org_id"]),
+            "currency": (currency or user["default_currency"] or "CLP").strip().upper(),
+            "days": days,
+            "min_overprice_pct": min_overprice_pct,
+            "limit": limit,
+        }
+    )
+    return {
+        "share_url": f"/api/exports/opportunities/shared/{token}",
+        "expires_in_hours": expires_hours,
+    }
+
+
+@router.get("/opportunities/shared/{token}")
+async def shared_opportunities(
+    token: str,
+    fmt: Literal["pdf", "xlsx"] = Query(default="pdf", alias="format"),
+):
+    serializer = URLSafeTimedSerializer(settings.session_secret or settings.jwt_secret)
+    try:
+        data = serializer.loads(token, max_age=7 * 24 * 3600)
+    except SignatureExpired:
+        raise HTTPException(status_code=410, detail="El enlace compartido expiró.") from None
+    except BadSignature:
+        raise HTTPException(status_code=404, detail="Enlace compartido inválido.") from None
+
+    async with get_pool().connection() as conn:
+        result = await repositories.price_opportunities(
+            conn,
+            data["org_id"],
+            currency=data["currency"],
+            days=data["days"],
+            min_overprice_pct=data["min_overprice_pct"],
+            min_samples=settings.min_history_samples,
+            limit=data["limit"],
+        )
+
+    headers = [
+        "Producto comparable",
+        "Proveedor",
+        "Precio actual",
+        "Mediana",
+        "Mejor precio",
+        "Mejor proveedor",
+        "Sobreprecio %",
+        "Ahorro conservador",
+        "Ahorro potencial",
+        "Muestras",
+        "Fecha",
+    ]
+    rows = [
+        [
+            row.get("comparable_product") or row.get("normalized_description") or row.get("sku") or "",
+            row.get("supplier_name") or "Sin proveedor",
+            _money(row.get("current_price"), data["currency"]),
+            _money(row.get("median_price"), data["currency"]),
+            _money(row.get("best_price"), data["currency"]),
+            row.get("best_supplier_name") or "",
+            f"{float(row.get('overprice_pct') or 0):.1f}%",
+            _money(row.get("savings_min"), data["currency"]),
+            _money(row.get("potential_savings"), data["currency"]),
+            row.get("samples") or 0,
+            _date_value(row.get("price_date")),
+        ]
+        for row in result.get("items", [])
+    ]
+
+    if fmt == "pdf":
+        content = build_pdf(
+            "Oportunidades de ahorro",
+            f"NEXORA · {len(rows)} oportunidades · Enlace compartido",
+            headers,
+            rows,
+            column_widths=[
+                42 * 2.5,
+                34 * 2.5,
+                24 * 2.5,
+                24 * 2.5,
+                24 * 2.5,
+                34 * 2.5,
+                20 * 2.5,
+                26 * 2.5,
+                26 * 2.5,
+                16 * 2.5,
+                22 * 2.5,
+            ],
+        )
+    else:
+        content = build_excel("Oportunidades", headers, rows)
+    return _file_response(content, fmt, "oportunidades-compartidas")

@@ -49,6 +49,10 @@ async def price_opportunities(
             r.sku,
             r.original_description,
             r.normalized_description,
+            r.canonical_product_id,
+            r.product_match_confidence,
+            r.product_match_confirmed,
+            cp.name AS comparable_product_name,
             r.base_unit,
             r.currency,
             r.quantity,
@@ -67,15 +71,21 @@ async def price_opportunities(
             SELECT
                 i.*,
                 s.name AS supplier_name,
-                COALESCE(NULLIF(i.normalized_description, ''), i.sku) AS product_key
+                COALESCE(
+                    i.canonical_product_id::text,
+                    'legacy:' || COALESCE(NULLIF(i.normalized_description, ''), i.sku)
+                ) AS product_key,
+                cp.name AS comparable_product_name
             FROM items_history i
             LEFT JOIN suppliers s ON s.id = i.supplier_id
+            LEFT JOIN canonical_products cp ON cp.id = i.canonical_product_id
             WHERE i.org_id = %s
               AND i.currency = %s
               AND i.review_status <> 'rejected'
               AND i.normalized_unit_price IS NOT NULL
               AND i.normalized_unit_price > 0
               AND i.price_date <= current_date
+              AND COALESCE(i.product_match_confirmed, i.canonical_product_id IS NULL)
               AND i.price_date >= (current_date - (%s * interval '1 day'))
         ) r
         CROSS JOIN LATERAL (
@@ -94,14 +104,11 @@ async def price_opportunities(
               AND h.base_unit IS NOT DISTINCT FROM r.base_unit
               AND h.price_date <= r.price_date
               AND h.price_date >= (r.price_date - (%s * interval '1 day'))
-              AND (
-                  h.normalized_description = r.normalized_description
-                  OR (
-                      h.supplier_id IS NOT DISTINCT FROM r.supplier_id
-                      AND r.sku IS NOT NULL
-                      AND h.sku = r.sku
-                  )
-              )
+            AND COALESCE(
+                h.canonical_product_id::text,
+                'legacy:' || COALESCE(NULLIF(h.normalized_description, ''), h.sku)
+            ) = r.product_key
+            AND COALESCE(h.product_match_confirmed, h.canonical_product_id IS NULL)
         ) hist
         LEFT JOIN LATERAL (
             SELECT s2.name AS supplier_name
@@ -115,18 +122,18 @@ async def price_opportunities(
               AND h2.price_date <= r.price_date
               AND h2.price_date >= (r.price_date - (%s * interval '1 day'))
               AND (
-                  h2.normalized_description = r.normalized_description
-                  OR (
-                      h2.supplier_id IS NOT DISTINCT FROM r.supplier_id
-                      AND r.sku IS NOT NULL
-                      AND h2.sku = r.sku
-                  )
+                  COALESCE(
+                      h2.canonical_product_id::text,
+                      'legacy:' || COALESCE(NULLIF(h2.normalized_description, ''), h2.sku)
+                  ) = r.product_key
               )
+              AND COALESCE(h2.product_match_confirmed, h2.canonical_product_id IS NULL)
             ORDER BY s2.name
             LIMIT 1
         ) best ON TRUE
         WHERE hist.samples >= %s
           AND hist.median_price > 0
+          AND COALESCE(r.product_match_confirmed, r.canonical_product_id IS NULL)
           AND ((r.normalized_unit_price - hist.median_price) / hist.median_price) * 100 >= %s
         ORDER BY potential_savings DESC, overprice_pct DESC
         LIMIT %s
@@ -173,7 +180,19 @@ async def price_opportunities(
                 "sku": row.get("sku"),
                 "original_description": row.get("original_description"),
                 "normalized_description": row.get("normalized_description"),
-                "base_unit": row.get("base_unit"),
+                "canonical_product_id": (
+                    str(row.get("canonical_product_id")) if row.get("canonical_product_id") else None
+                ),
+                "comparable_product": row.get("comparable_product_name") or row.get("normalized_description"),
+                "product_match_confidence": (
+                    _round(_num(row.get("product_match_confidence")), 3)
+                    if row.get("product_match_confidence") is not None
+                    else 1.0
+                ),
+                "product_match_confirmed": (
+                    bool(row.get("product_match_confirmed"))
+                    or row.get("canonical_product_id") is None
+                ),
                 "currency": row.get("currency"),
                 "quantity": _num(row.get("quantity")),
                 "current_price": _num(row.get("current_price")),

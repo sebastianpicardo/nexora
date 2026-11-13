@@ -41,6 +41,11 @@ from src.services import document_service, notification_service, storage_service
 from src.services.export_service import build_excel, build_pdf
 
 logger = get_logger(__name__)
+
+def _add_months(value: date, months: int) -> date:
+    month_index = value.year * 12 + value.month - 1 + months
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
 router = APIRouter(prefix="/api/enterprise", tags=["enterprise"])
 inbound_router = APIRouter(prefix="/api/inbound-email", tags=["inbound-email"])
 
@@ -718,93 +723,132 @@ async def seed_demo_data(
     user: dict = Depends(require_roles("owner", "admin")),
 ):
     async with get_pool().connection() as conn:
-        existing = await repositories.get_document_by_hash(conn, user["org_id"], f"demo-{user['org_id']}")
+        existing = await repositories.get_document_by_hash(conn, user["org_id"], f"demo-{user['org_id']}-0")
         if existing is not None:
             return {"success": True, "already_seeded": True, "document_id": str(existing["id"])}
 
-        supplier = await repositories.get_or_create_supplier(
-            conn,
-            org_id=user["org_id"],
-            name="Proveedor Demo NEXORA",
-            tax_id="76.000.000-0",
-            email="demo@proveedor.cl",
-        )
-        document_id = uuid4()
-        await repositories.create_document(
-            conn,
-            document_id=document_id,
-            org_id=user["org_id"],
-            supplier_id=supplier["id"],
-            uploaded_by=user["id"],
-            original_filename="demo-cotizacion.csv",
-            storage_path=f"demo/{document_id}.csv",
-            file_hash=f"demo-{user['org_id']}",
-            mime_type="text/csv",
-            file_size_bytes=0,
-            doc_type="invoice",
-            metadata={"demo": True},
-        )
-        items = [
-            ("DEMO-001", "Tornillo acero inoxidable", "unidad", 120, Decimal("0.85"), "auto_approved"),
-            ("DEMO-002", "Plancha acero 2mm", "kg", 80, Decimal("3.40"), "auto_approved"),
-            ("DEMO-003", "Guantes de seguridad", "par", 40, Decimal("2.10"), "pending"),
+        suppliers = []
+        for name, tax_id in [
+            ("Proveedor Demo Norte", "76.100.000-1"),
+            ("Proveedor Demo Central", "76.200.000-2"),
+            ("Proveedor Demo Sur", "76.300.000-3"),
+        ]:
+            suppliers.append(
+                await repositories.get_or_create_supplier(
+                    conn,
+                    org_id=user["org_id"],
+                    name=name,
+                    tax_id=tax_id,
+                    email=f"{name.lower().replace(' ', '')}@demo.nexora.cl",
+                )
+            )
+
+        products = [
+            ("DEMO-001", "Tornillo acero inoxidable 6mm", "unidad", Decimal("0.90")),
+            ("DEMO-002", "Plancha acero 2mm", "kg", Decimal("3.20")),
+            ("DEMO-003", "Guantes de seguridad", "par", Decimal("2.00")),
+            ("DEMO-004", "Pintura esmalte blanco 1 galon", "galon", Decimal("8200")),
+            ("DEMO-005", "Tuberia PVC 1/2 pulgada", "metro", Decimal("1450")),
+            ("DEMO-006", "Codo PVC 1/2 pulgada", "unidad", Decimal("420")),
+            ("DEMO-007", "Cable electrico 2.5mm", "metro", Decimal("620")),
+            ("DEMO-008", "Interruptor simple", "unidad", Decimal("2300")),
+            ("DEMO-009", "Cinta metrica 5m", "unidad", Decimal("4200")),
+            ("DEMO-010", "Llave inglesa 8 pulgadas", "unidad", Decimal("6200")),
         ]
-        created_items = []
-        for sku, description, unit, quantity, price, review_status in items:
-            row = await repositories.insert_item(
+
+        today = date.today()
+        first_document_id = None
+        for month_offset in range(11, -1, -1):
+            month_date = _add_months(today.replace(day=1), -month_offset)
+            price_date = month_date
+            document_id = uuid4()
+            if first_document_id is None:
+                first_document_id = document_id
+            await repositories.create_document(
+                conn,
+                document_id=document_id,
+                org_id=user["org_id"],
+                supplier_id=None,
+                uploaded_by=user["id"],
+                original_filename=f"demo-historico-{month_date.isoformat()}.csv",
+                storage_path=f"demo/{document_id}.csv",
+                file_hash=f"demo-{user['org_id']}-{month_offset}",
+                mime_type="text/csv",
+                file_size_bytes=0,
+                doc_type="invoice",
+                metadata={"demo": True, "month": month_date.isoformat()},
+            )
+            for index, (sku, description, unit, base_price) in enumerate(products):
+                supplier = suppliers[index % len(suppliers)]
+                # Precios comparables entre proveedores y un sobreprecio claro en el mes actual.
+                supplier_factor = (
+                    Decimal("0.92") if index % 3 == 0
+                    else Decimal("1.00") if index % 3 == 1
+                    else Decimal("1.08")
+                )
+                current_factor = Decimal("1.35") if month_offset == 0 and index in {0, 3, 6} else Decimal("1.00")
+                price = (base_price * supplier_factor * current_factor).quantize(Decimal("0.01"))
+                quantity = Decimal("10") + Decimal(index * 2)
+                canonical_id, confidence, confirmed = await repositories.resolve_product_alias(
+                    conn,
+                    org_id=user["org_id"],
+                    supplier_id=supplier["id"],
+                    sku=sku,
+                    alias_name=description,
+                    normalized_alias=description.lower(),
+                    base_unit=unit,
+                    confidence=1.0,
+                    confirmed=True,
+                )
+                review_status = "pending" if month_offset == 0 and index == 2 else "auto_approved"
+                row = await repositories.insert_item(
+                    conn,
+                    org_id=user["org_id"],
+                    document_id=document_id,
+                    supplier_id=supplier["id"],
+                    sku=sku,
+                    original_description=description,
+                    normalized_description=description.lower(),
+                    original_unit=unit,
+                    base_unit=unit,
+                    unit_factor=Decimal("1"),
+                    quantity=quantity,
+                    package_size=None,
+                    original_unit_price=price,
+                    normalized_unit_price=price,
+                    currency=user["default_currency"],
+                    price_date=price_date,
+                    confidence=Decimal("0.93") if review_status == "auto_approved" else Decimal("0.62"),
+                    review_status=review_status,
+                    source_page=1,
+                    source_text=f"{sku} · {description}",
+                    metadata={"demo": True, "month": month_date.isoformat()},
+                    canonical_product_id=canonical_id,
+                    product_match_confidence=confidence,
+                    product_match_confirmed=confirmed,
+                )
+                if month_offset == 0 and index == 2:
+                    await repositories.create_exception(
+                        conn,
+                        org_id=user["org_id"],
+                        document_id=document_id,
+                        item_id=row["id"],
+                        type="low_confidence",
+                        severity="medium",
+                        reason="Confianza de extracción bajo el umbral configurado.",
+                        evidence={"confidence": 0.62, "demo": True},
+                    )
+            await repositories.mark_processed(
                 conn,
                 org_id=user["org_id"],
                 document_id=document_id,
-                supplier_id=supplier["id"],
-                sku=sku,
-                original_description=description,
-                normalized_description=description.lower(),
-                original_unit=unit,
-                base_unit=unit,
-                unit_factor=Decimal("1"),
-                quantity=Decimal(quantity),
-                package_size=None,
-                original_unit_price=price,
-                normalized_unit_price=price,
-                currency=user["default_currency"],
-                price_date=date.today(),
-                confidence=Decimal("0.92"),
-                review_status=review_status,
-                source_page=1,
-                source_text=f"{sku} · {description}",
-                metadata={"demo": True},
+                supplier_id=None,
+                extraction_provider="demo",
+                extraction_model="demo",
+                raw_text="Datos demo históricos generados por NEXORA",
+                metadata={"demo": True, "month": month_date.isoformat(), "item_count": len(products)},
             )
-            created_items.append(row)
-        await repositories.create_exception(
-            conn,
-            org_id=user["org_id"],
-            document_id=document_id,
-            item_id=created_items[2]["id"],
-            type="low_confidence",
-            severity="medium",
-            reason="Confianza de extracción bajo el umbral configurado.",
-            evidence={"confidence": 0.55, "demo": True},
-        )
-        await repositories.create_exception(
-            conn,
-            org_id=user["org_id"],
-            document_id=document_id,
-            item_id=created_items[1]["id"],
-            type="price_spike",
-            severity="high",
-            reason="Alza de precio detectada contra el histórico.",
-            evidence={"historical_median": 2.80, "demo": True},
-        )
-        await repositories.mark_processed(
-            conn,
-            org_id=user["org_id"],
-            document_id=document_id,
-            supplier_id=supplier["id"],
-            extraction_provider="demo",
-            extraction_model="demo",
-            raw_text="Datos demo generados por NEXORA",
-            metadata={"demo": True, "item_count": len(items)},
-        )
+
         progress = await repositories.get_onboarding(conn, user["org_id"])
         manual = progress.get("steps") if isinstance(progress.get("steps"), dict) else {}
         manual["demo"] = True
@@ -822,8 +866,9 @@ async def seed_demo_data(
             action="onboarding.demo_seed",
             entity_type="organization",
             entity_id=str(user["org_id"]),
+            metadata={"months": 12, "products": len(products), "suppliers": len(suppliers)},
         )
-    return {"success": True, "already_seeded": False, "document_id": str(document_id)}
+    return {"success": True, "already_seeded": False, "months": 12, "products": len(products), "documents": 12}
 
 
 @router.get("/security")

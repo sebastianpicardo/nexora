@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
 import { DollarIcon, ExceptionsIcon, PricesIcon, SuppliersIcon } from "../components/Icons";
+import EmptyState from "../components/EmptyState";
 
 const DAY_OPTIONS = [30, 60, 90, 180, 365];
 const OVERPRICE_OPTIONS = [5, 10, 15, 20, 30];
@@ -16,6 +17,9 @@ export default function OpportunitiesPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [savingsSummary, setSavingsSummary] = useState({});
+  const [trackingKey, setTrackingKey] = useState("");
+  const [savingsError, setSavingsError] = useState("");
 
   useEffect(() => {
     if (organization?.default_currency) setCurrency(organization.default_currency);
@@ -42,6 +46,51 @@ export default function OpportunitiesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadSavings = useCallback(async () => {
+    try {
+      const result = await api("/api/insights/savings");
+      setSavingsSummary(result.summary || {});
+    } catch {
+      setSavingsSummary({});
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSavings();
+  }, [loadSavings]);
+
+  const trackSavings = async (row) => {
+    const suggested = Math.round(Number(row.savings_min ?? row.potential_savings ?? 0));
+    const input = window.prompt(
+      `Ahorro realizado para ${row.comparable_product || row.normalized_description} (${currency})`,
+      String(suggested)
+    );
+    if (input === null) return;
+    const amount = Number(String(input).replace(",", "."));
+    if (!Number.isFinite(amount) || amount < 0) {
+      setSavingsError("Ingresa un monto válido mayor o igual a 0.");
+      return;
+    }
+    setSavingsError("");
+    setTrackingKey(row.id);
+    try {
+      await api("/api/insights/savings/track", {
+        method: "POST",
+        body: JSON.stringify({
+          opportunity_key: `item:${row.id}`,
+          status: amount > 0 ? "realized" : "identified",
+          realized_amount: amount,
+          currency,
+        }),
+      });
+      await loadSavings();
+    } catch (err) {
+      setSavingsError(err.message || "No se pudo registrar el ahorro.");
+    } finally {
+      setTrackingKey("");
+    }
+  };
 
   const summary = data?.summary || {};
   const items = data?.items || [];
@@ -86,6 +135,7 @@ export default function OpportunitiesPage() {
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+      {savingsError ? <div className="alert error">{savingsError}</div> : null}
 
       <section className="stats-grid">
         <StatCard
@@ -110,9 +160,16 @@ export default function OpportunitiesPage() {
         />
         <StatCard
           label="Proveedores afectados"
-          value={loading ? "—" : summary.suppliers_affected ?? 0}
+          value={loading ? "�?" : summary.suppliers_affected ?? 0}
           detail="Con oportunidades detectadas"
           icon={<SuppliersIcon />}
+        />
+        <StatCard
+          label="Ahorro realizado"
+          value={formatMoney(savingsSummary.realized_amount || 0, currency)}
+          detail={`${savingsSummary.realized || 0} oportunidad(es) cerradas`}
+          tone="ok"
+          icon={<DollarIcon />}
         />
       </section>
 
@@ -158,9 +215,10 @@ export default function OpportunitiesPage() {
         {loading ? (
           <div className="empty-state">Analizando historial de precios…</div>
         ) : items.length === 0 ? (
-          <div className="empty-state">
-            <p>No se detectaron sobreprecios con los filtros actuales.</p>
-          </div>
+          <EmptyState
+            title="No se detectaron sobreprecios"
+            description="Sube más documentos o ajusta la ventana y el umbral para encontrar oportunidades."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="data-table">
@@ -174,6 +232,7 @@ export default function OpportunitiesPage() {
                   <th>Sobreprecio</th>
                   <th>Ahorro potencial</th>
                   <th>Fecha</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,6 +260,16 @@ export default function OpportunitiesPage() {
                     </td>
                     <td className="mono">{formatMoney(row.potential_savings, currency)}</td>
                     <td>{formatDate(row.price_date)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button ghost small"
+                        disabled={trackingKey === row.id}
+                        onClick={() => trackSavings(row)}
+                      >
+                        {trackingKey === row.id ? "Guardando..." : "Registrar ahorro"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -31,7 +31,15 @@ async def native_integration_action(
     handlers = ni.ACTION_HANDLERS.get(provider, {})
     handler = handlers.get(action)
     if handler is None:
-        raise HTTPException(status_code=404, detail="Acción no soportada para este proveedor.")
+        raise HTTPException(status_code=404, detail="Acci��n no soportada para este proveedor.")
+    provider_status = await ni.list_native_integrations(user)
+    current = next((item for item in provider_status["providers"] if item["provider"] == provider), None)
+    action_status = next((item for item in (current or {}).get("actions", []) if item["id"] == action), None)
+    if not current or not current.get("available") or not action_status or not action_status.get("enabled", True):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta integración o acción todavía no está disponible.",
+        )
     try:
         return await handler(user, payload)
     except HTTPException:

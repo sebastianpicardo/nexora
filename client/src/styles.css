@@ -7100,3 +7100,53 @@ a {
   }
 }
 
+
+.empty-state-card {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 28px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.empty-state-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 24px;
+}
+
+.empty-state-card h3 {
+  margin: 0;
+}
+
+.empty-state-card p {
+  max-width: 520px;
+}
+
+.empty-state-card {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 28px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.empty-state-card h3 {
+  margin: 0;
+}
+
+.empty-state-card p {
+  max-width: 520px;
+  margin: 0;
+}

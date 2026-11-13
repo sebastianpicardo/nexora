@@ -86,7 +86,7 @@ const PROVIDERS = [
   },
 ];
 
-function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
+function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) {
   const [running, setRunning] = useState(null);
   const [error, setError] = useState(null);
   const [configureModal, setConfigureModal] = useState(null);
@@ -129,7 +129,10 @@ function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
           <provider.icon />
         </div>
         <div>
-          <div className="integration-name">{provider.name}</div>
+          <div className="integration-name">
+            {provider.name}
+            {status?.status ? <span className="badge small">{status.status}</span> : null}
+          </div>
           <p className="integration-desc">{provider.description}</p>
         </div>
       </div>
@@ -139,7 +142,8 @@ function ProviderCard({ provider, onConfiguredAction, recentSearches }) {
             key={action.id}
             type="button"
             className={`integration-button ${action.primary ? "integration-button-primary" : "integration-button-ghost"}`}
-            disabled={running === action.id}
+            disabled={running === action.id || status?.available === false || action.enabled === false}
+            title={status?.available === false ? "Próximamente" : action.enabled === false ? "Acción no disponible todavía" : undefined}
             onClick={() => {
               if (action.id === "search_items" || action.id === "search_suppliers") {
                 openConfigure(action);
@@ -796,9 +800,8 @@ export default function NativeIntegrationsPage() {
           <div className="eyebrow">Integraciones nativas</div>
           <h2>Conecta tus herramientas</h2>
           <p>
-            Todas las integraciones están listas para usar. Desde cualquier documento, proveedor o aprobación puedes
-            lanzar acciones: buscar precios de referencia en ChileCompra, validar RUT en el SII, exportar a tu ERP,
-            notificar a tu equipo o guardar en Google Drive. No necesitas configurar claves ni APIs.
+            Consulta precios de referencia en ChileCompra, valida RUT localmente y exporta datos a tu ERP.
+            Las integraciones marcadas como Próximamente se muestran para planificación y no ejecutan acciones.
           </p>
         </div>
       </section>
@@ -816,6 +819,7 @@ export default function NativeIntegrationsPage() {
                 <ProviderCard
                   key={provider.id}
                   provider={provider}
+                  status={status}
                   onConfiguredAction={(prov, act, data, config) => {
                     setOpenResult({ ...data, provider_name: prov.name });
                     saveSearch(prov.id, act.id, config, data);

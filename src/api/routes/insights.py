@@ -11,6 +11,14 @@ from src.db.pool import get_pool
 router = APIRouter(prefix="/api/insights", tags=["insights"])
 
 
+class SavingsTrackingRequest(BaseModel):
+    opportunity_key: str = Field(min_length=1, max_length=240)
+    status: str = Field(default="identified")
+    realized_amount: float = Field(default=0.0, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 class AutoApproveRequest(BaseModel):
     threshold: float = Field(default=0.9, ge=0.0, le=1.0)
     max_amount: float | None = Field(default=None, ge=0.0)
@@ -147,6 +155,33 @@ async def approval_queue(
             days=days,
             max_amount=settings.auto_approve_max_amount,
         )
+
+
+@router.post("/savings/track")
+async def track_savings(
+    payload: SavingsTrackingRequest,
+    user: dict = Depends(require_roles("owner", "admin", "analyst")),
+):
+    active_currency = (payload.currency or user["default_currency"] or "CLP").strip().upper()
+    async with get_pool().connection() as conn:
+        row = await repositories.record_savings_tracking(
+            conn,
+            org_id=user["org_id"],
+            opportunity_key=payload.opportunity_key,
+            status=payload.status,
+            realized_amount=payload.realized_amount,
+            currency=active_currency,
+            notes=payload.notes,
+        )
+    return {"success": True, "tracking": row}
+
+
+@router.get("/savings")
+async def list_savings(user: CurrentUser, status_filter: str | None = Query(default=None, alias="status")):
+    async with get_pool().connection() as conn:
+        items = await repositories.list_savings_tracking(conn, user["org_id"], status=status_filter)
+        summary = await repositories.summarize_savings_tracking(conn, user["org_id"])
+    return {"items": items, "summary": summary}
 
 
 @router.post("/auto-approve")
