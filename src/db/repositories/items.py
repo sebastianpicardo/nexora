@@ -232,6 +232,7 @@ async def get_price_history(
     lookback_days: int,
     exclude_document_id: UUID | str,
     limit: int = 12,
+    canonical_product_id: UUID | str | None = None,
 ) -> list[dict]:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -242,28 +243,36 @@ async def get_price_history(
             WHERE org_id = %s::uuid
               AND review_status <> 'rejected'
               AND normalized_unit_price IS NOT NULL
-              AND supplier_id IS NOT DISTINCT FROM %s::uuid
               AND base_unit IS NOT DISTINCT FROM %s::text
               AND currency = %s::text
               AND price_date >= (%s::date - (%s * interval '1 day'))
               AND price_date <= %s
               AND document_id <> %s::uuid
               AND (
-                  (%s::text IS NOT NULL AND sku = %s::text)
-                  OR normalized_description = %s::text
+                  canonical_product_id = %s::uuid
+                  OR (
+                      %s::uuid IS NULL
+                      AND supplier_id IS NOT DISTINCT FROM %s::uuid
+                      AND (
+                          (%s::text IS NOT NULL AND sku = %s::text)
+                          OR normalized_description = %s::text
+                      )
+                  )
               )
             ORDER BY price_date DESC
             LIMIT %s
             """,
             (
                 str(org_id),
-                str(supplier_id) if supplier_id else None,
                 base_unit,
                 currency,
                 before_date,
                 lookback_days,
                 before_date,
                 str(exclude_document_id),
+                str(canonical_product_id) if canonical_product_id else None,
+                str(canonical_product_id) if canonical_product_id else None,
+                str(supplier_id) if supplier_id else None,
                 sku,
                 sku,
                 normalized_description,

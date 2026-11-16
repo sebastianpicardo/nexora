@@ -300,7 +300,7 @@ pytest -q
 ruff check .
 ```
 
-Los tests no requieren conexión a Supabase. La mayoría usa `APP_ENV=test` y mockea el pool; las pruebas de integración levantan un PostgreSQL efímero con `pgserver`, aplican `schema.sql` y validan ingesta, normalización, excepciones, resolución HITL, dashboard, reproceso, billing, invitaciones, perfiles, RBAC, panel global y exportaciones. La suite cubre seguridad JWT, health, unidades, moneda, descripciones, pricing, esquema de extracción, pipeline, imágenes y storage.
+Los tests no requieren conexión a Supabase. La mayoría usa `APP_ENV=test` y mockea el pool; las pruebas de integración levantan un PostgreSQL efímero con `pgserver`, aplican `schema.sql` y validan ingesta, normalización, aislamiento por organización, matriz de roles, excepciones, resolución HITL, dashboard, reproceso, billing, invitaciones, perfiles, RBAC, panel global y exportaciones. La suite cubre seguridad JWT, secretos cifrados, health, unidades, moneda, descripciones, pricing, esquema de extracción, pipeline, privacidad IA, imágenes y storage.
 
 Para el frontend:
 
@@ -308,6 +308,16 @@ Para el frontend:
 cd client
 npm run build
 ```
+
+Para las pruebas E2E (Playwright):
+
+```powershell
+npm install
+npx playwright install chromium
+npm run test:e2e
+```
+
+Las pruebas E2E cubren login/registro, tabla de precios y demo guiada del dashboard.
 
 Si `npm install` falla con `Cannot read properties of null (reading 'edgesOut')`, usa `npm ci` o actualiza npm a 11+.
 

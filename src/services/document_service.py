@@ -48,6 +48,9 @@ async def _process_claimed_document(doc: dict) -> None:
                 "price_spike_threshold_pct": float(org["price_spike_threshold_pct"]),
                 "min_confidence": float(org["min_confidence"]),
                 "default_currency": org["default_currency"],
+                "ai_data_consent": bool(org.get("ai_data_consent", True)),
+                "ai_images_enabled": bool(org.get("ai_images_enabled", True)),
+                "ai_text_max_chars": int(org.get("ai_text_max_chars") or 200_000),
             },
             upload_date=upload_date,
         )
@@ -112,17 +115,6 @@ async def _process_claimed_document(doc: dict) -> None:
 
             inserted: list[tuple[dict, list]] = []
             for item in result.items:
-                flags = await audit_service.audit_item(
-                    conn,
-                    org_id=org_id,
-                    document_id=document_id,
-                    supplier_id=supplier_id,
-                    item=item,
-                    price_spike_threshold_pct=float(org["price_spike_threshold_pct"]),
-                    lookback_days=settings.price_lookback_days,
-                    min_history_samples=settings.min_history_samples,
-                )
-                review_status = "pending" if flags else "auto_approved"
                 canonical_product_id, match_confidence, match_confirmed = await repositories.resolve_product_alias(
                     conn,
                     org_id=org_id,
@@ -134,6 +126,18 @@ async def _process_claimed_document(doc: dict) -> None:
                     confidence=1.0,
                     confirmed=True,
                 )
+                flags = await audit_service.audit_item(
+                    conn,
+                    org_id=org_id,
+                    document_id=document_id,
+                    supplier_id=supplier_id,
+                    item=item,
+                    price_spike_threshold_pct=float(org["price_spike_threshold_pct"]),
+                    lookback_days=settings.price_lookback_days,
+                    min_history_samples=settings.min_history_samples,
+                    canonical_product_id=canonical_product_id,
+                )
+                review_status = "pending" if flags else "auto_approved"
                 row = await repositories.insert_item(
                     conn,
                     org_id=org_id,

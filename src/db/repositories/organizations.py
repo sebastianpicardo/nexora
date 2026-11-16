@@ -34,6 +34,10 @@ async def update_organization(conn: AsyncConnection, org_id: UUID | str, fields:
         "sso_domain",
         "sso_required",
         "audit_retention_days",
+        "ai_data_consent",
+        "ai_images_enabled",
+        "ai_text_max_chars",
+        "ai_data_retention_days",
     }
     updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
     if not updates:

@@ -40,8 +40,8 @@ PLANS_SEED_SQL = """
             'enterprise',
             'Enterprise',
             'Para operaciones multi-sucursal y alto volumen.',
-            199,
-            'USD',
+            150000,
+            'CLP',
             NULL,
             jsonb_build_array(
                 'Documentos ilimitados',

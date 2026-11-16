@@ -864,7 +864,7 @@ story += [
             ["Pro", "USD 49", "500", "Equipo con roles, alertas de cuota, PDF y Excel, historial 6 meses."],
             [
                 "Enterprise",
-                "USD 199",
+                "CLP 150.000",
                 "Ilimitados",
                 "Multi-tenant, auditoria avanzada, exportaciones masivas, gestion centralizada.",
             ],

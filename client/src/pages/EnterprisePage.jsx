@@ -966,7 +966,16 @@ function SecurityTab() {
   const { user } = useAuth();
   const [security, setSecurity] = useState(null);
   const [push, setPush] = useState({ enabled: false, public_key: "" });
-  const [form, setForm] = useState({ sso_enabled: false, sso_domain: "", sso_required: false, audit_retention_days: 365 });
+  const [form, setForm] = useState({
+    sso_enabled: false,
+    sso_domain: "",
+    sso_required: false,
+    audit_retention_days: 365,
+    ai_data_consent: true,
+    ai_images_enabled: true,
+    ai_text_max_chars: 200000,
+    ai_data_retention_days: 90,
+  });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -984,6 +993,10 @@ function SecurityTab() {
         sso_domain: securityData.sso_domain,
         sso_required: securityData.sso_required,
         audit_retention_days: securityData.audit_retention_days,
+        ai_data_consent: securityData.ai_data_consent ?? true,
+        ai_images_enabled: securityData.ai_images_enabled ?? true,
+        ai_text_max_chars: securityData.ai_text_max_chars ?? 200000,
+        ai_data_retention_days: securityData.ai_data_retention_days ?? 90,
       });
     } catch (err) {
       setError(err.message || "No se pudo cargar seguridad.");
@@ -1005,6 +1018,8 @@ function SecurityTab() {
         body: JSON.stringify({
           ...form,
           audit_retention_days: Number(form.audit_retention_days),
+          ai_text_max_chars: Number(form.ai_text_max_chars),
+          ai_data_retention_days: Number(form.ai_data_retention_days),
         }),
       });
       setSecurity((current) => ({ ...current, ...data }));
@@ -1026,6 +1041,21 @@ function SecurityTab() {
       load();
     } catch (err) {
       setError(err.message || "No se pudo depurar.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function purgeAi() {
+    setPending(true);
+    setError("");
+    setSuccess("");
+    try {
+      const data = await api("/api/enterprise/security/purge-ai", { method: "POST", body: "{}" });
+      setSuccess(`Datos IA depurados: ${data.deleted} registro(s) eliminados.`);
+      load();
+    } catch (err) {
+      setError(err.message || "No se pudieron depurar los datos IA.");
     } finally {
       setPending(false);
     }
@@ -1094,8 +1124,8 @@ function SecurityTab() {
 
       <section className="card">
         <SectionHead
-          title="SSO y auditoría avanzada"
-          description="Restringe el acceso por dominio Google Workspace y define retención de auditoría."
+          title="SSO, privacidad IA y auditoría"
+          description="Restringe el acceso por dominio, define consentimiento IA, minimización de datos y retención de auditoría."
         />
         <form onSubmit={saveSecurity}>
           <div className="form-grid">
@@ -1133,10 +1163,49 @@ function SecurityTab() {
                 onChange={(event) => setForm((current) => ({ ...current, audit_retention_days: event.target.value }))}
               />
             </label>
+            <label className="form-field checkbox-field">
+              <input
+                type="checkbox"
+                checked={form.ai_data_consent}
+                onChange={(event) => setForm((current) => ({ ...current, ai_data_consent: event.target.checked }))}
+              />
+              <span>Autorizar envío de documentos a proveedores de IA</span>
+            </label>
+            <label className="form-field checkbox-field">
+              <input
+                type="checkbox"
+                checked={form.ai_images_enabled}
+                onChange={(event) => setForm((current) => ({ ...current, ai_images_enabled: event.target.checked }))}
+              />
+              <span>Enviar imágenes de páginas a la IA</span>
+            </label>
+            <label className="form-field">
+              <span>Máximo de texto enviado a IA (caracteres)</span>
+              <input
+                type="number"
+                min="1000"
+                max="200000"
+                value={form.ai_text_max_chars}
+                onChange={(event) => setForm((current) => ({ ...current, ai_text_max_chars: event.target.value }))}
+              />
+            </label>
+            <label className="form-field">
+              <span>Retención de datos IA (días)</span>
+              <input
+                type="number"
+                min="1"
+                max="3650"
+                value={form.ai_data_retention_days}
+                onChange={(event) => setForm((current) => ({ ...current, ai_data_retention_days: event.target.value }))}
+              />
+            </label>
           </div>
           <div className="form-actions">
             <button type="button" className="button ghost" onClick={purgeAudit} disabled={pending}>
               Depurar auditoría antigua
+            </button>
+            <button type="button" className="button ghost" onClick={purgeAi} disabled={pending}>
+              Depurar datos IA
             </button>
             <button type="submit" className="button primary" disabled={pending}>
               Guardar seguridad

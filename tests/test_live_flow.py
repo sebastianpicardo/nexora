@@ -82,6 +82,41 @@ async def _seed_user() -> dict:
         await close_pool()
 
 
+async def _create_member(org_id: str, email: str, role: str) -> dict:
+    await open_pool()
+    try:
+        async with get_pool().connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO users (org_id, email, name, role, active, email_verified)
+                    VALUES (%s, %s, %s, %s, TRUE, TRUE)
+                    RETURNING id
+                    """,
+                    (org_id, email, email.split("@")[0], role),
+                )
+                row = await cur.fetchone()
+            return await users.get_user_with_org(conn, row["id"])
+    finally:
+        await close_pool()
+
+
+async def _seed_other_org() -> dict:
+    await open_pool()
+    try:
+        async with get_pool().connection() as conn:
+            return await users.create_user_with_org(
+                conn,
+                email="otra@nexora.test",
+                google_id="google-otra",
+                name="Otra Empresa",
+                avatar_url="",
+                organization_name="Otra Empresa",
+            )
+    finally:
+        await close_pool()
+
+
 async def _expire_billing_period(org_id: str) -> None:
     await open_pool()
     try:
@@ -290,6 +325,9 @@ def test_empty_database_bootstraps_plans_and_returns_empty_dashboard(live_databa
         assert payload["subscription"]["plan_id"] == "free", payload
         assert payload["usage"]["limit"] == 25, payload
         assert {plan["id"] for plan in payload["plans"]} == {"free", "pro", "enterprise"}
+        enterprise = next(plan for plan in payload["plans"] if plan["id"] == "enterprise")
+        assert enterprise["price_monthly"] == 150000, enterprise
+        assert enterprise["currency"] == "CLP", enterprise
 
         dashboard = client.get("/api/dashboard/summary")
         assert dashboard.status_code == 200, dashboard.text
@@ -537,12 +575,27 @@ def test_enterprise_suite_end_to_end(live_database):
 
         security = client.patch(
             "/api/enterprise/security",
-            json={"sso_enabled": True, "sso_domain": "nexora.test", "audit_retention_days": 180},
+            json={
+                "sso_enabled": True,
+                "sso_domain": "nexora.test",
+                "audit_retention_days": 180,
+                "ai_data_consent": False,
+                "ai_images_enabled": False,
+                "ai_text_max_chars": 5000,
+                "ai_data_retention_days": 30,
+            },
         )
         assert security.status_code == 200, security.text
         assert security.json()["audit_retention_days"] == 180, security.text
+        assert security.json()["ai_data_consent"] is False, security.text
+        assert security.json()["ai_images_enabled"] is False, security.text
+        assert security.json()["ai_text_max_chars"] == 5000, security.text
+        assert security.json()["ai_data_retention_days"] == 30, security.text
         purged = client.post("/api/enterprise/security/purge-audit")
         assert purged.status_code == 200, purged.text
+        purged_ai = client.post("/api/enterprise/security/purge-ai")
+        assert purged_ai.status_code == 200, purged_ai.text
+        assert purged_ai.json()["retention_days"] == 30, purged_ai.text
 
         push_key = client.get("/api/enterprise/push/public-key")
         assert push_key.status_code == 200, push_key.text
@@ -559,3 +612,115 @@ def test_enterprise_suite_end_to_end(live_database):
             exported = client.get(f"/api/enterprise/roi/export?format={fmt}")
             assert exported.status_code == 200, exported.text
             assert exported.headers["content-type"].startswith(content_type), exported.headers
+
+def test_tenant_isolation_and_role_matrix(live_database, monkeypatch):
+    owner = asyncio.run(_seed_user())
+    viewer = asyncio.run(_create_member(owner["org_id"], "viewer@nexora.test", "viewer"))
+    other = asyncio.run(_seed_other_org())
+    owner_token = create_access_token(
+        user_id=owner["id"],
+        email=owner["email"],
+        org_id=owner["org_id"],
+        role=owner["role"],
+        name=owner["name"],
+    )
+    viewer_token = create_access_token(
+        user_id=viewer["id"],
+        email=viewer["email"],
+        org_id=viewer["org_id"],
+        role=viewer["role"],
+        name=viewer["name"],
+    )
+    other_token = create_access_token(
+        user_id=other["id"],
+        email=other["email"],
+        org_id=other["org_id"],
+        role=other["role"],
+        name=other["name"],
+    )
+
+    async def patched_pipeline(**kwargs):
+        return await real_run_pipeline(**kwargs, provider=FakeProvider())
+
+    monkeypatch.setattr(document_service, "run_pipeline", patched_pipeline)
+
+    from fastapi.testclient import TestClient
+
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", owner_token)
+        csv_bytes = (
+            b"descripcion,unidad,cantidad,precio,total\n"
+            b"Tornillo acero inoxidable,Caja x 100 unidades,2,50,100\n"
+            b"Plancha acero,kg,10,3,31\n"
+        )
+        ingest = client.post(
+            "/api/documents/ingest",
+            files={"file": ("compras.csv", csv_bytes, "text/csv")},
+            data={"doc_type": "invoice", "document_date": date.today().isoformat()},
+        )
+        assert ingest.status_code == 202, ingest.text
+        document_id = ingest.json()["document"]["id"]
+        document = _wait_for_document(client, document_id)
+        assert document["status"] == "processed", document
+        assert client.get("/api/items").json()["total"] == 2
+        exception_id = client.get("/api/exceptions?status=pending").json()["items"][0]["id"]
+
+        client.cookies.set("nexora_token", viewer_token)
+        visible = client.get("/api/items")
+        assert visible.status_code == 200, visible.text
+        assert visible.json()["total"] == 2, visible.text
+        denied_upload = client.post(
+            "/api/documents/ingest",
+            files={"file": ("x.csv", b"a\n1\n", "text/csv")},
+            data={"doc_type": "invoice"},
+        )
+        assert denied_upload.status_code == 403, denied_upload.text
+        denied_assistant = client.post("/api/assistant/chat", json={"message": "Hola", "history": []})
+        assert denied_assistant.status_code == 403, denied_assistant.text
+        denied_resolve = client.post(
+            f"/api/exceptions/{exception_id}/resolve",
+            json={"action": "ignore", "notes": "viewer"},
+        )
+        assert denied_resolve.status_code == 403, denied_resolve.text
+
+        client.cookies.set("nexora_token", other_token)
+        assert client.get("/api/items").json()["total"] == 0
+        assert client.get("/api/documents").json()["total"] == 0
+        assert client.get(f"/api/documents/{document_id}").status_code == 404
+        assert client.get("/api/exceptions?status=pending").json()["total"] == 0
+
+
+def test_ai_usage_retention_purges_old_rows(live_database):
+    user = asyncio.run(_seed_user())
+
+    async def _exercise_retention() -> int:
+        from src.db import repositories
+
+        await open_pool()
+        try:
+            async with get_pool().connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        INSERT INTO ai_usage (org_id, kind, provider, model, created_at)
+                        VALUES
+                            (%s, 'assistant', 'test', 'test', now() - interval '100 days'),
+                            (%s, 'assistant', 'test', 'test', now())
+                        """,
+                        (user["org_id"], user["org_id"]),
+                    )
+                deleted = await repositories.purge_expired_ai_usage(conn)
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "SELECT count(*) AS total FROM ai_usage WHERE org_id = %s",
+                        (user["org_id"],),
+                    )
+                    row = await cur.fetchone()
+                assert row["total"] == 1
+                return deleted
+        finally:
+            await close_pool()
+
+    assert asyncio.run(_exercise_retention()) == 1

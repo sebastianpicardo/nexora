@@ -96,6 +96,9 @@ async def lifespan(app: FastAPI):
             pool = await open_pool()
             async with pool.connection() as conn:
                 await repositories.ensure_default_plans(conn)
+                purged = await repositories.purge_expired_ai_usage(conn)
+                if purged:
+                    logger.info("Retención IA aplicada: %s registros depurados", purged)
         except Exception:
             logger.exception("No se pudo inicializar el pool de Postgres; el servicio seguirá disponible")
         logger.info(

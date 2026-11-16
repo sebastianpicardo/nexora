@@ -110,6 +110,18 @@ async def run_pipeline(
     provider: Any = None,
 ) -> NormalizationResult:
     extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
+    if not bool(org_settings.get("ai_data_consent", True)):
+        raise ExtractionError("La organización no autorizó el envío de documentos a proveedores de IA.")
+    if not bool(org_settings.get("ai_images_enabled", True)):
+        extracted.images = []
+    raw_max_chars = org_settings.get("ai_text_max_chars")
+    if raw_max_chars is not None:
+        max_chars = max(1000, min(int(raw_max_chars), 200_000))
+        combined = extracted.combined_text
+        if len(combined) > max_chars:
+            extracted.text = combined[:max_chars]
+            extracted.tables_text = ""
+
     usage: dict[str, int] | None = None
     if provider is not None:
         extraction: ExtractedDocument = await provider.extract_document(

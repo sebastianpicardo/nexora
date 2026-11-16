@@ -30,6 +30,7 @@ async def audit_item(
     price_spike_threshold_pct: float,
     lookback_days: int,
     min_history_samples: int,
+    canonical_product_id: UUID | str | None = None,
 ) -> list[AuditFlag]:
     flags = list(item.flags)
 
@@ -44,6 +45,7 @@ async def audit_item(
         before_date=item.price_date,
         lookback_days=lookback_days,
         exclude_document_id=document_id,
+        canonical_product_id=canonical_product_id,
     )
 
     price_audit = detect_price_spike(

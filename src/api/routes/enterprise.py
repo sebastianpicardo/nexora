@@ -886,6 +886,10 @@ async def enterprise_security(user: CurrentUser):
         "sso_domain": org.get("sso_domain") or "",
         "sso_required": bool(org.get("sso_required")),
         "audit_retention_days": int(org.get("audit_retention_days") or 365),
+        "ai_data_consent": bool(org.get("ai_data_consent", True)),
+        "ai_images_enabled": bool(org.get("ai_images_enabled", True)),
+        "ai_text_max_chars": int(org.get("ai_text_max_chars") or 200_000),
+        "ai_data_retention_days": int(org.get("ai_data_retention_days") or 90),
         "sessions": sessions,
         "audit_events": audit["total"],
         "branding": _org_branding(org),
@@ -951,6 +955,10 @@ async def update_security(
         "sso_domain": org.get("sso_domain") or "",
         "sso_required": bool(org.get("sso_required")),
         "audit_retention_days": int(org.get("audit_retention_days") or 365),
+        "ai_data_consent": bool(org.get("ai_data_consent", True)),
+        "ai_images_enabled": bool(org.get("ai_images_enabled", True)),
+        "ai_text_max_chars": int(org.get("ai_text_max_chars") or 200_000),
+        "ai_data_retention_days": int(org.get("ai_data_retention_days") or 90),
     }
 
 
@@ -975,6 +983,30 @@ async def purge_audit(
             metadata={"deleted": deleted},
         )
     return {"success": True, "deleted": deleted}
+
+
+@router.post("/security/purge-ai")
+async def purge_ai_data(
+    user: dict = Depends(require_roles("owner", "admin")),
+):
+    async with get_pool().connection() as conn:
+        org = await _require_org(conn, user["org_id"])
+        retention_days = int(org.get("ai_data_retention_days") or 90)
+        deleted = await repositories.purge_ai_usage_for_org(
+            conn,
+            user["org_id"],
+            retention_days=retention_days,
+        )
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="ai.purge",
+            entity_type="organization",
+            entity_id=str(user["org_id"]),
+            metadata={"deleted": deleted, "retention_days": retention_days},
+        )
+    return {"success": True, "deleted": deleted, "retention_days": retention_days}
 
 
 @router.get("/sessions")

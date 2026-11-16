@@ -69,24 +69,19 @@ async function mockDashboard(page: Page) {
   });
 }
 
-test('la demo flash avanza sola y se cierra con transición', async ({ page }) => {
+test('la bienvenida permite cargar la demo de 12 meses', async ({ page }) => {
   await mockDashboard(page);
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'El viaje del ahorro' })).toBeVisible();
-  await page.getByRole('button', { name: /Ver demo flash/ }).click();
+  await expect(page.getByRole('heading', { name: 'Empieza a auditar tus compras' })).toBeVisible();
+  await expect(page.getByText('Cargar demo de 12 meses')).toBeVisible();
 
-  const dialog = page.getByRole('dialog', { name: /Demo flash/ });
-  await expect(dialog).toBeVisible();
+  const demoRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes('/api/enterprise/onboarding/demo') && request.method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Cargar demo de 12 meses' }).click();
 
-  const progress = dialog.getByRole('progressbar', { name: /Progreso de la demo/ });
-  await expect(progress).toHaveAttribute('aria-valuenow', '1');
-  await expect(dialog.locator('.welcome-demo-step.active')).toHaveCount(1);
-  await expect(dialog.locator('.welcome-demo-media')).toBeVisible();
-
-  await expect(progress).toHaveAttribute('aria-valuenow', '2', { timeout: 6000 });
-  await expect(dialog.locator('.welcome-demo-step').nth(1)).toHaveAttribute('aria-current', 'step');
-
-  await dialog.getByRole('button', { name: 'Saltar introducción' }).click();
-  await expect(dialog).toBeHidden();
+  const request = await demoRequest;
+  expect(new URL(request.url()).pathname).toBe('/api/enterprise/onboarding/demo');
 });

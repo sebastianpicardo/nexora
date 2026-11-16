@@ -262,8 +262,8 @@ Corrección propuesta: deshabilitar acciones no implementadas, etiquetarlas “B
 |---|---|---|---|
 | Documentos Free | Hasta 50 por mes | 25 (`database/migrations/002_saas.sql:37`) | Definir uno |
 | Precio Pro | 49 USD/mes | 49 USD/mes | Definir moneda y equivalente CLP |
-| Precio Enterprise | 149 USD/mes | 199 USD/mes | Definir uno |
-| Precio objetivo | No aparece | No aparece | 150.000 CLP + IVA/mes |
+| Precio Enterprise | 149 USD/mes | 150.000 CLP/mes | Unificado en 150.000 CLP + IVA/mes |
+| Precio objetivo | No aparece | 150.000 CLP/mes | Alineado en planes y e2e |
 | Prueba gratuita | 14 días sin tarjeta | No hay creación de trial en el backend | Implementar o eliminar |
 | Historial | 6 meses en el plan Pro | Analytics permite 24 meses; oportunidades 730 días; pronóstico 12 meses | Alinear límites por plan |
 | Facturación | Checkout visible | Stripe, MercadoPago, Flow y mock existen | README dice que no hay cobro automático |

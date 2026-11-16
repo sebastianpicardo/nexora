@@ -25,8 +25,8 @@ const PLANS = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Para operaciones multi-sucursal y alto volumen.',
-    price_monthly: 199,
-    currency: 'USD',
+    price_monthly: 150000,
+    currency: 'CLP',
     document_limit: null,
     features: ['Documentos ilimitados', 'Panel multi-tenant'],
     sort_order: 30,
@@ -136,6 +136,7 @@ test('registra una cuenta y envía el payload esperado', async ({ page }) => {
   await page.getByLabel('Nombre completo').fill('Ana Pérez');
   await page.getByLabel('Email corporativo').fill('ana@empresa.com');
   await page.getByLabel('Contraseña').fill('Segura123');
+  await page.getByRole('checkbox', { name: /Acepto los Términos/ }).check();
 
   const registerRequest = page.waitForRequest(
     (request) => request.url().includes('/api/auth/register') && request.method() === 'POST',

@@ -88,6 +88,9 @@ def org_settings(user: dict) -> dict:
         "price_spike_threshold_pct": float(user["price_spike_threshold_pct"]),
         "min_confidence": float(user["min_confidence"]),
         "default_currency": user["default_currency"],
+        "ai_data_consent": bool(user.get("ai_data_consent", True)),
+        "ai_images_enabled": bool(user.get("ai_images_enabled", True)),
+        "ai_text_max_chars": int(user.get("ai_text_max_chars") or 200_000),
     }
 
 

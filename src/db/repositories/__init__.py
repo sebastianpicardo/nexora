@@ -2,6 +2,8 @@
 
 from src.db.repositories.ai_usage import (
     count_ai_usage_this_month,
+    purge_ai_usage_for_org,
+    purge_expired_ai_usage,
     record_ai_usage,
     summarize_ai_usage,
 )
@@ -167,6 +169,8 @@ __all__ = [
     "consumption_forecast",
     "price_opportunities",
     "count_ai_usage_this_month",
+    "purge_ai_usage_for_org",
+    "purge_expired_ai_usage",
     "record_ai_usage",
     "record_savings_tracking",
     "summarize_savings_tracking",

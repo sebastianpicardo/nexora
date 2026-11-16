@@ -148,6 +148,10 @@ class SecurityUpdate(BaseModel):
     sso_domain: str | None = Field(default=None, max_length=255)
     sso_required: bool | None = None
     audit_retention_days: int | None = Field(default=None, ge=30, le=3650)
+    ai_data_consent: bool | None = None
+    ai_images_enabled: bool | None = None
+    ai_text_max_chars: int | None = Field(default=None, ge=1000, le=200000)
+    ai_data_retention_days: int | None = Field(default=None, ge=1, le=3650)
 
 
 class PushSubscriptionIn(BaseModel):

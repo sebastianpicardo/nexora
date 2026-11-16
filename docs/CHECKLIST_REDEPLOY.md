@@ -25,3 +25,16 @@
 5. Probar `POST /api/enterprise/onboarding/demo` y confirmar 12 meses de historial.
 6. Revisar footer, banner, oportunidades, reporte PDF y link compartible.
 7. Confirmar que Slack/Webhook/Google Workspace aparecen como Próximamente y no ejecutan acciones.
+
+## Migraciones recientes
+- `010_canonical_products.sql`: catálogo canónico y alias de productos.
+- `011_savings_tracking.sql`: seguimiento de ahorro capturado.
+- `012_ai_privacy.sql`: consentimiento, minimización y retención de datos IA.
+- `013_plan_alignment.sql`: Enterprise alineado a `150000 CLP/mes`.
+
+## Verificación adicional
+1. Ejecutar `python -m pytest -q` y `python -m ruff check src tests`.
+2. Ejecutar `npm run test:e2e` para login, precios y demo guiada.
+3. Revisar en Supabase que existan las columnas IA en `organizations`.
+4. Confirmar en Render que `PAYMENT_PROVIDER` no sea `mock` y que `SECRET_ENCRYPTION_KEY` esté cargada.
+5. Verificar que el arranque aplique retención IA o ejecutar `POST /api/enterprise/security/purge-ai`.

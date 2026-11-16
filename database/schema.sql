@@ -286,8 +286,8 @@ VALUES
         'enterprise',
         'Enterprise',
         'Para operaciones multi-sucursal y alto volumen.',
-        199,
-        'USD',
+        150000,
+        'CLP',
         NULL,
         '["Documentos ilimitados", "Panel multi-tenant", "Auditoría avanzada", "Exportaciones masivas", "Gestión centralizada"]'::jsonb,
         30
@@ -515,6 +515,12 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_enabled BOOLEAN NOT NULL 
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_domain TEXT NOT NULL DEFAULT '';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_required BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS audit_retention_days INTEGER NOT NULL DEFAULT 365;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_data_consent BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_images_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_text_max_chars INTEGER NOT NULL DEFAULT 200000
+    CHECK (ai_text_max_chars >= 1000 AND ai_text_max_chars <= 200000);
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_data_retention_days INTEGER NOT NULL DEFAULT 90
+    CHECK (ai_data_retention_days >= 1 AND ai_data_retention_days <= 3650);
 
 CREATE TABLE IF NOT EXISTS purchase_approvals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

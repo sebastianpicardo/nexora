@@ -140,3 +140,37 @@ async def summarize_ai_usage(
             "estimated_cost_usd": round(_float(current.get("estimated_cost_usd")), 6),
         },
     }
+
+
+async def purge_expired_ai_usage(conn: AsyncConnection) -> int:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            DELETE FROM ai_usage AS usage
+            USING organizations AS org
+            WHERE usage.org_id = org.id
+              AND usage.created_at < (
+                  now() - (org.ai_data_retention_days * interval '1 day')
+              )
+            """
+        )
+        return cur.rowcount
+
+
+async def purge_ai_usage_for_org(
+    conn: AsyncConnection,
+    org_id: UUID | str,
+    *,
+    retention_days: int,
+) -> int:
+    days = max(1, min(int(retention_days), 3650))
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            DELETE FROM ai_usage
+            WHERE org_id = %s
+              AND created_at < (now() - (%s * interval '1 day'))
+            """,
+            (str(org_id), days),
+        )
+        return cur.rowcount
