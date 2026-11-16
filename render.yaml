@@ -35,6 +35,8 @@
         sync: false
       - key: SESSION_SECRET
         sync: false
+      - key: SECRET_ENCRYPTION_KEY
+        sync: false
       - key: JWT_EXPIRES_MINUTES
         value: 10080
       - key: COOKIE_NAME

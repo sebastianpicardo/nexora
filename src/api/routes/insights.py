@@ -200,17 +200,18 @@ async def auto_approve(
             max_amount=max_amount,
             item_ids=payload.item_ids,
         )
-        await repositories.record_audit_event(
-            conn,
-            org_id=user["org_id"],
-            user_id=user["id"],
-            action="insights.auto_approve",
-            entity_type="items_history",
-            entity_id=str(user["org_id"]),
-            metadata={
-                "approved": len(approved),
-                "threshold": payload.threshold,
-                "max_amount": max_amount,
-            },
-        )
+        if approved:
+            await repositories.record_audit_event(
+                conn,
+                org_id=user["org_id"],
+                user_id=user["id"],
+                action="insights.auto_approve",
+                entity_type="items_history",
+                entity_id=str(user["org_id"]),
+                metadata={
+                    "approved": len(approved),
+                    "threshold": payload.threshold,
+                    "max_amount": max_amount,
+                },
+            )
     return {"approved": len(approved), "item_ids": approved}

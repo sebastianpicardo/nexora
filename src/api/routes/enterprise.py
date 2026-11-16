@@ -17,6 +17,7 @@ from psycopg.errors import UniqueViolation
 from src.api.deps import CurrentUser, require_roles
 from src.core.config import settings
 from src.core.logging import get_logger
+from src.core.secrets import decrypt_secret
 from src.db import repositories
 from src.db.pool import get_pool
 from src.schemas.enterprise import (
@@ -598,13 +599,16 @@ async def test_webhook(
     user: dict = Depends(require_roles("owner", "admin")),
 ):
     async with get_pool().connection() as conn:
-        rows = await repositories.list_webhooks(conn, user["org_id"])
-    webhook = next((row for row in rows if str(row["id"]) == str(webhook_id)), None)
+        webhook = await repositories.get_webhook(conn, user["org_id"], webhook_id)
     if webhook is None:
         raise HTTPException(status_code=404, detail="Webhook no encontrado")
     payload = {"event": "webhook.test", "organization_id": str(user["org_id"]), "sent_at": date.today().isoformat()}
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    signature = hmac.new(webhook.get("secret", "").encode("utf-8"), body, hashlib.sha256).hexdigest()
+    try:
+        secret = decrypt_secret(webhook.get("secret"))
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    signature = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     try:
         async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
             response = await client.post(

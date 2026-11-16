@@ -643,9 +643,54 @@ async def approval_queue(
         ORDER BY i.confidence DESC, i.price_date DESC
         LIMIT 300
     """
+    summary_query = """
+        WITH pending AS (
+            SELECT
+                i.id,
+                i.confidence,
+                COALESCE(i.normalized_unit_price, i.original_unit_price, 0)
+                    * COALESCE(i.quantity, 0) AS amount,
+                COUNT(e.id) FILTER (
+                    WHERE e.status = 'pending' AND e.severity IN ('high', 'critical')
+                ) AS high_severity_exceptions
+            FROM items_history i
+            LEFT JOIN exceptions_log e ON e.item_id = i.id
+            WHERE i.org_id = %s
+              AND i.currency = %s
+              AND i.review_status = 'pending'
+              AND i.price_date <= current_date
+              AND i.price_date >= (current_date - (%s * interval '1 day'))
+            GROUP BY i.id
+        )
+        SELECT
+            COUNT(*) AS pending,
+            COUNT(*) FILTER (
+                WHERE confidence >= %s
+                  AND high_severity_exceptions = 0
+                  AND amount <= %s
+            ) AS auto_eligible,
+            COALESCE(SUM(amount) FILTER (
+                WHERE confidence >= %s
+                  AND high_severity_exceptions = 0
+                  AND amount <= %s
+            ), 0) AS auto_amount,
+            COALESCE(SUM(amount) FILTER (
+                WHERE NOT (
+                    confidence >= %s
+                    AND high_severity_exceptions = 0
+                    AND amount <= %s
+                )
+            ), 0) AS review_amount
+        FROM pending
+    """
     async with conn.cursor() as cur:
         await cur.execute(query, (str(org_id), currency, days))
         rows = list(await cur.fetchall())
+        await cur.execute(
+            summary_query,
+            (str(org_id), currency, days, threshold, max_amount, threshold, max_amount, threshold, max_amount),
+        )
+        totals = await cur.fetchone() or {}
 
     items = []
     auto_eligible = 0
@@ -685,17 +730,25 @@ async def approval_queue(
             }
         )
 
+    pending_count = int(totals.get("pending") or len(items))
+    auto_count = int(totals.get("auto_eligible") or auto_eligible)
+    auto_amount_total = totals.get("auto_amount")
+    review_amount_total = totals.get("review_amount")
     return {
         "currency": currency,
         "threshold": threshold,
         "days": days,
         "max_amount": max_amount,
         "summary": {
-            "pending": len(items),
-            "auto_eligible": auto_eligible,
-            "needs_review": len(items) - auto_eligible,
-            "auto_amount": _round(auto_amount),
-            "review_amount": _round(review_amount),
+            "pending": pending_count,
+            "auto_eligible": auto_count,
+            "needs_review": max(pending_count - auto_count, 0),
+            "auto_amount": _round(
+                _num(auto_amount_total) if auto_amount_total is not None else auto_amount
+            ),
+            "review_amount": _round(
+                _num(review_amount_total) if review_amount_total is not None else review_amount
+            ),
         },
         "items": items,
     }

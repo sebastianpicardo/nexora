@@ -5,6 +5,7 @@
 - `PAYMENT_PROVIDER=stripe` (o `mercadopago`/`flow`), nunca `mock`.
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` y `PAYMENT_WEBHOOK_SECRET` si se usa Stripe.
 - `SESSION_SECRET` y `JWT_SECRET` con al menos 32 caracteres.
+- `SECRET_ENCRYPTION_KEY` recomendado para cifrar secretos de webhooks en reposo.
 - `COOKIE_SECURE=true`.
 - `DATABASE_URL` de Supabase.
 - `STORAGE_BACKEND=local` o `supabase` con sus credenciales.

@@ -5,6 +5,8 @@ from uuid import UUID
 from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
+from src.core.secrets import encrypt_secret
+
 ROI_MONTHS = 6
 
 
@@ -772,6 +774,19 @@ async def list_webhooks(conn: AsyncConnection, org_id: UUID | str) -> list[dict]
         return list(await cur.fetchall())
 
 
+async def get_webhook(conn: AsyncConnection, org_id: UUID | str, webhook_id: UUID | str) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT id, url, secret, events, active, last_delivery_at, created_at
+            FROM webhook_subscriptions
+            WHERE org_id = %s AND id = %s
+            """,
+            (str(org_id), str(webhook_id)),
+        )
+        return await cur.fetchone()
+
+
 async def create_webhook(
     conn: AsyncConnection,
     *,
@@ -787,7 +802,7 @@ async def create_webhook(
             VALUES (%s, %s, %s, %s)
             RETURNING id, url, events, active, created_at
             """,
-            (str(org_id), url.strip(), secret, Jsonb(events)),
+            (str(org_id), url.strip(), encrypt_secret(secret), Jsonb(events)),
         )
         row = await cur.fetchone()
         assert row is not None

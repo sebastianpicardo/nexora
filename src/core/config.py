@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     jwt_expires_minutes: int = 10080
     jwt_key_version: int = 1
     session_secret: str = ""
+    secret_encryption_key: str = ""
     cookie_name: str = "nexora_token"
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
