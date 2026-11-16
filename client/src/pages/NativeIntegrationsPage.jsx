@@ -749,21 +749,24 @@ export default function NativeIntegrationsPage() {
     setLoading(true);
     setError("");
     try {
-      const [statusData, historyData, backupStatus] = await Promise.all([
+      const requests = [
         api("/api/integrations/native/status"),
         api("/api/user/search-history?limit=20"),
-        api("/api/backups/status"),
-      ]);
+      ];
+      if (user?.role === "super_admin") {
+        requests.push(api("/api/backups/status"));
+      }
+      const [statusData, historyData, backupStatus] = await Promise.all(requests);
       setProviders(statusData.providers || []);
       setSearchHistory(historyData.items || []);
-      setBackupAvailable(backupStatus.available !== false);
+      setBackupAvailable(backupStatus?.available !== false);
     } catch (err) {
       setError(err.message || "No se pudieron cargar las integraciones.");
       setBackupAvailable(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     load();
@@ -832,7 +835,7 @@ export default function NativeIntegrationsPage() {
         </section>
       )}
 
-      {user && user.role !== "viewer" && <BackupSection available={backupAvailable} />}
+      {user?.role === "super_admin" && <BackupSection available={backupAvailable} />}
 
       <section className="card">
         <div className="card-head">
