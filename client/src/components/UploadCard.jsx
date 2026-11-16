@@ -18,7 +18,8 @@ const AI_STEPS = [
 
 export default function UploadCard({ onUploaded }) {
   const inputRef = useRef(null);
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const file = files[0] || null;
   const [supplierName, setSupplierName] = useState("");
   const [docType, setDocType] = useState("invoice");
   const [documentDate, setDocumentDate] = useState("");
@@ -37,17 +38,16 @@ export default function UploadCard({ onUploaded }) {
       .catch(() => setSuppliers([]));
   }, []);
 
-  function selectFile(nextFile) {
+  function selectFiles(nextFiles) {
     setError("");
     setSuccess("");
-    setFile(nextFile || null);
+    setFiles(Array.from(nextFiles || []));
   }
 
   function handleDrop(event) {
     event.preventDefault();
     setDragging(false);
-    const dropped = event.dataTransfer.files?.[0];
-    if (dropped) selectFile(dropped);
+    if (event.dataTransfer.files?.length) selectFiles(event.dataTransfer.files);
   }
 
   async function handleSubmit(event) {
@@ -61,17 +61,31 @@ export default function UploadCard({ onUploaded }) {
     setError("");
     setSuccess("");
     try {
+      const isBulk = files.length > 1;
       const body = new FormData();
-      body.append("file", file);
+      files.forEach((item) => body.append("file", item));
       body.append("doc_type", docType);
       if (supplierName.trim()) body.append("supplier_name", supplierName.trim());
       if (documentDate) body.append("document_date", documentDate);
 
-      const data = await api("/api/documents/ingest", { method: "POST", body });
+      const endpoint = isBulk ? "/api/documents/ingest-bulk" : "/api/documents/ingest";
+      const data = await api(endpoint, { method: "POST", body });
+
+      if (isBulk) {
+        setSubmitting(false);
+        setFiles([]);
+        setDocumentDate("");
+        if (inputRef.current) inputRef.current.value = "";
+        setSuccess(
+          `Lote procesado: ${data.succeeded} de ${data.total} documentos aceptados` +
+            (data.failed ? `, ${data.failed} con error.` : ".")
+        );
+        return;
+      }
 
       if (data.duplicate) {
         setSuccess("Este documento ya estaba cargado. Te mostramos el registro existente.");
-        setFile(null);
+        setFiles([]);
         setDocumentDate("");
         if (inputRef.current) inputRef.current.value = "";
         onUploaded?.(data.document);
@@ -81,7 +95,7 @@ export default function UploadCard({ onUploaded }) {
       // Iniciar animación de procesamiento IA
       setSubmitting(false);
       setProcessing(true);
-      setFile(null);
+      setFiles([]);
       setDocumentDate("");
       if (inputRef.current) inputRef.current.value = "";
       onUploaded?.(data.document);
@@ -238,17 +252,22 @@ export default function UploadCard({ onUploaded }) {
               <input
                 ref={inputRef}
                 type="file"
+                multiple
                 accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp,.tif,.tiff"
-                onChange={(event) => selectFile(event.target.files?.[0])}
+                onChange={(event) => selectFiles(event.target.files)}
               />
               <span className="dropzone-icon">
                 <UploadIcon />
               </span>
               <span className="dropzone-title">
-                {file ? file.name : "Arrastra el archivo o haz clic para seleccionar"}
+                {files.length > 1
+                  ? `${files.length} archivos seleccionados`
+                  : file
+                    ? file.name
+                    : "Arrastra uno o m\u00e1s archivos o haz clic para seleccionar"}
               </span>
               <span className="dropzone-hint">
-                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Máximo 25 MB"}
+                {files.length > 1 ? "Carga masiva de hasta 50 archivos" : file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Máximo 25 MB por archivo"}
               </span>
             </label>
 
@@ -299,7 +318,7 @@ export default function UploadCard({ onUploaded }) {
                 className="button primary"
                 disabled={submitting || !file}
               >
-                {submitting ? "Subiendo…" : "Procesar documento"}
+                {submitting ? "Subiendo..." : files.length > 1 ? "Procesar lote" : "Procesar documento"}
               </button>
             </div>
           </motion.div>

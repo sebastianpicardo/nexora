@@ -170,6 +170,64 @@ async def ingest_document(
     return DocumentIngestResponse(success=True, document=_document_out(row), duplicate=False)
 
 
+@router.post("/ingest-bulk", status_code=status.HTTP_202_ACCEPTED)
+async def ingest_documents_bulk(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    supplier_id: UUID | None = Form(default=None),
+    supplier_name: str | None = Form(default=None, max_length=200),
+    doc_type: str = Form(default="quote"),
+    document_date: str | None = Form(default=None, max_length=40),
+    user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
+    _: None = Depends(rate_limit("document_ingest", "document_ingest_rate_limit_per_minute")),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un archivo.")
+    if len(files) > 50:
+        raise HTTPException(status_code=400, detail="Puedes cargar hasta 50 archivos por lote.")
+
+    results = []
+    for current in files:
+        filename = current.filename or "documento"
+        try:
+            response = await ingest_document(
+                background_tasks=background_tasks,
+                file=current,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                doc_type=doc_type,
+                document_date=document_date,
+                user=user,
+                _=None,
+            )
+            results.append(
+                {
+                    "filename": filename,
+                    "success": True,
+                    "duplicate": bool(response.duplicate),
+                    "document": response.document.model_dump(mode="json"),
+                }
+            )
+        except HTTPException as exc:
+            results.append(
+                {
+                    "filename": filename,
+                    "success": False,
+                    "status_code": exc.status_code,
+                    "error": exc.detail,
+                }
+            )
+
+    succeeded = sum(1 for item in results if item["success"])
+    return {
+        "success": succeeded > 0,
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": len(results) - succeeded,
+        "results": results,
+    }
+
+
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
     user: CurrentUser,

@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.deps import CurrentUser, rate_limit
+from src.api.deps import rate_limit, require_roles
 from src.db.pool import get_pool
 from src.services import ai_usage_service, assistant_service
 
@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def assistant_chat(
     payload: ChatRequest,
-    user: CurrentUser,
+    user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
     _: None = Depends(rate_limit("assistant", "assistant_rate_limit_per_minute")),
 ):
     async with get_pool().connection() as conn:

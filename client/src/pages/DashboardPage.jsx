@@ -100,7 +100,7 @@ export default function DashboardPage({ onNavigate }) {
   return (
     <div className="page-stack">
       {!summary || !hasActivity ? (
-        <WelcomeBanner />
+        <WelcomeBanner canOperate={canOperate} onNavigate={onNavigate} />
       ) : null}
 
       {error && summary ? (
