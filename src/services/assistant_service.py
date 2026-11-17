@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 
 from src.core.config import settings
+from src.core.errors import AI_TEMPORARY_MESSAGE, LLMTemporaryError
 from src.db.pool import get_pool
+from src.parsers.llm.base import is_transient_error, with_retries
 from src.services import ai_usage_service
 
 logger = logging.getLogger(__name__)
@@ -177,13 +179,20 @@ async def answer_question(
         "anthropic": settings.anthropic_model,
         "gemini": settings.gemini_model,
     }
+    had_error = False
+    all_errors_temporary = True
     for name in order:
         handler = handlers.get(name)
         if handler is None:
             continue
         try:
-            answer, usage = await handler(question, history)
+            answer, usage = await with_retries(
+                lambda current=handler: current(question, history),
+                label=f"Asistente {name}",
+            )
         except Exception as exc:
+            had_error = True
+            all_errors_temporary = all_errors_temporary and is_transient_error(exc)
             logger.warning("Asistente IA: proveedor %s falló: %s", name, str(exc)[:300])
             continue
         if answer:
@@ -204,4 +213,6 @@ async def answer_question(
                 except Exception as exc:
                     logger.warning("No se pudo registrar uso de IA del asistente: %s", str(exc)[:300])
             return answer, name
+    if had_error and all_errors_temporary:
+        raise LLMTemporaryError(AI_TEMPORARY_MESSAGE)
     return None, None

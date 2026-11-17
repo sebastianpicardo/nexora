@@ -50,6 +50,9 @@ export default function SmartApprovalsPage() {
   const eligible = items.filter((row) => row.auto_eligible);
   const allEligibleSelected =
     eligible.length > 0 && eligible.every((row) => selected.includes(row.id));
+  const noEligible = !loading && eligible.length === 0 && selected.length === 0;
+  const noEligibleReason =
+    `No hay ítems con confianza ≥ ${Math.round(threshold * 100)}% y libres de alertas críticas para auto-aprobar.`;
 
   function toggle(id) {
     setSelected((current) =>
@@ -115,15 +118,20 @@ export default function SmartApprovalsPage() {
             </select>
           </label>
           {canOperate ? (
-            <button
-              type="button"
-              className="button primary"
-              onClick={() => approve(selected.length ? selected : null)}
-              disabled={pending || (eligible.length === 0 && selected.length === 0)}
-            >
-              <CheckIcon />
-              {selected.length ? `Aprobar ${selected.length}` : "Auto-aprobar elegibles"}
-            </button>
+            <div className="action-with-hint">
+              <span title={noEligible ? noEligibleReason : undefined}>
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={() => approve(selected.length ? selected : null)}
+                  disabled={pending || (eligible.length === 0 && selected.length === 0)}
+                >
+                  <CheckIcon />
+                  {selected.length ? `Aprobar ${selected.length}` : "Auto-aprobar elegibles"}
+                </button>
+              </span>
+              {noEligible ? <p className="action-hint">{noEligibleReason}</p> : null}
+            </div>
           ) : null}
         </div>
       </section>

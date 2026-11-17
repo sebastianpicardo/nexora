@@ -106,7 +106,9 @@ export default function DocumentsTable({
                           </>
                         ) : null}
                         {onReprocess &&
-                        (document.status === "failed" || document.status === "processed") ? (
+                        (document.status === "failed" ||
+                          document.status === "temporary_error" ||
+                          document.status === "processed") ? (
                           <button
                             type="button"
                             className="button ghost small"

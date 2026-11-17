@@ -63,6 +63,7 @@ const LABELS = {
   price_list: "Lista de precios",
   queued: "En cola",
   processing: "Procesando",
+  temporary_error: "Error temporal / En cola",
   processed: "Procesado",
   failed: "Fallido",
   pending: "Pendiente",

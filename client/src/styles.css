@@ -7150,3 +7150,130 @@ a {
   max-width: 520px;
   margin: 0;
 }
+
+.recaptcha-note {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.action-with-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.action-hint {
+  max-width: 320px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.rut-validator {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.rut-validator .form-field {
+  gap: 4px;
+}
+
+.rut-validator-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rut-validator-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rut-validator-row .button {
+  white-space: nowrap;
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 120;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--brand);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.toast-success { border-left-color: var(--ok); }
+.toast-error { border-left-color: var(--danger); }
+.toast-warning { border-left-color: var(--warn); }
+
+.toast-message {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.badge.status-temporary_error {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+@media (max-width: 640px) {
+  .toast {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    max-width: none;
+  }
+
+  .rut-validator-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-with-hint {
+    align-items: stretch;
+  }
+
+  .action-hint {
+    max-width: none;
+    text-align: left;
+  }
+}

@@ -30,7 +30,10 @@ export default function DocumentDetailModal({
   if (!document) return null;
 
   const canExport = document.status === "processed";
-  const canReprocess = document.status === "failed" || document.status === "processed";
+  const canReprocess =
+    document.status === "failed" ||
+    document.status === "temporary_error" ||
+    document.status === "processed";
 
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">

@@ -15,7 +15,6 @@ import {
   DollarIcon,
   ExceptionsIcon,
   HelpIcon,
-  HistoryIcon,
   LogoutIcon,
   PricesIcon,
   ProfileIcon,
@@ -59,7 +58,6 @@ const NAV_SECTIONS = [
     items: [
       { id: "integrations", label: "ChileCompra / SII / ERP", icon: ArrowRightIcon, admin: true },
       { id: "enterprise", label: "Seguridad y marca", icon: SparkIcon, admin: true },
-      { id: "backups", label: "Backups", icon: HistoryIcon, admin: true },
     ],
   },
   {

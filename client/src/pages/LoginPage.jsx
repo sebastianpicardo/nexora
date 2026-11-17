@@ -427,6 +427,12 @@ export default function LoginPage({ error }) {
             </button>
           </form>
 
+          {mode === MODES.LOGIN || mode === MODES.REGISTER || mode === MODES.FORGOT ? (
+            <p className="recaptcha-note">
+              Protegido por reCAPTCHA. Aplican la Política de Privacidad y los Términos de Google.
+            </p>
+          ) : null}
+
           {mode === MODES.FORGOT && (
             <div className="login-divider">
               <span />

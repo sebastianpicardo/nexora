@@ -251,6 +251,38 @@ async def mark_failed(
         return await cur.fetchone()
 
 
+async def mark_temporary_failed(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID | str,
+    document_id: UUID | str,
+    error_message: str,
+) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            UPDATE documents_log
+            SET status = CASE
+                    WHEN COALESCE((metadata->>'temporary_retry_count')::int, 0) + 1 >= 3
+                        THEN 'failed'
+                    ELSE 'temporary_error'
+                END,
+                processing_started_at = NULL,
+                error_message = %s,
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+                    'temporary_error', true,
+                    'temporary_error_at', now(),
+                    'temporary_retry_count',
+                    COALESCE((metadata->>'temporary_retry_count')::int, 0) + 1
+                )
+            WHERE org_id = %s AND id = %s
+            RETURNING *
+            """,
+            (error_message[:2000], str(org_id), str(document_id)),
+        )
+        return await cur.fetchone()
+
+
 async def claim_document_by_id(conn: AsyncConnection, document_id: UUID | str) -> dict | None:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -273,6 +305,9 @@ async def claim_next_queued(conn: AsyncConnection) -> dict | None:
                 SELECT id
                 FROM documents_log
                 WHERE status = 'queued'
+                   OR (status = 'temporary_error'
+                       AND COALESCE((metadata->>'temporary_retry_count')::int, 0) < 3
+                       AND updated_at < now() - interval '5 minutes')
                    OR (status = 'processing'
                        AND processing_started_at < now() - interval '15 minutes')
                 ORDER BY created_at ASC
@@ -319,7 +354,11 @@ async def reset_document_for_reprocess(
             SET status = 'queued',
                 processing_started_at = NULL,
                 processed_at = NULL,
-                error_message = NULL
+                error_message = NULL,
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                    - 'temporary_error'
+                    - 'temporary_error_at'
+                    - 'temporary_retry_count'
             WHERE org_id = %s AND id = %s
             RETURNING *
             """,

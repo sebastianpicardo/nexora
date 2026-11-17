@@ -31,6 +31,7 @@
 - `011_savings_tracking.sql`: seguimiento de ahorro capturado.
 - `012_ai_privacy.sql`: consentimiento, minimización y retención de datos IA.
 - `013_plan_alignment.sql`: Enterprise alineado a `150000 CLP/mes`.
+- `014_ai_temporary_errors.sql`: estado `temporary_error` y reintentos ante saturación de IA.
 
 ## Verificación adicional
 1. Ejecutar `python -m pytest -q` y `python -m ruff check src tests`.

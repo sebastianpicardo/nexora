@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.config import settings
-from src.core.errors import LLMError, LLMNotConfiguredError
+from src.core.errors import AI_TEMPORARY_MESSAGE, LLMError, LLMNotConfiguredError, LLMTemporaryError
 from src.parsers.llm.anthropic_provider import AnthropicProvider
-from src.parsers.llm.base import LLMProvider
+from src.parsers.llm.base import LLMProvider, is_transient_error
 from src.parsers.llm.gemini_provider import GeminiProvider
 from src.parsers.llm.openai_provider import OpenAIProvider
 
@@ -63,6 +63,7 @@ async def extract_with_fallback(
     """
     providers = get_llm_providers()
     last_error: str | None = None
+    all_temporary = True
 
     for provider in providers:
         try:
@@ -74,9 +75,15 @@ async def extract_with_fallback(
             return result, provider.name, getattr(provider, "last_usage", None)
         except LLMError as exc:
             last_error = str(exc)
+            if not is_transient_error(exc):
+                all_temporary = False
             continue
         except Exception as exc:  # pragma: no cover - defensive
             last_error = str(exc)
+            all_temporary = all_temporary and is_transient_error(exc)
             continue
+
+    if last_error and all_temporary:
+        raise LLMTemporaryError(AI_TEMPORARY_MESSAGE)
 
     raise LLMError(f"Todos los proveedores LLM fallaron. Último error: {last_error}")

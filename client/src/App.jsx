@@ -58,7 +58,7 @@ export default function App() {
   }, [user, refresh]);
 
   useEffect(() => {
-    if (view === "admin" && !isSuperAdmin) setView("dashboard");
+    if (["admin", "backups"].includes(view) && !isSuperAdmin) setView("dashboard");
     if (["team", "billing", "settings", "enterprise", "integrations", "price-catalog"].includes(view) && !canManage) setView("dashboard");
   }, [view, isSuperAdmin, canManage]);
 

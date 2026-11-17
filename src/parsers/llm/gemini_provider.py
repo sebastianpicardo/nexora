@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types
 
 from src.core.config import settings
-from src.core.errors import LLMError
+from src.core.errors import LLMError, LLMTemporaryError
 from src.parsers.extractors.base import ExtractedContent
 from src.parsers.llm.base import LLMProvider, with_retries
 from src.parsers.llm.prompts import SYSTEM_PROMPT
@@ -54,10 +54,7 @@ class GeminiProvider(LLMProvider):
         except Exception as exc:
             logger.exception("Gemini extraction failed")
             if "503" in str(exc) or "UNAVAILABLE" in str(exc):
-                raise LLMError(
-                    "Gemini está temporalmente saturado (503). Reintenta en unos minutos "
-                    "o configura otro proveedor en LLM_PROVIDER_ORDER."
-                ) from exc
+                raise LLMTemporaryError() from exc
             raise LLMError(f"Error llamando a Gemini: {exc}") from exc
 
         if getattr(response, "usage_metadata", None):

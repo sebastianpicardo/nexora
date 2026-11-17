@@ -99,11 +99,10 @@ export default function OpportunitiesPage() {
     <div className="page-stack">
       <section className="page-intro">
         <div>
-          <div className="eyebrow"><DollarIcon /> Inteligencia de precios</div>
-          <h2>Oportunidades de ahorro</h2>
+          <div className="eyebrow"><DollarIcon /> Ahorro</div>
+          <h2>Ahorra en tus compras</h2>
           <p>
-            Detectamos automáticamente ítems pagados por sobre la mediana histórica y el mejor
-            precio registrado por proveedor.
+            Detectamos productos pagados sobre tu precio habitual y el mejor precio registrado.
           </p>
         </div>
         <div className="card-head-tools">
@@ -141,21 +140,21 @@ export default function OpportunitiesPage() {
         <StatCard
           label="Ahorro potencial"
           value={formatMoney(summary.total_potential_savings || 0, currency)}
-          detail="Contra el mejor precio histórico"
+          detail="Comparado con el mejor precio registrado"
           tone="ok"
           icon={<DollarIcon />}
         />
         <StatCard
           label="Ítems sobrevalorados"
           value={loading ? "—" : summary.opportunities ?? 0}
-          detail={`Umbral ${minOverprice}% sobre la mediana`}
+          detail={`Umbral ${minOverprice}% sobre tu precio habitual`}
           tone="warning"
           icon={<ExceptionsIcon />}
         />
         <StatCard
           label="Sobreprecio total"
           value={formatMoney(summary.total_excess_cost || 0, currency)}
-          detail="Diferencia contra la mediana"
+          detail="Diferencia con tu precio habitual"
           icon={<PricesIcon />}
         />
         <StatCard
@@ -177,8 +176,8 @@ export default function OpportunitiesPage() {
         <section className="card">
           <div className="card-head">
             <div>
-              <h2>Proveedores con mayor oportunidad</h2>
-              <p>Concentración del ahorro potencial por proveedor.</p>
+              <h2>Proveedores con más ahorro</h2>
+              <p>Dónde se concentra el ahorro estimado.</p>
             </div>
           </div>
           <div className="table-wrapper">
@@ -207,8 +206,8 @@ export default function OpportunitiesPage() {
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Oportunidades detectadas</h2>
-            <p>Comparación contra la mediana histórica y el mejor precio por proveedor.</p>
+            <h2>Productos con ahorro</h2>
+            <p>Comparación con tu precio habitual y el mejor precio registrado.</p>
           </div>
           <span className="badge">{items.length} ítem(s)</span>
         </div>

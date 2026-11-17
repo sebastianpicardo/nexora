@@ -5,6 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 
+from src.core.errors import LLMTemporaryError
 from src.parsers.extractors.base import ExtractedContent
 from src.parsers.llm.prompts import build_user_text
 from src.parsers.schemas import ExtractedDocument
@@ -31,6 +32,8 @@ _RETRYABLE_MARKERS = (
 
 
 def is_transient_error(exc: Exception) -> bool:
+    if isinstance(exc, LLMTemporaryError):
+        return True
     message = str(exc).lower()
     return any(marker in message for marker in _RETRYABLE_MARKERS)
 

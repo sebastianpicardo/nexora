@@ -11,17 +11,38 @@ function errorMessage(data, status) {
 }
 
 export async function api(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  const isFormData = options.body instanceof FormData;
-  if (options.body && !isFormData) {
+  const { timeoutMs, ...fetchOptions } = options;
+  const headers = { ...(fetchOptions.headers || {}) };
+  const isFormData = fetchOptions.body instanceof FormData;
+  if (fetchOptions.body && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    credentials: "include",
-    ...options,
-    headers,
-  });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = timeoutMs
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      credentials: "include",
+      ...fetchOptions,
+      headers,
+      signal: controller ? controller.signal : fetchOptions.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(
+        "La operación tardó demasiado. Revisa tu conexión e inténtalo nuevamente."
+      );
+      timeoutError.code = "timeout";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : null;

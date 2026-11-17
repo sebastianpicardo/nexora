@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS documents_log (
     doc_type TEXT NOT NULL DEFAULT 'quote'
         CHECK (doc_type IN ('quote', 'invoice', 'price_list')),
     status TEXT NOT NULL DEFAULT 'queued'
-        CHECK (status IN ('queued', 'processing', 'processed', 'failed')),
+        CHECK (status IN ('queued', 'processing', 'temporary_error', 'processed', 'failed')),
     extraction_provider TEXT,
     extraction_model TEXT,
     raw_text TEXT,

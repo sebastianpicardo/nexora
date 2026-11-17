@@ -21,6 +21,7 @@ export default function DocumentsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [reprocessingId, setReprocessingId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
@@ -49,7 +50,9 @@ export default function DocumentsPage() {
   }, [load]);
 
   useEffect(() => {
-    const hasPending = documents.some((doc) => ["queued", "processing"].includes(doc.status));
+    const hasPending = documents.some((doc) =>
+      ["queued", "processing", "temporary_error"].includes(doc.status)
+    );
     if (!hasPending) return undefined;
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
@@ -161,6 +164,7 @@ export default function DocumentsPage() {
       {canOperate ? <UploadCard onUploaded={handleUploaded} /> : null}
 
       {error ? <div className="alert error">{error}</div> : null}
+      {success ? <div className="alert success">{success}</div> : null}
 
       <section className="card">
         <div className="card-head">

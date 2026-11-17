@@ -49,11 +49,10 @@ export default function AnalyticsPage({ onNavigate }) {
     <div className="page-stack">
       <section className="page-intro">
         <div>
-          <div className="eyebrow"><SparkIcon /> Analítica ejecutiva</div>
-          <h2>Inteligencia de compras</h2>
+          <div className="eyebrow"><SparkIcon /> Resumen de compras</div>
+          <h2>Tendencias de compra</h2>
           <p>
-            Panorama de tendencia de precios, gasto mensual, ahorro potencial y decisiones
-            pendientes en una sola vista.
+            Revisa gasto, precios y ahorro potencial en una sola vista.
           </p>
         </div>
         <div className="card-head-tools">
@@ -148,7 +147,7 @@ export default function AnalyticsPage({ onNavigate }) {
             <div className="card-head">
               <div>
                 <h2>Oportunidades</h2>
-                <p>Ahorro detectado contra el mejor precio.</p>
+                <p>Ahorro estimado comparado con el mejor precio.</p>
               </div>
               <button type="button" className="button ghost small" onClick={() => onNavigate?.("opportunities")}>
                 Abrir <ArrowRightIcon />
@@ -171,7 +170,7 @@ export default function AnalyticsPage({ onNavigate }) {
           <section className="card">
             <div className="card-head">
               <div>
-                <h2>Aprobación inteligente</h2>
+                <h2>Aprobación automática</h2>
                 <p>Ítems listos para auto-aprobar.</p>
               </div>
               <button type="button" className="button ghost small" onClick={() => onNavigate?.("auto-approvals")}>

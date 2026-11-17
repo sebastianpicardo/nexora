@@ -86,6 +86,119 @@ const PROVIDERS = [
   },
 ];
 
+const HISTORY_STORAGE_PREFIX = "nexora.search_history";
+const HISTORY_LIMIT = 20;
+const RUT_RE = /^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$/;
+
+function historyConfig(entry) {
+  const data = entry?.result_data || {};
+  if (entry?.action === "search_items") {
+    return {
+      query: entry.query || data.query || "",
+      mode: data.mode || entry.mode || "all",
+    };
+  }
+  if (entry?.action === "validate_rut") {
+    return { rut: entry.query || data.rut || "" };
+  }
+  return {
+    name: entry.query || data.name || "",
+    order_by: data.order_by || entry.order_by || "ranking",
+  };
+}
+
+function historyDedupeKey(entry) {
+  return [entry?.provider || "", entry?.action || "", (entry?.query || "").trim().toLowerCase()].join("|");
+}
+
+function sortHistory(entries) {
+  return [...entries].sort(
+    (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+  );
+}
+
+function mergeHistory(...groups) {
+  const map = new Map();
+  for (const group of groups) {
+    for (const entry of group || []) {
+      if (!entry?.provider || !entry?.action) continue;
+      const key = historyDedupeKey(entry);
+      const current = map.get(key);
+      if (!current || new Date(entry.created_at || 0) >= new Date(current.created_at || 0)) {
+        map.set(key, entry);
+      }
+    }
+  }
+  return sortHistory([...map.values()]).slice(0, HISTORY_LIMIT);
+}
+
+function readLocalHistory(userId) {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(`${HISTORY_STORAGE_PREFIX}.${userId || "anon"}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistory(userId, entries) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${HISTORY_STORAGE_PREFIX}.${userId || "anon"}`,
+      JSON.stringify(entries.slice(0, HISTORY_LIMIT))
+    );
+  } catch {
+    // El historial del servidor sigue disponible aunque localStorage esté bloqueado.
+  }
+}
+
+function RutValidator({ running, disabled, onValidate }) {
+  const [rut, setRut] = useState("");
+  const [error, setError] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    const value = rut.trim();
+    if (!value) {
+      setError("Ingresa el RUT que quieres validar.");
+      return;
+    }
+    if (!RUT_RE.test(value)) {
+      setError("Formato esperado: 12.345.678-9.");
+      return;
+    }
+    setError("");
+    onValidate({ rut: value });
+  }
+
+  return (
+    <form className="rut-validator" onSubmit={submit}>
+      <label className="form-field">
+        <span>RUT del proveedor</span>
+        <div className="rut-validator-row">
+          <input
+            type="text"
+            inputMode="text"
+            value={rut}
+            onChange={(event) => setRut(event.target.value)}
+            placeholder="Ej: 76.123.456-7"
+            aria-label="RUT del proveedor"
+          />
+          <button type="submit" className="button primary" disabled={running || disabled}>
+            <CheckIcon />
+            {running ? "Validando..." : "Validar RUT"}
+          </button>
+        </div>
+        <p className="muted small">Valida el dígito verificador y el formato chileno.</p>
+      </label>
+      {error ? <div className="integration-error">{error}</div> : null}
+    </form>
+  );
+}
+
 function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) {
   const [running, setRunning] = useState(null);
   const [error, setError] = useState(null);
@@ -121,6 +234,10 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
   const providerHistory = recentSearches.filter(
     (h) => h.provider === provider.id && (h.action === "search_items" || h.action === "search_suppliers")
   );
+  const visibleActions = provider.actions.filter(
+    (action) => !(provider.id === "sii" && action.id === "validate_rut")
+  );
+  const validateRutAction = provider.actions.find((action) => action.id === "validate_rut");
 
   return (
     <div className="integration-card">
@@ -136,8 +253,15 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
           <p className="integration-desc">{provider.description}</p>
         </div>
       </div>
+      {provider.id === "sii" && validateRutAction ? (
+        <RutValidator
+          running={running === validateRutAction.id}
+          disabled={status?.available === false}
+          onValidate={(config) => runAction(validateRutAction, config)}
+        />
+      ) : null}
       <div className="integration-actions">
-        {provider.actions.map((action) => (
+        {visibleActions.map((action) => (
           <button
             key={action.id}
             type="button"
@@ -166,8 +290,9 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
                 type="button"
                 className="recent-search-chip"
                 onClick={() => {
-                  const config = h.action === "search_items" ? { query: h.query, mode: h.mode || "all" } : { name: h.query, order_by: h.order_by || "ranking" };
-                  runAction({ ...provider.actions.find((a) => a.id === h.action), id: h.action }, config);
+                  const action = provider.actions.find((a) => a.id === h.action);
+                  if (!action) return;
+                  runAction(action, historyConfig(h));
                 }}
               >
                 {h.query}
@@ -207,12 +332,14 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
   useEffect(() => {
     const latest = recentSearches[0];
     if (latest && isItems && !query) {
-      setQuery(latest.query || "");
-      setMode(latest.mode || "all");
+      const config = historyConfig(latest);
+      setQuery(config.query || "");
+      setMode(config.mode || "all");
     }
     if (latest && isSuppliers && !supplierName) {
-      setSupplierName(latest.query || "");
-      setOrderBy(latest.order_by || "ranking");
+      const config = historyConfig(latest);
+      setSupplierName(config.name || "");
+      setOrderBy(config.order_by || "ranking");
     }
   }, [recentSearches, isItems, isSuppliers, query, supplierName]);
 
@@ -235,13 +362,14 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
                   type="button"
                   className="recent-search-chip"
                   onClick={() => {
+                    const config = historyConfig(h);
                     if (isItems) {
-                      setQuery(h.query || "");
-                      setMode(h.mode || "all");
+                      setQuery(config.query || "");
+                      setMode(config.mode || "all");
                     }
                     if (isSuppliers) {
-                      setSupplierName(h.query || "");
-                      setOrderBy(h.order_by || "ranking");
+                      setSupplierName(config.name || "");
+                      setOrderBy(config.order_by || "ranking");
                     }
                   }}
                 >
@@ -321,36 +449,24 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError("");
     try {
-      const config = {
-        query: result.query || "",
-        mode: result.mode || "",
-        name: result.query || "",
-        order_by: result.order_by || "",
-      };
-      const response = await api("/api/user/search-history", {
-        method: "POST",
-        body: JSON.stringify({
-          provider: result.provider,
-          action: result.action,
-          query: result.query || "",
-          result_summary: result.note || result.mensaje || "Ejecutado correctamente.",
-          result_data: result,
-        }),
-      });
-      if (response.saved === false) {
+      const ok = onSaveHistory ? await onSaveHistory(result) : true;
+      if (ok === false) {
         setSaved(false);
+        setSaveError("No se pudo guardar el historial. Inténtalo nuevamente.");
         return;
       }
       setSaved(true);
-      setSaving(false);
-      if (onSaveHistory) onSaveHistory();
     } catch {
-      setSaving(false);
       setSaved(false);
+      setSaveError("No se pudo guardar el historial. Inténtalo nuevamente.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -497,6 +613,7 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
             </div>
           )}
         </div>
+        {saveError ? <div className="integration-error">{saveError}</div> : null}
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cerrar
@@ -743,7 +860,6 @@ export default function NativeIntegrationsPage() {
   const [openHistory, setOpenHistory] = useState(null);
   const [searchHistory, setSearchHistory] = useState([]);
   const [backupAvailable, setBackupAvailable] = useState(true);
-  const [pendingHistoryId, setPendingHistoryId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -751,14 +867,16 @@ export default function NativeIntegrationsPage() {
     try {
       const requests = [
         api("/api/integrations/native/status"),
-        api("/api/user/search-history?limit=20"),
+        api("/api/user/search-history?limit=20").catch(() => ({ items: [] })),
       ];
       if (user?.role === "super_admin") {
-        requests.push(api("/api/backups/status"));
+        requests.push(api("/api/backups/status").catch(() => ({ available: true })));
       }
       const [statusData, historyData, backupStatus] = await Promise.all(requests);
+      const merged = mergeHistory(historyData?.items || [], readLocalHistory(user?.id));
       setProviders(statusData.providers || []);
-      setSearchHistory(historyData.items || []);
+      setSearchHistory(merged);
+      writeLocalHistory(user?.id, merged);
       setBackupAvailable(backupStatus?.available !== false);
     } catch (err) {
       setError(err.message || "No se pudieron cargar las integraciones.");
@@ -766,33 +884,60 @@ export default function NativeIntegrationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.role]);
+  }, [user?.role, user?.id]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const saveSearch = useCallback(async (providerId, actionId, config, result) => {
-    if (!user) return;
+    const query = config.query || config.name || config.rut || "";
+    const now = new Date().toISOString();
+    const payload = {
+      ...result,
+      ...config,
+      provider: providerId,
+      action: actionId,
+      query,
+    };
+    const localEntry = {
+      id: `local-${providerId}-${actionId}-${query}-${now}`,
+      provider: providerId,
+      action: actionId,
+      query,
+      result_summary: result.note || result.mensaje || "Ejecutado correctamente.",
+      result_data: payload,
+      created_at: now,
+      local: true,
+    };
+    setSearchHistory((current) => {
+      const merged = mergeHistory([localEntry], current);
+      writeLocalHistory(user?.id, merged);
+      return merged;
+    });
+
+    if (!user) return true;
     try {
       const response = await api("/api/user/search-history", {
         method: "POST",
         body: JSON.stringify({
           provider: providerId,
           action: actionId,
-          query: config.query || config.name || "",
-          result_summary: result.note || result.mensaje || "Ejecutado correctamente.",
-          result_data: result,
+          query,
+          result_summary: localEntry.result_summary,
+          result_data: payload,
         }),
       });
-      if (response.saved === false) {
-        // Migración no aplicada; silenciar
-        return;
-      }
-      const historyData = await api("/api/user/search-history?limit=20");
-      setSearchHistory(historyData.items || []);
+      if (response.saved === false) return true;
+      const serverEntry = response.id ? response : null;
+      setSearchHistory((current) => {
+        const merged = mergeHistory(serverEntry ? [serverEntry] : [], [localEntry], current);
+        writeLocalHistory(user?.id, merged);
+        return merged;
+      });
+      return true;
     } catch {
-      // No fallar la UI si no se puede guardar
+      return true;
     }
   }, [user]);
 
@@ -824,7 +969,14 @@ export default function NativeIntegrationsPage() {
                   provider={provider}
                   status={status}
                   onConfiguredAction={(prov, act, data, config) => {
-                    setOpenResult({ ...data, provider_name: prov.name });
+                    const result = {
+                      ...data,
+                      ...config,
+                      provider: prov.id,
+                      action: act.id,
+                      provider_name: prov.name,
+                    };
+                    setOpenResult(result);
                     saveSearch(prov.id, act.id, config, data);
                   }}
                   recentSearches={searchHistory}
@@ -885,10 +1037,9 @@ export default function NativeIntegrationsPage() {
               )
             )
           }
-          onSaveHistory={() => {
-            setOpenResult(null);
-            load();
-          }}
+          onSaveHistory={(result) =>
+            saveSearch(result.provider, result.action, historyConfig(result), result)
+          }
         />
       )}
       {openHistory && (
@@ -896,16 +1047,22 @@ export default function NativeIntegrationsPage() {
           history={openHistory}
           onClose={() => setOpenHistory(null)}
           onLoadHistory={(h) => {
+            const config = historyConfig(h);
+            const data = h.result_data || {};
             setOpenHistory(null);
             setOpenResult({
-              provider_name: h.provider,
+              ...data,
+              ...config,
+              provider: h.provider,
               action: h.action,
+              provider_name: h.provider,
               query: h.query,
-              results: (h.result_data && h.result_data.results) || [],
+              results: data.results || [],
+              invoices: data.invoices || [],
               note: h.result_summary,
-              total: h.result_data && h.result_data.total,
-              mode: h.mode,
-              order_by: h.order_by,
+              total: data.total,
+              mode: config.mode,
+              order_by: config.order_by,
             });
           }}
         />

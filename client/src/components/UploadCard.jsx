@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import { UploadIcon, CheckIcon, SparkIcon } from "./Icons";
+import Toast from "./Toast";
 
 const DOC_TYPES = [
   { value: "quote", label: "Cotización" },
@@ -31,6 +32,7 @@ export default function UploadCard({ onUploaded }) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     api("/api/suppliers")
@@ -69,22 +71,25 @@ export default function UploadCard({ onUploaded }) {
       if (documentDate) body.append("document_date", documentDate);
 
       const endpoint = isBulk ? "/api/documents/ingest-bulk" : "/api/documents/ingest";
-      const data = await api(endpoint, { method: "POST", body });
+      const data = await api(endpoint, { method: "POST", body, timeoutMs: 30000 });
 
       if (isBulk) {
         setSubmitting(false);
         setFiles([]);
         setDocumentDate("");
         if (inputRef.current) inputRef.current.value = "";
-        setSuccess(
+        const message =
           `Lote procesado: ${data.succeeded} de ${data.total} documentos aceptados` +
-            (data.failed ? `, ${data.failed} con error.` : ".")
-        );
+          (data.failed ? `, ${data.failed} con error.` : ".");
+        setSuccess(message);
+        setToast({ message, tone: data.failed ? "warning" : "success" });
         return;
       }
 
       if (data.duplicate) {
-        setSuccess("Este documento ya estaba cargado. Te mostramos el registro existente.");
+        const message = "Este documento ya estaba cargado. Te mostramos el registro existente.";
+        setSuccess(message);
+        setToast({ message, tone: "info" });
         setFiles([]);
         setDocumentDate("");
         if (inputRef.current) inputRef.current.value = "";
@@ -116,13 +121,19 @@ export default function UploadCard({ onUploaded }) {
       setProgress(100);
       await new Promise((r) => setTimeout(r, 600));
       setProcessing(false);
-      setSuccess(
-        `✅ Procesamiento completado. ${data.duplicate ? "Documento duplicado." : "Ahorro detectado y alertas generadas."}`
-      );
+      const message =
+        data.message || "Documento recibido. La extracción con IA continuará en segundo plano.";
+      setSuccess(message);
+      setToast({ message, tone: "success" });
     } catch (err) {
       setProcessing(false);
       setSubmitting(false);
-      setError(err.message || "No se pudo subir el documento.");
+      const message =
+        err.code === "timeout"
+          ? "La carga superó los 30 segundos. El archivo no se envió; revisa tu conexión e inténtalo otra vez."
+          : err.message || "No se pudo subir el documento.";
+      setError(message);
+      setToast({ message, tone: "error" });
     }
   }
 
@@ -367,6 +378,7 @@ export default function UploadCard({ onUploaded }) {
           </motion.div>
         ) : null}
       </AnimatePresence>
+      <Toast message={toast?.message} tone={toast?.tone} onClose={() => setToast(null)} />
     </form>
   );
 }

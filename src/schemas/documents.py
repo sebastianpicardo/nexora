@@ -32,6 +32,7 @@ class DocumentIngestResponse(BaseModel):
     success: bool = True
     document: DocumentOut
     duplicate: bool = False
+    message: str = "Documento recibido. La extracción con IA continuará en segundo plano."
 
 
 class DocumentListResponse(BaseModel):

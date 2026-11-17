@@ -6,9 +6,10 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.core.config import settings
-from src.core.errors import NexoraError
+from src.core.errors import AI_TEMPORARY_MESSAGE, LLMError, LLMTemporaryError, NexoraError
 from src.db import repositories
 from src.db.pool import get_pool
+from src.parsers.llm.base import is_transient_error
 from src.parsers.normalization.dates import parse_flexible_date
 from src.parsers.pipeline import run_pipeline
 from src.services import ai_usage_service, audit_service, storage_service
@@ -56,25 +57,47 @@ async def _process_claimed_document(doc: dict) -> None:
         )
     except Exception as exc:
         logger.exception("Error procesando documento %s", document_id)
-        message = str(exc) if isinstance(exc, NexoraError) else f"Error inesperado: {exc}"
+        temporary = isinstance(exc, LLMTemporaryError) or (
+            not isinstance(exc, LLMError) and is_transient_error(exc)
+        )
+        technical_message = str(exc) if isinstance(exc, NexoraError) else f"Error inesperado: {exc}"
+        message = AI_TEMPORARY_MESSAGE if temporary else technical_message
         async with get_pool().connection() as conn:
-            await repositories.mark_failed(
-                conn,
-                org_id=org_id,
-                document_id=document_id,
-                error_message=message,
-            )
+            retries_exhausted = False
+            if temporary:
+                updated = await repositories.mark_temporary_failed(
+                    conn,
+                    org_id=org_id,
+                    document_id=document_id,
+                    error_message=message,
+                )
+                retries_exhausted = (updated or {}).get("status") == "failed"
+            else:
+                await repositories.mark_failed(
+                    conn,
+                    org_id=org_id,
+                    document_id=document_id,
+                    error_message=message,
+                )
+            if retries_exhausted:
+                reason = "La IA estuvo saturada en varios intentos. Reintenta el documento manualmente."
+            elif temporary:
+                reason = "El motor de IA está con alta demanda; el documento quedó en cola para reintento."
+            else:
+                reason = "No se pudo extraer la información del documento."
             await repositories.create_exception(
                 conn,
                 org_id=org_id,
                 document_id=document_id,
                 item_id=None,
                 type="extraction_failed",
-                severity="high",
-                reason="No se pudo extraer la información del documento.",
+                severity="high" if (not temporary or retries_exhausted) else "medium",
+                reason=reason,
                 evidence={
                     "filename": doc["original_filename"],
-                    "error": message[:1000],
+                    "error": technical_message[:1000],
+                    "temporary": temporary,
+                    "retries_exhausted": retries_exhausted,
                 },
             )
         return

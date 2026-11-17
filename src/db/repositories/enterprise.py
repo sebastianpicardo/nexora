@@ -269,7 +269,7 @@ async def list_alerts(conn: AsyncConnection, org_id: UUID | str, *, currency: st
                 (SELECT COALESCE(SUM(amount), 0) FROM purchase_approvals
                  WHERE org_id = %s AND status = 'pending' AND currency = %s) AS approval_amount,
                 (SELECT COUNT(*) FROM documents_log
-                 WHERE org_id = %s AND status IN ('queued', 'processing')) AS documents_pending
+                 WHERE org_id = %s AND status IN ('queued', 'processing', 'temporary_error')) AS documents_pending
             """,
             (str(org_id), str(org_id), str(org_id), str(org_id), str(org_id), currency, str(org_id)),
         )
