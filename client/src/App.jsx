@@ -3,25 +3,51 @@ import { useAuth } from "./context/AuthContext";
 import { api } from "./lib/api";
 import HelpChat from "./components/HelpChat";
 import Layout from "./components/Layout";
+import UploadModal from "./components/UploadModal";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
-import DocumentsPage from "./pages/DocumentsPage";
-import ItemsPage from "./pages/ItemsPage";
-import ExceptionsPage from "./pages/ExceptionsPage";
 import TeamPage from "./pages/TeamPage";
 import ProfilePage from "./pages/ProfilePage";
 import SuperAdminPage from "./pages/SuperAdminPage";
-import SuppliersPage from "./pages/SuppliersPage";
 import SettingsPage from "./pages/SettingsPage";
-import ApprovalsPage from "./pages/ApprovalsPage";
 import EnterprisePage from "./pages/EnterprisePage";
 import NativeIntegrationsPage from "./pages/NativeIntegrationsPage";
-import PriceCatalogPage from "./pages/PriceCatalogPage";
 import PricingPage from "./pages/PricingPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import OpportunitiesPage from "./pages/OpportunitiesPage";
-import ForecastPage from "./pages/ForecastPage";
-import SmartApprovalsPage from "./pages/SmartApprovalsPage";
+import PurchasesInboxPage from "./pages/PurchasesInboxPage";
+import ApprovalsHubPage from "./pages/ApprovalsHubPage";
+import IntelligencePage from "./pages/IntelligencePage";
+import DirectoryPage from "./pages/DirectoryPage";
+
+const DEFAULT_TABS = {
+  purchases: "documents",
+  "approvals-hub": "smart",
+  intelligence: "overview",
+  directory: "suppliers",
+};
+
+const LEGACY_VIEWS = {
+  documents: ["purchases", "documents"],
+  items: ["purchases", "items"],
+  exceptions: ["purchases", "exceptions"],
+  approvals: ["approvals-hub", "manual"],
+  "auto-approvals": ["approvals-hub", "smart"],
+  analytics: ["intelligence", "overview"],
+  opportunities: ["intelligence", "opportunities"],
+  forecast: ["intelligence", "forecast"],
+  suppliers: ["directory", "suppliers"],
+  "price-catalog": ["directory", "catalog"],
+};
+
+const HELP_TOPICS = {
+  purchases: { documents: "documents", items: "items", exceptions: "exceptions" },
+  "approvals-hub": { smart: "auto-approvals", manual: "approvals" },
+  intelligence: {
+    overview: "analytics",
+    opportunities: "opportunities",
+    forecast: "forecast",
+  },
+  directory: { suppliers: "suppliers", catalog: "price-catalog" },
+};
 
 function Splash() {
   return (
@@ -38,6 +64,9 @@ function Splash() {
 export default function App() {
   const { user, loading, error, canManage, isSuperAdmin, refresh } = useAuth();
   const [view, setView] = useState("dashboard");
+  const [tabs, setTabs] = useState(DEFAULT_TABS);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -59,55 +88,105 @@ export default function App() {
 
   useEffect(() => {
     if (["admin", "backups"].includes(view) && !isSuperAdmin) setView("dashboard");
-    if (["team", "billing", "settings", "enterprise", "integrations", "price-catalog"].includes(view) && !canManage) setView("dashboard");
+    if (["team", "billing", "settings", "enterprise", "integrations"].includes(view) && !canManage) {
+      setView("dashboard");
+    }
   }, [view, isSuperAdmin, canManage]);
+
+  function navigate(next) {
+    const legacy = LEGACY_VIEWS[next];
+    if (legacy) {
+      const [group, tab] = legacy;
+      setView(group);
+      setTabs((current) => ({ ...current, [group]: tab }));
+      return;
+    }
+    setView(next);
+  }
+
+  function changeTab(group, tab) {
+    setTabs((current) => ({ ...current, [group]: tab }));
+  }
+
+  function handleUploaded() {
+    setDataVersion((version) => version + 1);
+  }
+
+  const helpView = HELP_TOPICS[view]?.[tabs[view]] || view;
 
   if (loading) return <Splash />;
   if (!user) return <LoginPage error={error} />;
 
-  return (
-    <Layout active={view} onNavigate={setView}>
-      {view === "dashboard" ? (
-        <DashboardPage onNavigate={setView} />
-      ) : view === "analytics" ? (
-        <AnalyticsPage onNavigate={setView} />
-      ) : view === "opportunities" ? (
-        <OpportunitiesPage />
-      ) : view === "forecast" ? (
-        <ForecastPage />
-      ) : view === "auto-approvals" ? (
-        <SmartApprovalsPage />
-      ) : view === "documents" ? (
-        <DocumentsPage />
-      ) : view === "items" ? (
-        <ItemsPage />
-      ) : view === "exceptions" ? (
-        <ExceptionsPage />
-      ) : view === "approvals" ? (
-        <ApprovalsPage />
-      ) : view === "suppliers" ? (
-        <SuppliersPage />
-      ) : view === "enterprise" ? (
-        <EnterprisePage onNavigate={setView} />
-      ) : view === "integrations" ? (
-        <NativeIntegrationsPage />
-      ) : view === "price-catalog" ? (
-        <PriceCatalogPage />
-      ) : view === "team" ? (
-        <TeamPage />
-      ) : view === "billing" ? (
-        <PricingPage />
-      ) : view === "settings" ? (
-        <SettingsPage />
-      ) : view === "profile" ? (
-        <ProfilePage />
-      ) : view === "admin" ? (
-        <SuperAdminPage />
-      ) : (
-        <DashboardPage onNavigate={setView} />
-      )}
-    <HelpChat />
+  function renderView() {
+    if (view === "dashboard") {
+      return (
+        <DashboardPage
+          onNavigate={navigate}
+          onUpload={() => setUploadOpen(true)}
+        />
+      );
+    }
+    if (view === "purchases") {
+      return (
+        <PurchasesInboxPage
+          tab={tabs.purchases}
+          onTabChange={(tab) => changeTab("purchases", tab)}
+          onUpload={() => setUploadOpen(true)}
+        />
+      );
+    }
+    if (view === "approvals-hub") {
+      return (
+        <ApprovalsHubPage
+          tab={tabs["approvals-hub"]}
+          onTabChange={(tab) => changeTab("approvals-hub", tab)}
+          onUpload={() => setUploadOpen(true)}
+        />
+      );
+    }
+    if (view === "intelligence") {
+      return (
+        <IntelligencePage
+          tab={tabs.intelligence}
+          onTabChange={(tab) => changeTab("intelligence", tab)}
+          onNavigate={navigate}
+          onUpload={() => setUploadOpen(true)}
+        />
+      );
+    }
+    if (view === "directory") {
+      return (
+        <DirectoryPage
+          tab={tabs.directory}
+          onTabChange={(tab) => changeTab("directory", tab)}
+          onUpload={() => setUploadOpen(true)}
+        />
+      );
+    }
+    if (view === "enterprise") return <EnterprisePage onNavigate={navigate} />;
+    if (view === "integrations") return <NativeIntegrationsPage />;
+    if (view === "team") return <TeamPage />;
+    if (view === "billing") return <PricingPage />;
+    if (view === "settings") return <SettingsPage />;
+    if (view === "profile") return <ProfilePage />;
+    if (view === "admin") return <SuperAdminPage />;
+    return <DashboardPage onNavigate={navigate} onUpload={() => setUploadOpen(true)} />;
+  }
 
-    </Layout>
+  return (
+    <>
+      <Layout active={view} onNavigate={navigate} helpView={helpView}>
+        <div className="view-slot" key={`${view}-${dataVersion}`}>
+          {renderView()}
+        </div>
+        <HelpChat />
+      </Layout>
+      {uploadOpen ? (
+        <UploadModal
+          onClose={() => setUploadOpen(false)}
+          onUploaded={handleUploaded}
+        />
+      ) : null}
+    </>
   );
 }

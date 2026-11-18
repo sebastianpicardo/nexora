@@ -11,10 +11,11 @@ import {
   SearchIcon,
   SparkIcon,
   TrashIcon,
+  UploadIcon,
 } from "../components/Icons";
 
-export default function PriceCatalogPage() {
-  const { canManage } = useAuth();
+export default function PriceCatalogPage({ embedded = false, onUpload }) {
+  const { canManage, canOperate } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -175,8 +176,8 @@ export default function PriceCatalogPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Catálogo de precios</div>
           <h2>Tu catálogo, listo para comparar</h2>
           <p>
@@ -217,40 +218,48 @@ export default function PriceCatalogPage() {
             Importa el último costo de tus facturas aprobadas o carga productos de prueba para
             ver márgenes al instante.
           </p>
-          {canManage ? (
-            <div className="empty-state-actions">
-              <button
-                type="button"
-                className="button primary"
-                disabled={Boolean(importing)}
-                onClick={() => importCatalog("approved")}
-              >
-                <DocumentsIcon />
-                {importing === "approved" ? "Importando..." : "Importar desde facturas aprobadas"}
+          <div className="empty-state-actions">
+            {canOperate ? (
+              <button type="button" className="button primary" onClick={onUpload}>
+                <UploadIcon /> Subir primera factura
               </button>
-              <button
-                type="button"
-                className="button ghost"
-                disabled={Boolean(importing)}
-                onClick={() => importCatalog("demo")}
-              >
-                <SparkIcon />
-                {importing === "demo" ? "Cargando..." : "Cargar productos de prueba"}
-              </button>
-              <button
-                type="button"
-                className="button ghost"
-                disabled={Boolean(importing)}
-                onClick={openCreate}
-              >
-                <PlusIcon /> Agregar manualmente
-              </button>
-            </div>
-          ) : (
+            ) : null}
+            {canManage ? (
+              <>
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={Boolean(importing)}
+                  onClick={() => importCatalog("demo")}
+                >
+                  <SparkIcon />
+                  {importing === "demo" ? "Cargando..." : "Cargar datos de demostración"}
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={Boolean(importing)}
+                  onClick={() => importCatalog("approved")}
+                >
+                  <DocumentsIcon />
+                  {importing === "approved" ? "Importando..." : "Importar facturas aprobadas"}
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={Boolean(importing)}
+                  onClick={openCreate}
+                >
+                  <PlusIcon /> Agregar manualmente
+                </button>
+              </>
+            ) : null}
+          </div>
+          {!canManage ? (
             <p className="muted small">
-              Pide a un administrador que importe facturas aprobadas o cargue productos de prueba.
+              Pide a un administrador que cargue productos de prueba o importe tus facturas aprobadas.
             </p>
-          )}
+          ) : null}
         </div>
       ) : (
         <div className="card">

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, labelize } from "../lib/format";
-import { PlusIcon, SearchIcon, EditIcon, TrashIcon, CheckIcon, XIcon } from "../components/Icons";
+import ActionEmptyState from "../components/ActionEmptyState";
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, CheckIcon, XIcon, SuppliersIcon } from "../components/Icons";
 
-export default function SuppliersPage() {
+export default function SuppliersPage({ embedded = false, onUpload }) {
   const { canManage } = useAuth();
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,8 +132,8 @@ export default function SuppliersPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Gestión</div>
           <h2>Proveedores</h2>
           <p>Administra la base de proveedores para asociar documentos y normalizar nombres.</p>
@@ -161,12 +162,13 @@ export default function SuppliersPage() {
         {loading ? (
           <div className="empty-state">Cargando proveedores…</div>
         ) : suppliers.length === 0 ? (
-          <div className="empty-state">
-            <p>No hay proveedores registrados.</p>
-            <button type="button" className="button primary" onClick={openCreate}>
-              <PlusIcon /> Crear el primero
-            </button>
-          </div>
+          <ActionEmptyState
+            icon={<SuppliersIcon />}
+            title="Aún no hay proveedores"
+            description="Sube una cotización o factura para detectar proveedores automáticamente. También puedes crear uno manualmente o cargar datos de demostración."
+            onUpload={onUpload}
+            onLoaded={load}
+          />
         ) : (
           <div className="table-wrapper">
             <table className="data-table">

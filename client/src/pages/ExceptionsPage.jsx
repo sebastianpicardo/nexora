@@ -6,6 +6,7 @@ import ExceptionsTable from "../components/ExceptionsTable";
 import InfoHint from "../components/InfoHint";
 import ResolveExceptionModal from "../components/ResolveExceptionModal";
 import StatCard from "../components/StatCard";
+import ActionEmptyState from "../components/ActionEmptyState";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -16,7 +17,7 @@ import {
   PricesIcon,
 } from "../components/Icons";
 
-export default function ExceptionsPage() {
+export default function ExceptionsPage({ embedded = false, onUpload }) {
   const { canOperate, organization } = useAuth();
   const currency = organization?.default_currency || "CLP";
   const [exceptions, setExceptions] = useState([]);
@@ -96,8 +97,8 @@ export default function ExceptionsPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Human-in-the-Loop</div>
           <h2 className="title-with-help">
             Bandeja de excepciones
@@ -181,6 +182,14 @@ export default function ExceptionsPage() {
 
         {loading ? (
           <div className="empty-state">Cargando excepciones…</div>
+        ) : exceptions.length === 0 ? (
+          <ActionEmptyState
+            icon={<ExceptionsIcon />}
+            title="No hay alertas pendientes"
+            description="Cuando detectemos un sobreprecio, una unidad inconsistente o baja confianza, aparecerá aquí para revisión. También puedes cargar datos de demostración."
+            onUpload={onUpload}
+            onLoaded={refresh}
+          />
         ) : (
           <>
             <ExceptionsTable exceptions={exceptions} onResolve={canOperate ? setSelected : undefined} />

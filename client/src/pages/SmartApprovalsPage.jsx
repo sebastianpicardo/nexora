@@ -3,11 +3,12 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
+import ActionEmptyState from "../components/ActionEmptyState";
 import { CheckIcon, ClockIcon, ExceptionsIcon, SparkIcon } from "../components/Icons";
 
 const THRESHOLD_OPTIONS = [0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
 
-export default function SmartApprovalsPage() {
+export default function SmartApprovalsPage({ embedded = false, onUpload }) {
   const { organization, canOperate } = useAuth();
   const [currency, setCurrency] = useState(organization?.default_currency || "CLP");
   const [threshold, setThreshold] = useState(0.9);
@@ -88,8 +89,8 @@ export default function SmartApprovalsPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow"><SparkIcon /> Automatización</div>
           <h2>Aprueba rápido lo seguro</h2>
           <p>
@@ -180,9 +181,13 @@ export default function SmartApprovalsPage() {
         {loading ? (
           <div className="empty-state">Cargando cola…</div>
         ) : items.length === 0 ? (
-          <div className="empty-state">
-            <p>No hay ítems pendientes de aprobación.</p>
-          </div>
+          <ActionEmptyState
+            icon={<CheckIcon />}
+            title="No hay ítems pendientes de aprobación"
+            description="Cuando lleguen documentos con ítems por decidir, aparecerán en esta cola. También puedes cargar datos de demostración para probar el flujo."
+            onUpload={onUpload}
+            onLoaded={load}
+          />
         ) : (
           <div className="table-wrapper">
             <table className="data-table">

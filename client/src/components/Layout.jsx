@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import AppBanner from "./AppBanner";
 import AppFooter from "./AppFooter";
 import {
   AdminIcon,
@@ -9,14 +8,10 @@ import {
   BellIcon,
   BillingIcon,
   CheckIcon,
-  ClockIcon,
   DashboardIcon,
   DocumentsIcon,
-  DollarIcon,
-  ExceptionsIcon,
   HelpIcon,
   LogoutIcon,
-  PricesIcon,
   ProfileIcon,
   SettingsIcon,
   SparkIcon,
@@ -28,56 +23,32 @@ import ModuleHelp from "./ModuleHelp";
 
 const NAV_SECTIONS = [
   {
-    label: "Inicio",
+    label: "Operación",
     items: [
-      { id: "dashboard", label: "Resumen del día", icon: DashboardIcon },
-    ],
-  },
-  {
-    label: "Inteligencia",
-    items: [
-      { id: "analytics", label: "Analítica ejecutiva", icon: SparkIcon },
-      { id: "opportunities", label: "Oportunidades de ahorro", icon: DollarIcon },
-      { id: "forecast", label: "Pronóstico de compras", icon: ClockIcon },
-      { id: "auto-approvals", label: "Aprobación inteligente", icon: CheckIcon },
-    ],
-  },
-  {
-    label: "Compras",
-    items: [
-      { id: "documents", label: "Documentos", icon: DocumentsIcon },
-      { id: "items", label: "Precios auditados", icon: PricesIcon },
-      { id: "exceptions", label: "Excepciones", icon: ExceptionsIcon },
-      { id: "approvals", label: "Aprobaciones", icon: CheckIcon },
-      { id: "suppliers", label: "Proveedores", icon: SuppliersIcon },
-      { id: "price-catalog", label: "Catálogo de precios", icon: PricesIcon, admin: true },
-    ],
-  },
-  {
-    label: "Integraciones",
-    items: [
-      { id: "integrations", label: "ChileCompra / SII / ERP", icon: ArrowRightIcon, admin: true },
-      { id: "enterprise", label: "Seguridad y marca", icon: SparkIcon, admin: true },
+      { id: "dashboard", label: "Inicio", icon: DashboardIcon },
+      { id: "purchases", label: "Bandeja de Compras", icon: DocumentsIcon },
+      { id: "approvals-hub", label: "Aprobaciones", icon: CheckIcon },
+      { id: "intelligence", label: "Inteligencia y Ahorro", icon: SparkIcon },
+      { id: "directory", label: "Directorio", icon: SuppliersIcon },
     ],
   },
   {
     label: "Administración",
     items: [
+      { id: "integrations", label: "Integraciones", icon: ArrowRightIcon, admin: true },
+      { id: "enterprise", label: "Seguridad y marca", icon: SparkIcon, admin: true },
       { id: "team", label: "Equipo", icon: TeamIcon, admin: true },
-      { id: "billing", label: "Planes y precios", icon: SparkIcon, admin: true },
+      { id: "billing", label: "Planes y precios", icon: BillingIcon, admin: true },
       { id: "settings", label: "Configuración", icon: SettingsIcon, admin: true },
       { id: "profile", label: "Mi perfil", icon: ProfileIcon },
+      { id: "admin", label: "Usuarios y auditoría", icon: AdminIcon, superAdmin: true },
     ],
-  },
-  {
-    label: "Plataforma",
-    items: [{ id: "admin", label: "Usuarios y auditoría", icon: AdminIcon, superAdmin: true }],
   },
 ];
 
 const ALL_ITEMS = NAV_SECTIONS.flatMap((section) => section.items);
 
-export default function Layout({ active, onNavigate, children }) {
+export default function Layout({ active, onNavigate, helpView, children }) {
   const { user, organization, billing, branding, canManage, isSuperAdmin, logout } = useAuth();
   const [summary, setSummary] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -241,13 +212,12 @@ export default function Layout({ active, onNavigate, children }) {
       </aside>
 
       <div className="main-shell">
-        <AppBanner onNavigate={onNavigate} />
         <header className="topbar">
           <div>
             <div className="topbar-eyebrow">Panel de control</div>
             <div className="topbar-title-row">
               <h1 className="topbar-title">
-                {ALL_ITEMS.find((item) => item.id === active)?.label || "Resumen del día"}
+                {ALL_ITEMS.find((item) => item.id === active)?.label || "Inicio"}
               </h1>
               <button
                 type="button"
@@ -324,7 +294,7 @@ export default function Layout({ active, onNavigate, children }) {
       </div>
 
       {helpOpen ? (
-        <ModuleHelp view={active} onClose={() => setHelpOpen(false)} onNavigate={onNavigate} />
+        <ModuleHelp view={helpView || active} onClose={() => setHelpOpen(false)} onNavigate={onNavigate} />
       ) : null}
     </div>
   );

@@ -5,6 +5,7 @@ import DocumentsTable from "../components/DocumentsTable";
 import DocumentDetailModal from "../components/DocumentDetailModal";
 import InfoHint from "../components/InfoHint";
 import UploadCard from "../components/UploadCard";
+import ActionEmptyState from "../components/ActionEmptyState";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon, CheckIcon, DocumentsIcon } from "../components/Icons";
 
 function processedFilename(document, format) {
@@ -13,7 +14,7 @@ function processedFilename(document, format) {
   return `${stem}-procesado.${format}`;
 }
 
-export default function DocumentsPage() {
+export default function DocumentsPage({ embedded = false, onUpload }) {
   const { canOperate } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [total, setTotal] = useState(0);
@@ -144,8 +145,8 @@ export default function DocumentsPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Ingesta documental</div>
           <h2 className="title-with-help">
             Documentos de compra
@@ -161,7 +162,7 @@ export default function DocumentsPage() {
         </button>
       </section>
 
-      {canOperate ? <UploadCard onUploaded={handleUploaded} /> : null}
+      {canOperate && !embedded ? <UploadCard onUploaded={handleUploaded} /> : null}
 
       {error ? <div className="alert error">{error}</div> : null}
       {success ? <div className="alert success">{success}</div> : null}
@@ -187,6 +188,15 @@ export default function DocumentsPage() {
         </div>
         {loading ? (
           <div className="empty-state">Cargando documentos…</div>
+        ) : documents.length === 0 ? (
+          <ActionEmptyState
+            icon={<DocumentsIcon />}
+            title="Tu bandeja está vacía"
+            description="Sube tu primera cotización o factura y NEXORA extraerá proveedores, ítems y precios. También puedes explorar la plataforma con datos de demostración."
+            onUpload={onUpload}
+            onLoaded={load}
+            uploadLabel="Subir primera cotización"
+          />
         ) : (
           <>
             <DocumentsTable

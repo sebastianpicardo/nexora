@@ -8,10 +8,12 @@ import QuotaCard from "../components/QuotaCard";
 import SpendChart from "../components/SpendChart";
 import StatCard from "../components/StatCard";
 import UploadCard from "../components/UploadCard";
+import AppBanner from "../components/AppBanner";
+import ActionEmptyState from "../components/ActionEmptyState";
+import QuickGuide from "../components/QuickGuide";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
-import WelcomeBanner from "../components/WelcomeBanner";
 
-export default function DashboardPage({ onNavigate }) {
+export default function DashboardPage({ onNavigate, onUpload }) {
   const { organization, billing, canOperate } = useAuth();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -99,9 +101,8 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div className="page-stack">
-      {!summary || !hasActivity ? (
-        <WelcomeBanner canOperate={canOperate} onNavigate={onNavigate} />
-      ) : null}
+      <AppBanner onNavigate={onNavigate} onUpload={canOperate ? onUpload : undefined} />
+      <QuickGuide activeStep={1} />
 
       {error && summary ? (
         <div className="alert error">
@@ -137,24 +138,13 @@ export default function DashboardPage({ onNavigate }) {
       ) : null}
 
       {showEmpty ? (
-        <section className="card dashboard-empty">
-          <div className="empty-orb"><SparkIcon /></div>
-          <h2>Sin registros aún</h2>
-          <p>
-            Sube tu primera cotización o factura para comenzar a ver compras, precios
-            normalizados y excepciones en este panel.
-          </p>
-          <div className="empty-actions">
-            {canOperate ? (
-              <button type="button" className="button primary" onClick={() => onNavigate("documents")}>
-                Cargar documento
-              </button>
-            ) : null}
-            <button type="button" className="button ghost" onClick={retry}>
-              Actualizar
-            </button>
-          </div>
-        </section>
+        <ActionEmptyState
+          icon={<SparkIcon />}
+          title="Sin registros aún"
+          description="Sube tu primera cotización o factura para ver compras, precios normalizados y excepciones. También puedes explorar NEXORA con datos de demostración."
+          onUpload={canOperate ? onUpload : undefined}
+          onLoaded={retry}
+        />
       ) : null}
 
       {summary && !showEmpty ? (
@@ -225,6 +215,15 @@ export default function DashboardPage({ onNavigate }) {
             <section className="stack">
               <QuotaCard quota={quota} planName={planName} />
               <div className="quick-actions">
+                {canOperate ? (
+                  <button type="button" className="quick-action" onClick={onUpload}>
+                    <span className="quick-icon"><DocumentsIcon /></span>
+                    <span>
+                      <strong>Subir documento</strong>
+                      <small>Cotización, factura o lista de precios</small>
+                    </span>
+                  </button>
+                ) : null}
                 <button type="button" className="quick-action" onClick={() => onNavigate("items")}>
                   <span className="quick-icon"><PricesIcon /></span>
                   <span>

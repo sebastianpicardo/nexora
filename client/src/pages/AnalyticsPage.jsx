@@ -4,11 +4,12 @@ import { api } from "../lib/api";
 import { formatMoney, formatMonth, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
 import DemoDataBanner from "../components/DemoDataBanner";
+import ActionEmptyState from "../components/ActionEmptyState";
 import { ArrowRightIcon, CheckIcon, DollarIcon, PricesIcon, SparkIcon } from "../components/Icons";
 
 const MONTH_OPTIONS = [3, 6, 12, 24];
 
-export default function AnalyticsPage({ onNavigate }) {
+export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }) {
   const { organization } = useAuth();
   const [currency, setCurrency] = useState(organization?.default_currency || "CLP");
   const [months, setMonths] = useState(6);
@@ -50,8 +51,8 @@ export default function AnalyticsPage({ onNavigate }) {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow"><SparkIcon /> Analítica ejecutiva</div>
           <h2>Controla el gasto y los precios</h2>
           <p>
@@ -81,9 +82,11 @@ export default function AnalyticsPage({ onNavigate }) {
       {error ? <div className="alert error">{error}</div> : null}
 
       {!loading && !hasData ? (
-        <DemoDataBanner
+        <ActionEmptyState
+          icon={<PricesIcon />}
           title="Tu analítica empieza con la primera factura"
-          description="Sube una factura o carga 12 meses de datos demo para ver gasto, precios y ahorro potencial sin planillas."
+          description="Sube una factura para ver gasto, precios y ahorro potencial sin planillas. También puedes explorar la vista completa con datos de demostración."
+          onUpload={onUpload}
           onLoaded={load}
         />
       ) : null}

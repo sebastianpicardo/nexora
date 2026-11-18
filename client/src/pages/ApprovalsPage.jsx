@@ -14,7 +14,7 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-export default function ApprovalsPage() {
+export default function ApprovalsPage({ embedded = false }) {
   const { canManage, canOperate, organization } = useAuth();
   const [approvals, setApprovals] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -113,8 +113,8 @@ export default function ApprovalsPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Gobierno de compras</div>
           <h2 className="title-with-help">
             Aprobaciones

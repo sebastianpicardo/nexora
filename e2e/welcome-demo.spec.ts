@@ -73,15 +73,37 @@ test('la bienvenida permite cargar la demo de 12 meses', async ({ page }) => {
   await mockDashboard(page);
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Empieza a auditar tus compras' })).toBeVisible();
-  await expect(page.getByText('Cargar demo de 12 meses')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Convierte tus documentos de compra en decisiones claras' }),
+  ).toBeVisible();
+  await expect(page.getByText('Cargar datos de demostración')).toBeVisible();
 
   const demoRequest = page.waitForRequest(
     (request) =>
       request.url().includes('/api/enterprise/onboarding/demo') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Cargar demo de 12 meses' }).click();
+  await page.getByRole('button', { name: 'Cargar datos de demostración' }).click();
 
   const request = await demoRequest;
   expect(new URL(request.url()).pathname).toBe('/api/enterprise/onboarding/demo');
+});
+
+test('agrupa la operación en secciones con tabs internas', async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Bandeja de Compras' }).click();
+
+  await expect(page.getByRole('tab', { name: 'Todos los documentos' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Ítems auditados' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Alertas y Excepciones' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Ítems auditados' }).click();
+  await expect(page.getByRole('tab', { name: 'Ítems auditados' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Convierte tus documentos de compra en decisiones claras' }),
+  ).toHaveCount(0);
 });

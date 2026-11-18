@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, labelize } from "../lib/format";
 import InfoHint from "../components/InfoHint";
 import StatCard from "../components/StatCard";
+import ActionEmptyState from "../components/ActionEmptyState";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -14,7 +15,7 @@ import {
   SuppliersIcon,
 } from "../components/Icons";
 
-export default function ItemsPage() {
+export default function ItemsPage({ embedded = false, onUpload }) {
   const { organization } = useAuth();
   const currency = organization?.default_currency || "CLP";
   const [items, setItems] = useState([]);
@@ -94,8 +95,8 @@ export default function ItemsPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow">Histórico normalizado</div>
           <h2 className="title-with-help">
             Precios auditados
@@ -189,10 +190,13 @@ export default function ItemsPage() {
         {loading ? (
           <div className="empty-state">Cargando precios…</div>
         ) : items.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-title">Sin resultados</div>
-            <p>Procesa un documento o ajusta los filtros de búsqueda.</p>
-          </div>
+          <ActionEmptyState
+            icon={<PricesIcon />}
+            title="Aún no hay ítems auditados"
+            description="Sube una cotización o factura para normalizar precios y comparar proveedores. También puedes ajustar los filtros o cargar datos de demostración."
+            onUpload={onUpload}
+            onLoaded={refresh}
+          />
         ) : (
           <>
             <div className="table-wrap">

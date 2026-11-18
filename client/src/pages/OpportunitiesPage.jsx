@@ -4,13 +4,13 @@ import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
 import DemoDataBanner from "../components/DemoDataBanner";
+import ActionEmptyState from "../components/ActionEmptyState";
 import { DollarIcon, ExceptionsIcon, PricesIcon, SuppliersIcon } from "../components/Icons";
-import EmptyState from "../components/EmptyState";
 
 const DAY_OPTIONS = [30, 60, 90, 180, 365];
 const OVERPRICE_OPTIONS = [5, 10, 15, 20, 30];
 
-export default function OpportunitiesPage() {
+export default function OpportunitiesPage({ embedded = false, onUpload }) {
   const { organization } = useAuth();
   const [currency, setCurrency] = useState(organization?.default_currency || "CLP");
   const [days, setDays] = useState(90);
@@ -101,8 +101,8 @@ export default function OpportunitiesPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow"><DollarIcon /> Ahorro</div>
           <h2>Oportunidades de ahorro</h2>
           <p>
@@ -141,9 +141,11 @@ export default function OpportunitiesPage() {
       {savingsError ? <div className="alert error">{savingsError}</div> : null}
 
       {!loading && !hasData ? (
-        <DemoDataBanner
+        <ActionEmptyState
+          icon={<DollarIcon />}
           title="Descubre tu primer ahorro con datos reales"
-          description="Sube una factura o carga 12 meses de datos demo para comparar precios entre proveedores y ver cuánto puedes ahorrar."
+          description="Sube una factura para comparar precios entre proveedores y ver cuánto puedes ahorrar. También puedes explorar la vista con datos de demostración."
+          onUpload={onUpload}
           onLoaded={load}
         />
       ) : null}
@@ -237,9 +239,12 @@ export default function OpportunitiesPage() {
         {loading ? (
           <div className="empty-state">Analizando historial de precios…</div>
         ) : items.length === 0 ? (
-          <EmptyState
+          <ActionEmptyState
+            icon={<DollarIcon />}
             title="No se detectaron sobreprecios"
-            description="Sube más documentos o ajusta la ventana y el umbral para encontrar oportunidades."
+            description="Sube más documentos o ajusta la ventana y el umbral para encontrar oportunidades. También puedes cargar datos de demostración."
+            onUpload={onUpload}
+            onLoaded={load}
           />
         ) : (
           <div className="table-wrapper">

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, labelize, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
-import DemoDataBanner from "../components/DemoDataBanner";
+import ActionEmptyState from "../components/ActionEmptyState";
 import { ClockIcon, DocumentsIcon, PricesIcon, SparkIcon } from "../components/Icons";
 
 const HISTORY_OPTIONS = [3, 6, 9, 12];
@@ -17,7 +17,7 @@ const TREND_TONES = {
   estable: "status-pending",
 };
 
-export default function ForecastPage() {
+export default function ForecastPage({ embedded = false, onUpload }) {
   const { organization } = useAuth();
   const [currency, setCurrency] = useState(organization?.default_currency || "CLP");
   const [historyMonths, setHistoryMonths] = useState(6);
@@ -60,8 +60,8 @@ export default function ForecastPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-intro">
-        <div>
+      <section className={`page-intro ${embedded ? "page-intro-embedded" : ""}`}>
+        <div className={embedded ? "sr-only" : undefined}>
           <div className="eyebrow"><ClockIcon /> Planificación</div>
           <h2>Anticipa tus próximas compras</h2>
           <p>
@@ -100,7 +100,8 @@ export default function ForecastPage() {
       {error ? <div className="alert error">{error}</div> : null}
 
       {!loading && !hasData ? (
-        <DemoDataBanner
+        <ActionEmptyState
+          icon={<ClockIcon />}
           title={
             needsMoreHistory
               ? "Ya tienes historial, faltan meses para proyectar"
@@ -108,9 +109,10 @@ export default function ForecastPage() {
           }
           description={
             needsMoreHistory
-              ? "Necesitas al menos 3 meses de consumo del mismo producto para calcular una tendencia confiable. Puedes cargar datos demo para ver la vista completa."
-              : "Sube facturas o carga 12 meses de datos demo para proyectar consumo, gasto y reposiciones desde el primer minuto."
+              ? "Necesitas al menos 3 meses de consumo del mismo producto para calcular una tendencia confiable. También puedes cargar datos de demostración."
+              : "Sube facturas para proyectar consumo, gasto y reposiciones desde el primer minuto. También puedes explorar la vista con datos de demostración."
           }
+          onUpload={onUpload}
           onLoaded={load}
         />
       ) : null}
