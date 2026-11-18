@@ -20,6 +20,44 @@ def _safe_filename(filename: str) -> str:
     return name[:180] or "documento"
 
 
+_MIME_BY_SUFFIX = {
+    ".pdf": "application/pdf",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".csv": "text/csv",
+    ".txt": "text/plain",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+}
+_TEXT_SUFFIXES = {".csv", ".txt"}
+_OFFICE_SUFFIXES = {".xlsx", ".xls"}
+_OFFICE_WRAPPERS = {"application/zip", "application/octet-stream", "application/vnd.ms-excel"}
+
+
+def resolve_upload_mime(filename: str, detected_mime: str | None, declared_mime: str | None) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    expected = _MIME_BY_SUFFIX.get(suffix)
+    detected = (detected_mime or "").strip().lower()
+    declared = (declared_mime or "").strip().lower()
+    if detected:
+        if detected == expected or (suffix in _TEXT_SUFFIXES and detected.startswith("text/")):
+            return detected
+        if suffix in _OFFICE_SUFFIXES and detected in _OFFICE_WRAPPERS:
+            return detected
+        raise ValueError("El contenido del archivo no coincide con su extensión.")
+    if declared and (declared == expected or (suffix in _TEXT_SUFFIXES and declared.startswith("text/"))):
+        return declared
+    if suffix in _TEXT_SUFFIXES:
+        return declared or "text/plain"
+    if suffix in _OFFICE_SUFFIXES and declared in _OFFICE_WRAPPERS:
+        return declared
+    raise ValueError("No se pudo verificar el tipo de archivo subido.")
+
+
 def _supabase_headers() -> dict[str, str]:
     return {
         "apikey": settings.supabase_service_role_key,

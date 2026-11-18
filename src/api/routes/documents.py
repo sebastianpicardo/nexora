@@ -80,7 +80,17 @@ async def ingest_document(
         )
 
     kind = filetype.guess(content)
-    mime_type = kind.mime if kind else (file.content_type or "application/octet-stream")
+    try:
+        mime_type = storage_service.resolve_upload_mime(
+            filename,
+            kind.mime if kind else None,
+            file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
     file_hash = hashlib.sha256(content).hexdigest()
 
     async with get_pool().connection() as conn:

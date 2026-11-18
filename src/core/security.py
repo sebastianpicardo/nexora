@@ -96,6 +96,7 @@ def create_access_token(
     org_id: UUID | str,
     role: str,
     name: str,
+    session_id: UUID | str | None = None,
 ) -> str:
     now = datetime.now(UTC)
     payload = {
@@ -109,6 +110,8 @@ def create_access_token(
         "iss": settings.app_name,
         "kid": settings.jwt_key_version,
     }
+    if session_id:
+        payload["sid"] = str(session_id)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

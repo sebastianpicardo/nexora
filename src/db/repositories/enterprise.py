@@ -494,6 +494,19 @@ async def list_notification_channels(conn: AsyncConnection, org_id: UUID | str) 
         return list(await cur.fetchall())
 
 
+async def get_notification_channel(
+    conn: AsyncConnection,
+    org_id: UUID | str,
+    channel_id: UUID | str,
+) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "SELECT * FROM notification_channels WHERE org_id = %s AND id = %s",
+            (str(org_id), str(channel_id)),
+        )
+        return await cur.fetchone()
+
+
 async def create_notification_channel(
     conn: AsyncConnection,
     *,
@@ -943,15 +956,52 @@ async def record_user_session(
     user_id: UUID | str,
     ip_address: str | None,
     user_agent: str,
-) -> None:
+) -> str:
     async with conn.cursor() as cur:
         await cur.execute(
             """
             INSERT INTO user_sessions (org_id, user_id, ip_address, user_agent)
             VALUES (%s, %s, %s, %s)
+            RETURNING id
             """,
             (str(org_id), str(user_id), ip_address, user_agent[:500]),
         )
+        row = await cur.fetchone()
+        assert row is not None
+        return str(row["id"])
+
+
+async def list_user_sessions_for_user(
+    conn: AsyncConnection,
+    *,
+    org_id: UUID | str,
+    user_id: UUID | str,
+    limit: int = 50,
+) -> list[dict]:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT *
+            FROM user_sessions
+            WHERE org_id = %s AND user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(org_id), str(user_id), max(int(limit), 1)),
+        )
+        return list(await cur.fetchall())
+
+
+async def delete_user_session(conn: AsyncConnection, session_id: UUID | str) -> bool:
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM user_sessions WHERE id = %s", (str(session_id),))
+        return cur.rowcount > 0
+
+
+async def delete_user_sessions_for_user(conn: AsyncConnection, user_id: UUID | str) -> int:
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM user_sessions WHERE user_id = %s", (str(user_id),))
+        return cur.rowcount
 
 
 async def list_user_sessions(conn: AsyncConnection, org_id: UUID | str, limit: int = 50) -> list[dict]:

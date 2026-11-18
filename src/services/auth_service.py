@@ -78,7 +78,9 @@ async def register_with_password(
     async with get_pool().connection() as conn:
         existing = await repositories.get_user_by_email(conn, email)
         if existing is not None:
-            raise ConflictError("Ya existe una cuenta con este email. Inicia sesión.")
+            raise ConflictError(
+                "No se pudo crear la cuenta. Si ya tienes una cuenta, inicia sesión o recupera tu contraseña."
+            )
         try:
             created = await repositories.create_user_with_org(
                 conn,
@@ -95,7 +97,9 @@ async def register_with_password(
             )
         except UniqueViolation as exc:
             await conn.rollback()
-            raise ConflictError("Ya existe una cuenta con este email. Inicia sesión.") from exc
+            raise ConflictError(
+                "No se pudo crear la cuenta. Si ya tienes una cuenta, inicia sesión o recupera tu contraseña."
+            ) from exc
         user = await _ensure_super_admin(conn, created)
         verify_token = await _issue_token(conn, user["id"], "email_verify", VERIFY_TOKEN_TTL)
 
@@ -133,6 +137,7 @@ async def reset_password_with_token(*, token: str, password: str) -> None:
         await repositories.consume_auth_token(conn, record["id"])
         await repositories.set_password_hash(conn, record["user_id"], hash_password(password))
         await repositories.invalidate_auth_tokens(conn, user_id=record["user_id"], token_type="password_reset")
+        await repositories.delete_user_sessions_for_user(conn, record["user_id"])
 
 
 async def verify_email_with_token(*, token: str) -> None:

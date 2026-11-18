@@ -28,11 +28,16 @@ async def get_current_user(request: Request) -> dict:
     try:
         payload = decode_access_token(token)
         user_id = UUID(payload["sub"])
+        raw_session_id = payload.get("sid")
+        session_id = UUID(raw_session_id) if raw_session_id else None
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="SesiÃ³n invÃ¡lida") from exc
 
+    if session_id is None and settings.is_production:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="SesiÃ³n invÃ¡lida")
+
     async with get_pool().connection() as conn:
-        user = await repositories.get_user_with_org(conn, user_id)
+        user = await repositories.get_user_with_org(conn, user_id, session_id=session_id)
 
     if user is None or not user["active"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no disponible")
@@ -58,8 +63,6 @@ def require_roles(*roles: str):
         if role in roles:
             return user
         if role == "owner" and "admin" in roles:
-            return user
-        if role == "admin" and "owner" in roles:
             return user
         if role == "analyst" and "user" in roles:
             return user
@@ -94,6 +97,28 @@ def org_settings(user: dict) -> dict:
     }
 
 
+def _client_ip_from_scope(scope: Scope) -> str:
+    """Obtiene la IP del cliente usando el ultimo salto de X-Forwarded-For.
+
+    El proxy de despliegue agrega la IP real al final de la cadena; usar el
+    primer valor permitia a un atacante falsificar su IP y evadir el limite.
+    """
+
+    headers = dict(scope.get("headers") or [])
+    forwarded = headers.get(b"x-forwarded-for", b"").decode("latin-1")
+    if forwarded:
+        for candidate in reversed(forwarded.split(",")):
+            candidate = candidate.strip()
+            if candidate:
+                return candidate[:64]
+    client = scope.get("client")
+    return (client[0] if client else "unknown")[:64]
+
+
+def client_ip_from_request(request: Request) -> str:
+    return _client_ip_from_scope(request.scope)
+
+
 class RateLimitMiddleware:
     """Rate limiting en memoria por IP para las rutas /api.
 
@@ -102,6 +127,7 @@ class RateLimitMiddleware:
     """
 
     EXEMPT_PREFIXES = ("/api/billing/webhook/",)
+    MAX_BUCKETS = 20_000
 
     def __init__(self, app: ASGIApp, limit: int | None = None, window_seconds: int = 60):
         self.app = app
@@ -114,18 +140,25 @@ class RateLimitMiddleware:
             return False
         return not any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES)
 
+    def _prune(self, cutoff: float) -> None:
+        if len(self._hits) < self.MAX_BUCKETS:
+            return
+        for key, values in list(self._hits.items()):
+            if not values or values[-1] <= cutoff:
+                self._hits.pop(key, None)
+        while len(self._hits) >= self.MAX_BUCKETS:
+            self._hits.pop(next(iter(self._hits)))
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not self._is_limited(str(scope.get("path", ""))):
             await self.app(scope, receive, send)
             return
 
-        client = scope.get("client")
-        headers = dict(scope.get("headers") or [])
-        forwarded = headers.get(b"x-forwarded-for", b"").decode("latin-1")
-        ip = forwarded.split(",")[0].strip() if forwarded else (client[0] if client else "unknown")
+        ip = _client_ip_from_scope(scope)
 
         now = time.monotonic()
         cutoff = now - self.window_seconds
+        self._prune(cutoff)
         bucket = self._hits.setdefault(ip, deque())
         while bucket and bucket[0] <= cutoff:
             bucket.popleft()
@@ -183,6 +216,90 @@ class SpecificRateLimiter:
 def rate_limit(scope: str, setting_name: str, window_seconds: int = 60) -> SpecificRateLimiter:
     return SpecificRateLimiter(scope, setting_name, window_seconds)
 
+
+class AuthAttemptLimiter:
+    """Rate limiting por IP+email para endpoints de autenticación sin sesión."""
+
+    def __init__(self, setting_name: str = "auth_attempt_rate_limit_per_minute", window_seconds: int = 60):
+        self.setting_name = setting_name
+        self.window_seconds = max(int(window_seconds), 1)
+        self._hits: dict[str, deque[float]] = {}
+
+    async def __call__(self, request: Request, email: str) -> None:
+        limit = max(int(getattr(settings, self.setting_name, 10) or 10), 1)
+        key = f"auth:{client_ip_from_request(request)}:{str(email or '').strip().lower()}"
+        bucket = self._hits.setdefault(key, deque())
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            retry_after = max(int(self.window_seconds - (now - bucket[0])) if bucket else self.window_seconds, 1)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiados intentos. Intenta nuevamente en unos segundos.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        bucket.append(now)
+
+
+auth_attempt_limiter = AuthAttemptLimiter()
+
+
+class OriginGuardMiddleware:
+    """Bloquea peticiones mutables con cookie de sesion desde origenes ajenos.
+
+    SameSite=Lax mitiga la mayoria de CSRF, pero esta comprobacion de Origin
+    y Sec-Fetch-Site agrega defensa en profundidad para navegadores antiguos.
+    Las peticiones sin cookie (API keys, webhooks externos) no se ven afectadas.
+    """
+
+    UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+        self.allowed_origins = {
+            origin.strip().rstrip("/").lower()
+            for origin in settings.cors_origins_list
+            if origin.strip()
+        }
+
+    @staticmethod
+    def _has_session_cookie(header_value: bytes) -> bool:
+        cookie_name = f"{settings.cookie_name}=".encode("latin-1")
+        return cookie_name in header_value
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = str(scope.get("method", "")).upper()
+        path = str(scope.get("path", ""))
+        if method not in self.UNSAFE_METHODS or not path.startswith("/api"):
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers") or [])
+        if not self._has_session_cookie(headers.get(b"cookie", b"")):
+            await self.app(scope, receive, send)
+            return
+
+        origin = headers.get(b"origin", b"").decode("latin-1").strip().rstrip("/").lower()
+        fetch_site = headers.get(b"sec-fetch-site", b"").decode("latin-1").strip().lower()
+        cross_site = fetch_site == "cross-site"
+        invalid_origin = bool(origin) and origin not in self.allowed_origins
+        if cross_site or invalid_origin:
+            response = JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"success": False, "error": "Origen no permitido para esta accion."},
+            )
+            await response(scope, receive, send)
+            return
+
+        await self.app(scope, receive, send)
+
+
 class SecurityHeadersMiddleware:
     """AÃ±ade encabezados de seguridad a todas las respuestas HTTP."""
 
@@ -203,6 +320,7 @@ class SecurityHeadersMiddleware:
                 headers["X-Content-Type-Options"] = "nosniff"
                 # PolÃ­tica de remitente
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
                 # HSTS solo en producciÃ³n (HTTPS)
                 if settings.is_production:
                     headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -220,6 +338,7 @@ class SecurityHeadersMiddleware:
                     "font-src 'self' https://www.gstatic.com; "
                     "object-src 'none'; "
                     "base-uri 'self'; "
+                    "frame-ancestors 'none'; "
                     "form-action 'self';"
                 )
             await send(message)

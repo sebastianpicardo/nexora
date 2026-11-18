@@ -6,9 +6,9 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from src.api.deps import CurrentUser
+from src.api.deps import CurrentUser, auth_attempt_limiter, client_ip_from_request
 from src.core.config import settings
-from src.core.security import cookie_max_age, create_access_token
+from src.core.security import cookie_max_age, create_access_token, decode_access_token
 from src.db import repositories
 from src.db.pool import get_pool
 from src.schemas.auth import (
@@ -77,13 +77,14 @@ def _org_out(user: dict) -> OrganizationOut:
     )
 
 
-def _set_session_cookie(response: Response, user: dict) -> None:
+def _set_session_cookie(response: Response, user: dict, session_id: str) -> None:
     token = create_access_token(
         user_id=user["id"],
         email=user["email"],
         org_id=user["org_id"],
         role=user["role"],
         name=user["name"],
+        session_id=session_id,
     )
     response.set_cookie(
         key=settings.cookie_name,
@@ -97,36 +98,37 @@ def _set_session_cookie(response: Response, user: dict) -> None:
 
 
 def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or None
-    return request.client.host if request.client else None
+    value = client_ip_from_request(request)
+    return value if value and value != "unknown" else None
 
 
-async def _record_session(user: dict, request: Request) -> None:
+async def _record_session(user: dict, request: Request) -> str:
     try:
         async with get_pool().connection() as conn:
-            # Límite de sesiones concurrentes por usuario (M3)
             max_sessions = settings.max_concurrent_sessions
-            existing = await repositories.list_user_sessions(conn, user["org_id"], limit=max_sessions + 1)
-            user_sessions = [s for s in existing if s.get("user_id") == user["id"]]
-            if len(user_sessions) >= max_sessions:
-                # Invalidar la sesión más antigua
-                oldest = user_sessions[-1]
-                async with conn.cursor() as cur:
-                    await cur.execute(
-                        "DELETE FROM user_sessions WHERE id = %s",
-                        (str(oldest["id"]),),
-                    )
-            await repositories.record_user_session(
+            sessions = await repositories.list_user_sessions_for_user(
+                conn,
+                org_id=user["org_id"],
+                user_id=user["id"],
+                limit=max_sessions,
+            )
+            if len(sessions) >= max_sessions:
+                await repositories.delete_user_session(conn, sessions[-1]["id"])
+            return await repositories.record_user_session(
                 conn,
                 org_id=user["org_id"],
                 user_id=user["id"],
                 ip_address=_client_ip(request),
                 user_agent=request.headers.get("user-agent", ""),
             )
-    except Exception:
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.exception("No se pudo registrar la sesión del usuario %s", user.get("id"))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo iniciar la sesión. Intenta nuevamente.",
+        ) from exc
 
 
 def _sanitize_metadata(metadata: dict | None) -> dict | None:
@@ -183,6 +185,7 @@ async def register(
     request: Request,
     response: Response,
 ) -> MeResponse:
+    await auth_attempt_limiter(request, payload.email)
     await verify_recaptcha(
         payload.recaptcha_token,
         remote_ip=_client_ip(request),
@@ -194,9 +197,9 @@ async def register(
         name=payload.name,
         organization_name=payload.organization_name,
     )
-    _set_session_cookie(response, user)
+    session_id = await _record_session(user, request)
+    _set_session_cookie(response, user, session_id)
     await _audit(user, "auth.register", request)
-    await _record_session(user, request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -206,15 +209,16 @@ async def login(
     request: Request,
     response: Response,
 ) -> MeResponse:
+    await auth_attempt_limiter(request, payload.email)
     await verify_recaptcha(
         payload.recaptcha_token,
         remote_ip=_client_ip(request),
         expected_action="login",
     )
     user = await authenticate_with_password(email=payload.email, password=payload.password)
-    _set_session_cookie(response, user)
+    session_id = await _record_session(user, request)
+    _set_session_cookie(response, user, session_id)
     await _audit(user, "auth.login", request)
-    await _record_session(user, request)
     return MeResponse(success=True, user=_user_out(user), organization=_org_out(user))
 
 
@@ -241,9 +245,9 @@ async def google_callback(request: Request):
         return RedirectResponse(url=f"{settings.frontend_origin}/?auth=error", status_code=302)
 
     response = RedirectResponse(url=f"{settings.frontend_origin}/?auth=ok", status_code=302)
-    _set_session_cookie(response, user)
+    session_id = await _record_session(user, request)
+    _set_session_cookie(response, user, session_id)
     await _audit(user, "auth.google", request)
-    await _record_session(user, request)
     return response
 
 
@@ -253,7 +257,17 @@ async def me(user: CurrentUser) -> MeResponse:
 
 
 @router.post("/logout")
-async def logout():
+async def logout(request: Request):
+    token = request.cookies.get(settings.cookie_name)
+    if token:
+        try:
+            payload = decode_access_token(token)
+            session_id = payload.get("sid")
+            if session_id:
+                async with get_pool().connection() as conn:
+                    await repositories.delete_user_session(conn, session_id)
+        except Exception:
+            logger.debug("No se pudo revocar la sesión al cerrar sesión", exc_info=True)
     response = JSONResponse({"success": True})
     response.delete_cookie(
         key=settings.cookie_name,
@@ -266,6 +280,7 @@ async def logout():
 
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request) -> dict:
+    await auth_attempt_limiter(request, payload.email)
     await verify_recaptcha(
         payload.recaptcha_token,
         remote_ip=_client_ip(request),
@@ -288,6 +303,10 @@ async def verify_email(payload: VerifyEmailRequest) -> dict:
 
 
 @router.post("/resend-verification")
-async def resend_verification_email(payload: ResendVerificationRequest) -> dict:
+async def resend_verification_email(
+    payload: ResendVerificationRequest,
+    request: Request,
+) -> dict:
+    await auth_attempt_limiter(request, payload.email)
     await resend_verification(email=payload.email)
     return {"success": True, "message": "Si la cuenta existe y no está verificada, recibirás un correo."}

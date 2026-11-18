@@ -7,6 +7,7 @@ import httpx
 
 from src.core.config import settings
 from src.core.logging import get_logger
+from src.core.url_safety import ensure_safe_outbound_url
 from src.db import repositories
 from src.db.pool import get_pool
 from src.services.email_service import send_email
@@ -55,10 +56,16 @@ async def _deliver(
 
     if channel_type in {"slack", "webhook"}:
         try:
-            async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
-                response = await client.post(target, json={"text": text, "alerts": payload})
+            safe_target = await ensure_safe_outbound_url(target)
+            async with httpx.AsyncClient(
+                timeout=settings.integration_timeout_seconds,
+                follow_redirects=False,
+            ) as client:
+                response = await client.post(safe_target, json={"text": text, "alerts": payload})
                 response.raise_for_status()
             return "sent", None
+        except ValueError:
+            return "failed", "Destino no permitido"
         except Exception as exc:
             logger.warning("No se pudo entregar alerta a %s: %s", target, exc)
             return "failed", str(exc)[:500]
@@ -193,10 +200,17 @@ async def send_slack_notification(
     text += "\nIngresa a NEXORA para revisar el detalle."
 
     try:
-        async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
-            response = await client.post(channel, json={"text": text})
+        safe_channel = await ensure_safe_outbound_url(channel)
+        async with httpx.AsyncClient(
+            timeout=settings.integration_timeout_seconds,
+            follow_redirects=False,
+        ) as client:
+            response = await client.post(safe_channel, json={"text": text})
             response.raise_for_status()
             return True
+    except ValueError:
+        logger.warning("Destino Slack no permitido para la organizacion %s", org_id)
+        return False
     except Exception as exc:
         logger.warning("No se pudo enviar alerta a Slack %s: %s", channel, exc)
         return False
@@ -226,10 +240,17 @@ async def send_webhook_notification(
         "alert": alert,
     }
     try:
-        async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
-            response = await client.post(webhook_url, json=payload)
+        safe_webhook_url = await ensure_safe_outbound_url(webhook_url)
+        async with httpx.AsyncClient(
+            timeout=settings.integration_timeout_seconds,
+            follow_redirects=False,
+        ) as client:
+            response = await client.post(safe_webhook_url, json=payload)
             response.raise_for_status()
             return True
+    except ValueError:
+        logger.warning("Destino webhook no permitido para la organizacion %s", org_id)
+        return False
     except Exception as exc:
         logger.warning("No se pudo enviar webhook de alerta a %s: %s", webhook_url, exc)
         return False

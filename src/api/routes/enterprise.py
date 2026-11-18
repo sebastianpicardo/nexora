@@ -7,6 +7,7 @@ import secrets
 from datetime import date
 from decimal import Decimal
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import httpx
@@ -17,7 +18,8 @@ from psycopg.errors import UniqueViolation
 from src.api.deps import CurrentUser, require_roles
 from src.core.config import settings
 from src.core.logging import get_logger
-from src.core.secrets import decrypt_secret
+from src.core.secrets import decrypt_secret, encrypt_secret
+from src.core.url_safety import ensure_safe_outbound_url
 from src.db import repositories
 from src.db.pool import get_pool
 from src.schemas.enterprise import (
@@ -79,11 +81,128 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _mask_secret(value: str | None) -> str:
+    """Enmascara un secreto (token/API key) dejando solo los últimos 4 caracteres."""
+    if not value:
+        return ""
+    try:
+        decrypted = decrypt_secret(value)
+    except ValueError:
+        decrypted = value
+    if len(decrypted) <= 4:
+        return "•" * len(decrypted)
+    return f"{'•' * (len(decrypted) - 4)}{decrypted[-4:]}"
+
+
+def _redact_config(config: dict | None) -> dict:
+    if not isinstance(config, dict):
+        return {}
+    safe: dict = {}
+    for key, value in config.items():
+        lowered = key.lower()
+        if any(token in lowered for token in ("token", "secret", "key", "password", "api_key")):
+            safe[key] = _mask_secret(str(value)) if value else ""
+        elif isinstance(value, dict):
+            safe[key] = _redact_config(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+def _redact_target(channel: dict) -> dict:
+    safe = dict(channel)
+    target = str(channel.get("target") or "")
+    if channel.get("channel") in {"slack", "webhook"} and target:
+        parsed = urlsplit(target)
+        safe["target"] = f"{parsed.scheme or 'https'}://{parsed.netloc or '***'}/••••••"
+    return safe
+
+
+def _decrypt_config(config: dict | None) -> dict:
+    if not isinstance(config, dict):
+        return {}
+    safe: dict = {}
+    for key, value in config.items():
+        lowered = key.lower()
+        if any(marker in lowered for marker in _SENSITIVE_CONFIG_KEYS):
+            try:
+                safe[key] = decrypt_secret(str(value)) if value else ""
+            except ValueError:
+                safe[key] = ""
+        elif isinstance(value, dict):
+            safe[key] = _decrypt_config(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+def _decrypt_secret(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return decrypt_secret(value)
+    except ValueError:
+        return ""
+
+
+def _decrypt_config(config: dict | None) -> dict:
+    if not isinstance(config, dict):
+        return {}
+    safe: dict = {}
+    for key, value in config.items():
+        lowered = key.lower()
+        if any(marker in lowered for marker in _SENSITIVE_CONFIG_KEYS):
+            try:
+                safe[key] = decrypt_secret(str(value)) if value else ""
+            except ValueError:
+                safe[key] = ""
+        elif isinstance(value, dict):
+            safe[key] = _decrypt_config(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+def _encrypt_config(config: dict | None) -> dict:
+    if not isinstance(config, dict):
+        return {}
+    safe: dict = {}
+    for key, value in config.items():
+        lowered = key.lower()
+        if any(marker in lowered for marker in _SENSITIVE_CONFIG_KEYS):
+            safe[key] = encrypt_secret(str(value)) if value else ""
+        elif isinstance(value, dict):
+            safe[key] = _encrypt_config(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+_SENSITIVE_CONFIG_KEYS = ("token", "secret", "key", "password", "api_key")
+
+
 async def _require_org(conn, org_id) -> dict:
     org = await repositories.get_organization(conn, org_id)
     if org is None:
-        raise HTTPException(status_code=404, detail="Organización no encontrada")
+        raise HTTPException(status_code=404, detail="OrganizaciÃ³n no encontrada")
     return org
+
+
+async def _safe_outbound_url(url: str, *, field: str = "URL") -> str:
+    try:
+        return await ensure_safe_outbound_url(url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field} no permitida. Usa una URL publica http(s).",
+        ) from exc
+
+
+async def _validate_integration_config(config: dict) -> None:
+    for key in ("health_url", "endpoint", "url"):
+        value = config.get(key)
+        if isinstance(value, str) and value.strip():
+            await _safe_outbound_url(value, field=f"La URL '{key}'")
 
 
 @router.get("/overview")
@@ -329,9 +448,10 @@ async def decide_approval(
 
 
 @router.get("/notifications/channels")
-async def list_notification_channels(user: CurrentUser):
+async def list_notification_channels(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
-        return {"items": await repositories.list_notification_channels(conn, user["org_id"])}
+        rows = await repositories.list_notification_channels(conn, user["org_id"])
+    return {"items": [_redact_target(row) for row in rows]}
 
 
 @router.post("/notifications/channels", status_code=status.HTTP_201_CREATED)
@@ -339,6 +459,8 @@ async def create_notification_channel(
     payload: NotificationChannelCreate,
     user: dict = Depends(require_roles("owner", "admin")),
 ):
+    if payload.channel in {"slack", "webhook"}:
+        await _safe_outbound_url(payload.target, field="El destino del canal")
     async with get_pool().connection() as conn:
         row = await repositories.create_notification_channel(
             conn,
@@ -357,12 +479,24 @@ async def update_notification_channel(
     payload: NotificationChannelUpdate,
     user: dict = Depends(require_roles("owner", "admin")),
 ):
+    fields = payload.model_dump(exclude_unset=True)
+    effective_channel = fields.get("channel")
+    effective_target = fields.get("target")
     async with get_pool().connection() as conn:
+        current = await repositories.get_notification_channel(conn, user["org_id"], channel_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Canal no encontrado")
+        if effective_channel is None:
+            effective_channel = current.get("channel")
+        if effective_target is None:
+            effective_target = current.get("target")
+        if effective_channel in {"slack", "webhook"} and effective_target:
+            await _safe_outbound_url(str(effective_target), field="El destino del canal")
         row = await repositories.update_notification_channel(
             conn,
             org_id=user["org_id"],
             channel_id=channel_id,
-            fields=payload.model_dump(exclude_unset=True),
+            fields=fields,
         )
     if row is None:
         raise HTTPException(status_code=404, detail="Canal no encontrado")
@@ -416,15 +550,19 @@ async def test_notification_channel(
 
 
 @router.get("/notifications/deliveries")
-async def notification_deliveries(user: CurrentUser, limit: int = Query(default=50, ge=1, le=200)):
+async def notification_deliveries(
+    user: dict = Depends(require_roles("owner", "admin")),
+    limit: int = Query(default=50, ge=1, le=200),
+):
     async with get_pool().connection() as conn:
         return {"items": await repositories.list_notification_deliveries(conn, user["org_id"], limit=limit)}
 
 
 @router.get("/integrations")
-async def list_integrations(user: CurrentUser):
+async def list_integrations(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
-        return {"items": await repositories.list_integrations(conn, user["org_id"])}
+        rows = await repositories.list_integrations(conn, user["org_id"])
+    return {"items": [{**row, "config": _redact_config(row.get("config"))} for row in rows]}
 
 
 @router.post("/integrations", status_code=status.HTTP_201_CREATED)
@@ -432,16 +570,17 @@ async def create_integration(
     payload: IntegrationCreate,
     user: dict = Depends(require_roles("owner", "admin")),
 ):
+    await _validate_integration_config(payload.config)
     async with get_pool().connection() as conn:
         row = await repositories.create_integration(
             conn,
             org_id=user["org_id"],
             provider=payload.provider,
             name=payload.name,
-            config=payload.config,
+            config=_encrypt_config(payload.config),
             active=payload.active,
         )
-    return row
+    return {**row, "config": _redact_config(row.get("config"))}
 
 
 @router.patch("/integrations/{integration_id}")
@@ -450,16 +589,20 @@ async def update_integration(
     payload: IntegrationUpdate,
     user: dict = Depends(require_roles("owner", "admin")),
 ):
+    fields = payload.model_dump(exclude_unset=True)
+    if isinstance(fields.get("config"), dict):
+        await _validate_integration_config(fields["config"])
+        fields["config"] = _encrypt_config(fields["config"])
     async with get_pool().connection() as conn:
         row = await repositories.update_integration(
             conn,
             org_id=user["org_id"],
             integration_id=integration_id,
-            fields=payload.model_dump(exclude_unset=True),
+            fields=fields,
         )
     if row is None:
         raise HTTPException(status_code=404, detail="Integración no encontrada")
-    return row
+    return {**row, "config": _redact_config(row.get("config"))}
 
 
 @router.post("/integrations/{integration_id}/sync")
@@ -472,7 +615,7 @@ async def sync_integration(
         integration = next((row for row in rows if str(row["id"]) == str(integration_id)), None)
         if integration is None:
             raise HTTPException(status_code=404, detail="Integración no encontrada")
-        config = integration.get("config") or {}
+        config = _decrypt_config(integration.get("config") or {})
         url = config.get("health_url") or config.get("endpoint")
         if not url:
             result = await repositories.touch_integration_sync(
@@ -482,12 +625,16 @@ async def sync_integration(
                 status="Configurada, sin endpoint de prueba",
             )
             return {"success": True, "integration": result, "detail": "Integración guardada."}
+        safe_url = await _safe_outbound_url(str(url), field="La URL de la integraciÃ³n")
         headers = {}
         if config.get("token"):
             headers["Authorization"] = f"Bearer {config['token']}"
         try:
-            async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
-                response = await client.get(str(url), headers=headers)
+            async with httpx.AsyncClient(
+                timeout=settings.integration_timeout_seconds,
+                follow_redirects=False,
+            ) as client:
+                response = await client.get(safe_url, headers=headers)
                 response.raise_for_status()
             sync_status = f"Conexión OK ({response.status_code})"
             success = True
@@ -525,7 +672,7 @@ async def delete_integration(
 
 
 @router.get("/api-keys")
-async def list_api_keys(user: CurrentUser):
+async def list_api_keys(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
         return {"items": await repositories.list_api_keys(conn, user["org_id"])}
 
@@ -571,7 +718,7 @@ async def revoke_api_key(
 
 
 @router.get("/webhooks")
-async def list_webhooks(user: CurrentUser):
+async def list_webhooks(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
         return {"items": await repositories.list_webhooks(conn, user["org_id"])}
 
@@ -581,6 +728,7 @@ async def create_webhook(
     payload: WebhookCreate,
     user: dict = Depends(require_roles("owner", "admin")),
 ):
+    await _safe_outbound_url(payload.url, field="La URL del webhook")
     secret = payload.secret or secrets.token_hex(24)
     async with get_pool().connection() as conn:
         row = await repositories.create_webhook(
@@ -602,6 +750,7 @@ async def test_webhook(
         webhook = await repositories.get_webhook(conn, user["org_id"], webhook_id)
     if webhook is None:
         raise HTTPException(status_code=404, detail="Webhook no encontrado")
+    safe_url = await _safe_outbound_url(str(webhook["url"]), field="La URL del webhook")
     payload = {"event": "webhook.test", "organization_id": str(user["org_id"]), "sent_at": date.today().isoformat()}
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     try:
@@ -610,9 +759,12 @@ async def test_webhook(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     signature = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     try:
-        async with httpx.AsyncClient(timeout=settings.integration_timeout_seconds) as client:
+        async with httpx.AsyncClient(
+            timeout=settings.integration_timeout_seconds,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(
-                webhook["url"],
+                safe_url,
                 content=body,
                 headers={
                     "Content-Type": "application/json",
@@ -638,7 +790,7 @@ async def delete_webhook(
 
 
 @router.get("/inbound-email/tokens")
-async def list_inbound_tokens(user: CurrentUser):
+async def list_inbound_tokens(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
         return {"items": await repositories.list_inbound_tokens(conn, user["org_id"])}
 
@@ -876,7 +1028,7 @@ async def seed_demo_data(
 
 
 @router.get("/security")
-async def enterprise_security(user: CurrentUser):
+async def enterprise_security(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
         org = await _require_org(conn, user["org_id"])
         sessions = await repositories.list_user_sessions(conn, user["org_id"], limit=25)
@@ -1010,7 +1162,7 @@ async def purge_ai_data(
 
 
 @router.get("/sessions")
-async def list_sessions(user: CurrentUser):
+async def list_sessions(user: dict = Depends(require_roles("owner", "admin"))):
     async with get_pool().connection() as conn:
         return {"items": await repositories.list_user_sessions(conn, user["org_id"], limit=100)}
 
@@ -1047,7 +1199,7 @@ async def unsubscribe_push(payload: PushUnsubscribeIn, user: CurrentUser):
 
 
 @router.post("/push/test")
-async def test_push(user: CurrentUser):
+async def test_push(user: dict = Depends(require_roles("owner", "admin"))):
     if not (settings.vapid_public_key and settings.vapid_private_key):
         return {"configured": False, "sent": 0, "detail": "VAPID no configurado."}
     try:
@@ -1104,7 +1256,14 @@ async def receive_inbound_email(
     import filetype
 
     kind = filetype.guess(content)
-    mime_type = kind.mime if kind else (file.content_type or "application/octet-stream")
+    try:
+        mime_type = storage_service.resolve_upload_mime(
+            filename,
+            kind.mime if kind else None,
+            file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
     file_hash = hashlib.sha256(content).hexdigest()
     org_id = inbound["org_id"]
 

@@ -43,9 +43,27 @@ def _slugify(value: str) -> str:
     return slug or "empresa"
 
 
-async def get_user_with_org(conn: AsyncConnection, user_id: UUID | str) -> dict | None:
+async def get_user_with_org(
+    conn: AsyncConnection,
+    user_id: UUID | str,
+    *,
+    session_id: UUID | str | None = None,
+) -> dict | None:
     async with conn.cursor() as cur:
-        await cur.execute(f"{USER_SELECT} WHERE u.id = %s", (str(user_id),))
+        if session_id is None:
+            await cur.execute(f"{USER_SELECT} WHERE u.id = %s", (str(user_id),))
+        else:
+            await cur.execute(
+                f"""
+                {USER_SELECT}
+                WHERE u.id = %s
+                  AND EXISTS (
+                      SELECT 1 FROM user_sessions s
+                      WHERE s.id = %s AND s.user_id = u.id AND s.org_id = u.org_id
+                  )
+                """,
+                (str(user_id), str(session_id)),
+            )
         return await cur.fetchone()
 
 

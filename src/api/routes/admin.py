@@ -10,6 +10,8 @@ from src.schemas.admin import AdminOrganizationOut, AdminOverview, AdminStats
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+VALID_ROLES = {"owner", "admin", "analyst", "user", "auditor", "viewer", "super_admin"}
+
 
 @router.get("/overview", response_model=AdminOverview)
 async def overview(user: dict = Depends(require_super_admin)):
@@ -64,6 +66,12 @@ async def update_user_global(
     active = payload.get("active")
     if role is None and active is None:
         raise HTTPException(status_code=400, detail="Debe enviar role o active")
+    if role is not None and (not isinstance(role, str) or role not in VALID_ROLES):
+        raise HTTPException(status_code=422, detail="Rol no válido")
+    if active is not None and not isinstance(active, bool):
+        raise HTTPException(status_code=422, detail="El campo active debe ser booleano")
+    if str(user_id) == str(user["id"]) and active is False:
+        raise HTTPException(status_code=409, detail="No puedes desactivar tu propia cuenta")
     async with get_pool().connection() as conn:
         updated = await repositories.update_user_global(conn, user_id, role=role, active=active)
     if not updated:
@@ -76,6 +84,8 @@ async def delete_user_global(
     user_id: str = Path(...),
     user: dict = Depends(require_super_admin),
 ):
+    if str(user_id) == str(user["id"]):
+        raise HTTPException(status_code=409, detail="No puedes eliminar tu propia cuenta")
     async with get_pool().connection() as conn:
         deleted = await repositories.delete_user_global(conn, user_id)
     if not deleted:

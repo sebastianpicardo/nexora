@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.api.deps import RateLimitMiddleware, SecurityHeadersMiddleware
+from src.api.deps import OriginGuardMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from src.api.router import api_router
 from src.api.routes import health
 from src.core.config import PROJECT_ROOT, settings
@@ -154,6 +154,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(OriginGuardMiddleware)
 
     @app.exception_handler(NexoraError)
     async def nexora_error_handler(_request: Request, exc: NexoraError):

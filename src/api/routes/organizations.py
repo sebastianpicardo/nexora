@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.api.deps import CurrentUser, require_roles
+from src.api.deps import CurrentUser, rate_limit, require_roles
 from src.db import repositories
 from src.db.pool import get_pool
 from src.schemas.auth import OrganizationOut, OrganizationUpdate
@@ -65,7 +65,10 @@ async def list_audit_events(
 
 
 @router.get("/current/export")
-async def export_organization_data(user: CurrentUser):
+async def export_organization_data(
+    user: dict = Depends(require_roles("owner", "admin", "analyst")),
+    _: None = Depends(rate_limit("org_export", "export_rate_limit_per_minute")),
+):
     async with get_pool().connection() as conn:
         org = await repositories.get_organization(conn, user["org_id"])
         if org is None:
@@ -73,14 +76,14 @@ async def export_organization_data(user: CurrentUser):
         users = await repositories.list_users(conn, user["org_id"])
         suppliers = await repositories.list_suppliers(conn, user["org_id"])
         documents = await repositories.list_documents(
-            conn, user["org_id"], page=1, page_size=5000
+            conn, user["org_id"], page=1, page_size=1000
         )
-        items = await repositories.list_items(conn, user["org_id"], page=1, page_size=5000)
+        items = await repositories.list_items(conn, user["org_id"], page=1, page_size=1000)
         exceptions = await repositories.list_exceptions(
-            conn, user["org_id"], page=1, page_size=5000
+            conn, user["org_id"], page=1, page_size=1000
         )
         audit = await repositories.list_audit_events(
-            conn, user["org_id"], page=1, page_size=5000
+            conn, user["org_id"], page=1, page_size=1000
         )
     return {
         "organization": org,
