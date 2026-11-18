@@ -1,3 +1,5 @@
+import { motion } from "framer-motion";
+
 export default function PageTabs({ tabs, active, onChange, label = "Secciones" }) {
   if (!tabs?.length) return null;
 
@@ -15,8 +17,15 @@ export default function PageTabs({ tabs, active, onChange, label = "Secciones" }
             className={`page-tab ${selected ? "active" : ""}`}
             onClick={() => onChange?.(tab.id)}
           >
+            {selected ? (
+              <motion.span
+                className="page-tab-pill"
+                layoutId={`page-tab-pill-${label}`}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              />
+            ) : null}
             {Icon ? <Icon /> : null}
-            <span>{tab.label}</span>
+            <span className="page-tab-label">{tab.label}</span>
             {tab.badge ? <span className="page-tab-badge">{tab.badge}</span> : null}
           </button>
         );

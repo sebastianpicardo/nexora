@@ -43,7 +43,7 @@ export default function ActionEmptyState({
       <p>{description}</p>
       <div className="empty-state-actions">
         {onUpload ? (
-          <button type="button" className="button primary" onClick={onUpload}>
+          <button type="button" className="button primary cta-gradient" onClick={onUpload}>
             <UploadIcon /> {uploadLabel}
           </button>
         ) : null}

@@ -98,6 +98,7 @@ export default function DashboardPage({ onNavigate, onUpload }) {
   const totalSpend = Number(primarySpend?.amount || 0);
   const totalSavings = Number(summary?.total_savings || 0);
   const savingsRate = totalSpend > 0 ? Math.round((totalSavings / totalSpend) * 100) : 0;
+  const spendSeries = (summary?.monthly_purchases || []).map((row) => Number(row.spend || 0));
 
   return (
     <div className="page-stack">
@@ -156,6 +157,7 @@ export default function DashboardPage({ onNavigate, onUpload }) {
               value={formatMoney(totalSpend, activeCurrency)}
               detail={`${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`}
               icon={<DocumentsIcon />}
+              sparkline={spendSeries}
             />
             <StatCard
               label="Ahorro estimado"
@@ -163,6 +165,8 @@ export default function DashboardPage({ onNavigate, onUpload }) {
               detail={`${savingsRate}% de la compra auditada`}
               tone="ok"
               icon={<SparkIcon />}
+              trend={savingsRate}
+              trendHint="vs. gasto"
             />
             <StatCard
               label="Excepciones pendientes"

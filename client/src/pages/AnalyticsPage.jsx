@@ -109,6 +109,8 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
           detail={`${formatNumber(summary.price_change_pct || 0, 2)}% vs inicio del período`}
           tone={(summary.price_change_pct || 0) > 0 ? "warning" : "ok"}
           icon={<PricesIcon />}
+          trend={summary.price_change_pct || 0}
+          trendHint="var. período"
         />
         <StatCard
           label="Productos monitoreados"

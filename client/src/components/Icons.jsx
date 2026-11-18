@@ -347,3 +347,29 @@ export function HistoryIcon() {
     </svg>
   );
 }
+
+export function TrendUpIcon() {
+  return (
+    <svg {...base}>
+      <path d="M3 17l6-6 4 4 7-8" />
+      <path d="M15 7h5v5" />
+    </svg>
+  );
+}
+
+export function TrendDownIcon() {
+  return (
+    <svg {...base}>
+      <path d="M3 7l6 6 4-4 7 8" />
+      <path d="M15 17h5v-5" />
+    </svg>
+  );
+}
+
+export function ArrowUpRightIcon() {
+  return (
+    <svg {...base}>
+      <path d="M7 17L17 7M8 7h9v9" />
+    </svg>
+  );
+}
