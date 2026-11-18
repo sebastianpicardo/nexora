@@ -206,16 +206,21 @@ class SecurityHeadersMiddleware:
                 # HSTS solo en producciÃ³n (HTTPS)
                 if settings.is_production:
                     headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-                # Content Security Policy bÃ¡sica
+                # Content Security Policy con soporte para Google reCAPTCHA v3.
                 headers["Content-Security-Policy"] = (
                     "default-src 'self'; "
-                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                    "style-src 'self' 'unsafe-inline'; "
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+                    "https://www.google.com https://www.gstatic.com; "
+                    "script-src-elem 'self' 'unsafe-inline' "
+                    "https://www.google.com https://www.gstatic.com; "
+                    "style-src 'self' 'unsafe-inline' https://www.gstatic.com; "
                     "img-src 'self' data: https:; "
-                    "connect-src 'self' https:; "
-                    "font-src 'self'; "
+                    "connect-src 'self' https: https://www.google.com https://www.gstatic.com; "
+                    "frame-src 'self' https://www.google.com https://www.gstatic.com; "
+                    "font-src 'self' https://www.gstatic.com; "
                     "object-src 'none'; "
-                    "base-uri 'self';"
+                    "base-uri 'self'; "
+                    "form-action 'self';"
                 )
             await send(message)
 
