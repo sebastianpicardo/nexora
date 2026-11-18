@@ -2,7 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatMoney, formatNumber } from "../lib/format";
-import { CheckIcon, PlusIcon, TrashIcon, EditIcon, SearchIcon } from "../components/Icons";
+import {
+  CheckIcon,
+  DocumentsIcon,
+  EditIcon,
+  PlusIcon,
+  PricesIcon,
+  SearchIcon,
+  SparkIcon,
+  TrashIcon,
+} from "../components/Icons";
 
 export default function PriceCatalogPage() {
   const { canManage } = useAuth();
@@ -24,6 +33,8 @@ export default function PriceCatalogPage() {
     active: true,
   });
   const [pending, setPending] = useState(false);
+  const [importing, setImporting] = useState("");
+  const [success, setSuccess] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
 
   const load = useCallback(async () => {
@@ -47,7 +58,26 @@ export default function PriceCatalogPage() {
     load();
   }, [load]);
 
+  async function importCatalog(source) {
+    setImporting(source);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await api("/api/price-catalog/import", {
+        method: "POST",
+        body: JSON.stringify({ source }),
+      });
+      setSuccess(result.message || "Catálogo actualizado.");
+      await load();
+    } catch (err) {
+      setError(err.message || "No se pudo importar al catálogo.");
+    } finally {
+      setImporting("");
+    }
+  }
+
   function openCreate() {
+    setSuccess("");
     setEditing(null);
     setForm({
       sku: "", name: "", description: "", unit: "unidad",
@@ -141,16 +171,17 @@ export default function PriceCatalogPage() {
       (item.category || "").toLowerCase().includes(term)
     );
   });
+  const isSearching = search.trim().length > 0;
 
   return (
     <div className="page-stack">
       <section className="page-intro">
         <div>
           <div className="eyebrow">Catálogo de precios</div>
-          <h2>Catálogo propio</h2>
+          <h2>Tu catálogo, listo para comparar</h2>
           <p>
-            Gestiona tu propio catálogo de productos con precio de costo, precio de venta y margen
-            de ganancia calculado automáticamente. Úsalo como referencia al auditor compras.
+            Centraliza costos y precios de venta para ver tus márgenes y comparar cada factura
+            contra tu propia referencia.
           </p>
         </div>
         {canManage ? (
@@ -161,17 +192,65 @@ export default function PriceCatalogPage() {
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+      {success ? <div className="alert success">{success}</div> : null}
 
       {loading ? (
         <div className="empty-state">Cargando catálogo…</div>
+      ) : filteredItems.length === 0 && isSearching ? (
+        <div className="empty-state-card">
+          <div className="empty-state-icon">
+            <SearchIcon />
+          </div>
+          <h3>No encontramos productos para “{search}”</h3>
+          <p>Prueba con otro SKU, nombre o categoría.</p>
+          <button type="button" className="button ghost" onClick={() => setSearch("")}>
+            Limpiar búsqueda
+          </button>
+        </div>
       ) : filteredItems.length === 0 ? (
-        <div className="empty-state">
-          <p>No hay productos en el catálogo.</p>
+        <div className="empty-state-card catalog-empty">
+          <div className="empty-state-icon">
+            <PricesIcon />
+          </div>
+          <h3>Tu catálogo está listo para empezar</h3>
+          <p>
+            Importa el último costo de tus facturas aprobadas o carga productos de prueba para
+            ver márgenes al instante.
+          </p>
           {canManage ? (
-            <button type="button" className="button primary" onClick={openCreate}>
-              <PlusIcon /> Agregar el primero
-            </button>
-          ) : null}
+            <div className="empty-state-actions">
+              <button
+                type="button"
+                className="button primary"
+                disabled={Boolean(importing)}
+                onClick={() => importCatalog("approved")}
+              >
+                <DocumentsIcon />
+                {importing === "approved" ? "Importando..." : "Importar desde facturas aprobadas"}
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                disabled={Boolean(importing)}
+                onClick={() => importCatalog("demo")}
+              >
+                <SparkIcon />
+                {importing === "demo" ? "Cargando..." : "Cargar productos de prueba"}
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                disabled={Boolean(importing)}
+                onClick={openCreate}
+              >
+                <PlusIcon /> Agregar manualmente
+              </button>
+            </div>
+          ) : (
+            <p className="muted small">
+              Pide a un administrador que importe facturas aprobadas o cargue productos de prueba.
+            </p>
+          )}
         </div>
       ) : (
         <div className="card">
@@ -382,7 +461,7 @@ export default function PriceCatalogPage() {
                   <input
                     type="checkbox"
                     checked={form.active}
-                    onChange={(event) => setForm((f) => ({ ...f, active: event.target.value }))}
+                    onChange={(event) => setForm((f) => ({ ...f, active: event.target.checked }))}
                     disabled={pending}
                   />
                   <span>Producto activo</span>

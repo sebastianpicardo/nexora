@@ -22,6 +22,7 @@ const PROVIDERS = [
     icon: SearchIcon,
     description: "Compara precios de referencia del mercado público y busca proveedores para tus compras de ferretería.",
     color: "#10b981",
+    maturity: "operativo",
     actions: [
       { id: "search_items", label: "Buscar precios", primary: true, icon: SearchIcon },
       { id: "search_suppliers", label: "Buscar proveedores", icon: SuppliersIcon },
@@ -34,6 +35,7 @@ const PROVIDERS = [
     icon: CheckIcon,
     description: "Valida el formato RUT de tus proveedores y prepara documentos para conciliación tributaria.",
     color: "#059669",
+    maturity: "operativo",
     actions: [
       { id: "validate_rut", label: "Validar RUT", primary: true, icon: CheckIcon },
       { id: "fetch_invoices", label: "Facturas electrónicas", icon: DocumentsIcon },
@@ -46,6 +48,7 @@ const PROVIDERS = [
     icon: ArrowRightIcon,
     description: "Exporta proveedores, órdenes de compra y facturas en archivos listos para importar a cualquier sistema.",
     color: "#0f766e",
+    maturity: "a_medida",
     actions: [
       { id: "sync_suppliers", label: "Exportar proveedores", primary: true, icon: SuppliersIcon },
       { id: "send_approval", label: "Enviar aprobación", icon: ArrowRightIcon },
@@ -58,6 +61,7 @@ const PROVIDERS = [
     icon: BellIcon,
     description: "Prepara avisos de compras pendientes y aprobaciones para compartir con tu equipo.",
     color: "#3b82f6",
+    maturity: "proximamente",
     actions: [
       { id: "notify", label: "Notificar al equipo", primary: true, icon: BellIcon },
       { id: "approve_from_slack", label: "Aprobar compra", icon: CheckIcon },
@@ -69,6 +73,7 @@ const PROVIDERS = [
     icon: ArrowRightIcon,
     description: "Genera payloads para conectar NEXORA con otros sistemas de tu empresa.",
     color: "#6366f1",
+    maturity: "a_medida",
     actions: [
       { id: "send_event", label: "Enviar evento", primary: true, icon: ArrowRightIcon },
     ],
@@ -79,12 +84,19 @@ const PROVIDERS = [
     icon: LockIcon,
     description: "Guarda documentos y accede con tu cuenta de Google de la empresa.",
     color: "#7c3aed",
+    maturity: "proximamente",
     actions: [
       { id: "save_drive", label: "Guardar en Drive", primary: true, icon: DocumentsIcon },
       { id: "sso_login", label: "Iniciar sesión con Google", icon: LockIcon },
     ],
   },
 ];
+
+const MATURITY_LABELS = {
+  operativo: "Operativo",
+  a_medida: "A medida",
+  proximamente: "Próximamente",
+};
 
 const HISTORY_STORAGE_PREFIX = "nexora.search_history";
 const HISTORY_LIMIT = 20;
@@ -238,6 +250,8 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
     (action) => !(provider.id === "sii" && action.id === "validate_rut")
   );
   const validateRutAction = provider.actions.find((action) => action.id === "validate_rut");
+  const maturity =
+    status?.available === false ? "proximamente" : provider.maturity || "operativo";
 
   return (
     <div className="integration-card">
@@ -248,7 +262,9 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
         <div>
           <div className="integration-name">
             {provider.name}
-            {status?.status ? <span className="badge small">{status.status}</span> : null}
+            <span className={`badge maturity-${maturity}`}>
+              {MATURITY_LABELS[maturity] || MATURITY_LABELS.operativo}
+            </span>
           </div>
           <p className="integration-desc">{provider.description}</p>
         </div>
@@ -948,13 +964,19 @@ export default function NativeIntegrationsPage() {
           <div className="eyebrow">Integraciones nativas</div>
           <h2>Conecta tus herramientas</h2>
           <p>
-            Consulta precios de referencia en ChileCompra, valida RUT localmente y exporta datos a tu ERP.
-            Las integraciones marcadas como Próximamente se muestran para planificación y no ejecutan acciones.
+            Usa hoy las integraciones operativas y planifica las que requieren configuración a
+            medida. Las marcadas como Próximamente no ejecutan acciones todavía.
           </p>
         </div>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+
+      <div className="integration-legend">
+        <span><i className="badge maturity-operativo">Operativo</i> Lista para usar hoy.</span>
+        <span><i className="badge maturity-a_medida">A medida</i> Requiere configuración o exportación manual.</span>
+        <span><i className="badge maturity-proximamente">Próximamente</i> Visible para planificación.</span>
+      </div>
 
       {loading ? (
         <div className="empty-state">Cargando integraciones…</div>

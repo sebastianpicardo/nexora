@@ -91,10 +91,10 @@ export default function SmartApprovalsPage() {
       <section className="page-intro">
         <div>
           <div className="eyebrow"><SparkIcon /> Automatización</div>
-          <h2>Aprobación inteligente</h2>
+          <h2>Aprueba rápido lo seguro</h2>
           <p>
-            Auto-aprueba ítems con alta confianza y sin excepciones críticas. El resto queda en
-            revisión manual para el equipo de compras.
+            Auto-aprueba ítems confiables y reserva tu tiempo para las compras que realmente
+            requieren revisión.
           </p>
         </div>
         <div className="card-head-tools">

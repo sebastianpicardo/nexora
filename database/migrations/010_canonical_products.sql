@@ -40,6 +40,12 @@ ALTER TABLE items_history
     ADD COLUMN IF NOT EXISTS product_match_confidence NUMERIC(4, 3),
     ADD COLUMN IF NOT EXISTS product_match_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Los ítems históricos sin producto canónico se consideran coincidencias válidas.
+UPDATE items_history
+SET product_match_confirmed = TRUE
+WHERE canonical_product_id IS NULL
+  AND product_match_confirmed = FALSE;
+
 CREATE INDEX IF NOT EXISTS items_history_org_canonical_idx
     ON items_history (org_id, canonical_product_id);
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
@@ -21,6 +21,16 @@ class PriceCatalogItemIn(BaseModel):
     sale_price: float = 0
     category: str | None = None
     supplier_name: str | None = None
+
+
+class PriceCatalogImportIn(BaseModel):
+    source: Literal["approved", "demo"] = "approved"
+
+
+class PriceCatalogImportOut(BaseModel):
+    source: str
+    imported: int
+    message: str
 
 
 class PriceCatalogItemOut(BaseModel):
@@ -71,6 +81,30 @@ async def list_price_catalog(
     except Exception:
         # Si la tabla no existe (migración 007 no aplicada), devolver lista vacía
         return []
+
+
+@router.post("/import", response_model=PriceCatalogImportOut)
+async def import_price_catalog(
+    payload: PriceCatalogImportIn,
+    user: dict = Depends(require_roles("owner", "admin")),
+) -> PriceCatalogImportOut:
+    async with get_pool().connection() as conn:
+        if payload.source == "demo":
+            imported = await repositories.seed_demo_catalog(conn, user["org_id"])
+            message = (
+                "Productos de prueba cargados. Revisa costos, precios de venta y márgenes."
+                if imported > 0
+                else "Los productos de prueba ya estaban cargados en tu catálogo."
+            )
+        else:
+            imported = await repositories.import_from_approved_items(conn, user["org_id"])
+            message = (
+                f"{imported} producto(s) sincronizados desde tus facturas aprobadas. "
+                "Revisa y define tu precio de venta para calcular el margen."
+                if imported > 0
+                else "No encontramos ítems aprobados con SKU y costo válido para importar."
+            )
+    return PriceCatalogImportOut(source=payload.source, imported=imported, message=message)
 
 
 @router.post("", response_model=PriceCatalogItemOut, status_code=status.HTTP_201_CREATED)

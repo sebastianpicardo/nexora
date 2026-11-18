@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatMoney, formatMonth, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
+import DemoDataBanner from "../components/DemoDataBanner";
 import { ArrowRightIcon, CheckIcon, DollarIcon, PricesIcon, SparkIcon } from "../components/Icons";
 
 const MONTH_OPTIONS = [3, 6, 12, 24];
@@ -44,15 +45,17 @@ export default function AnalyticsPage({ onNavigate }) {
   const opportunities = data?.opportunities?.summary || {};
   const forecast = data?.forecast?.summary || {};
   const approvals = data?.approvals?.summary || {};
+  const hasData = !loading && ((summary.items ?? 0) > 0 || monthly.length > 0);
+  const lowData = !loading && hasData && monthly.length < 2;
 
   return (
     <div className="page-stack">
       <section className="page-intro">
         <div>
-          <div className="eyebrow"><SparkIcon /> Resumen de compras</div>
-          <h2>Tendencias de compra</h2>
+          <div className="eyebrow"><SparkIcon /> Analítica ejecutiva</div>
+          <h2>Controla el gasto y los precios</h2>
           <p>
-            Revisa gasto, precios y ahorro potencial en una sola vista.
+            Detecta alzas, entiende tu gasto y prioriza ahorros sin revisar planillas.
           </p>
         </div>
         <div className="card-head-tools">
@@ -77,6 +80,25 @@ export default function AnalyticsPage({ onNavigate }) {
 
       {error ? <div className="alert error">{error}</div> : null}
 
+      {!loading && !hasData ? (
+        <DemoDataBanner
+          title="Tu analítica empieza con la primera factura"
+          description="Sube una factura o carga 12 meses de datos demo para ver gasto, precios y ahorro potencial sin planillas."
+          onLoaded={load}
+        />
+      ) : null}
+
+      {lowData ? (
+        <DemoDataBanner
+          compact
+          title="Aún hay pocos meses para comparar"
+          description="Con dos o más meses de historial podrás ver tendencias más confiables. También puedes cargar datos demo para explorar la vista completa."
+          onLoaded={load}
+        />
+      ) : null}
+
+      {!loading && !hasData ? null : (
+        <>
       <section className="stats-grid">
         <StatCard
           label="Índice de precios"
@@ -240,6 +262,8 @@ export default function AnalyticsPage({ onNavigate }) {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

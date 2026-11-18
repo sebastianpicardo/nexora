@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
+import DemoDataBanner from "../components/DemoDataBanner";
 import { DollarIcon, ExceptionsIcon, PricesIcon, SuppliersIcon } from "../components/Icons";
 import EmptyState from "../components/EmptyState";
 
@@ -94,15 +95,18 @@ export default function OpportunitiesPage() {
 
   const summary = data?.summary || {};
   const items = data?.items || [];
+  const totalItems = Number(summary.total_items || 0);
+  const hasData = !loading && Boolean(summary.data_available);
+  const lowData = !loading && hasData && totalItems < 3;
 
   return (
     <div className="page-stack">
       <section className="page-intro">
         <div>
           <div className="eyebrow"><DollarIcon /> Ahorro</div>
-          <h2>Ahorra en tus compras</h2>
+          <h2>Oportunidades de ahorro</h2>
           <p>
-            Detectamos productos pagados sobre tu precio habitual y el mejor precio registrado.
+            Aquí ves cuánto dinero pierdes cuando un proveedor te cobra por sobre tu precio habitual.
           </p>
         </div>
         <div className="card-head-tools">
@@ -136,6 +140,25 @@ export default function OpportunitiesPage() {
       {error ? <div className="alert error">{error}</div> : null}
       {savingsError ? <div className="alert error">{savingsError}</div> : null}
 
+      {!loading && !hasData ? (
+        <DemoDataBanner
+          title="Descubre tu primer ahorro con datos reales"
+          description="Sube una factura o carga 12 meses de datos demo para comparar precios entre proveedores y ver cuánto puedes ahorrar."
+          onLoaded={load}
+        />
+      ) : null}
+
+      {lowData ? (
+        <DemoDataBanner
+          compact
+          title="Aún hay pocos ítems para comparar"
+          description="Con más compras registradas podremos detectar mejores oportunidades. También puedes cargar datos demo para explorar la vista completa."
+          onLoaded={load}
+        />
+      ) : null}
+
+      {!loading && !hasData ? null : (
+        <>
       <section className="stats-grid">
         <StatCard
           label="Ahorro potencial"
@@ -159,7 +182,7 @@ export default function OpportunitiesPage() {
         />
         <StatCard
           label="Proveedores afectados"
-          value={loading ? "�?" : summary.suppliers_affected ?? 0}
+          value={loading ? "—" : summary.suppliers_affected ?? 0}
           detail="Con oportunidades detectadas"
           icon={<SuppliersIcon />}
         />
@@ -276,6 +299,8 @@ export default function OpportunitiesPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

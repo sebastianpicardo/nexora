@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, labelize, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
+import DemoDataBanner from "../components/DemoDataBanner";
 import { ClockIcon, DocumentsIcon, PricesIcon, SparkIcon } from "../components/Icons";
 
 const HISTORY_OPTIONS = [3, 6, 9, 12];
@@ -53,16 +54,19 @@ export default function ForecastPage() {
 
   const summary = data?.summary || {};
   const items = data?.items || [];
+  const hasData = !loading && Number(summary.products || 0) > 0;
+  const needsMoreHistory =
+    !loading && !hasData && Number(summary.skipped_low_history || 0) > 0;
 
   return (
     <div className="page-stack">
       <section className="page-intro">
         <div>
           <div className="eyebrow"><ClockIcon /> Planificación</div>
-          <h2>Pronóstico de compras</h2>
+          <h2>Anticipa tus próximas compras</h2>
           <p>
-            Proyecta consumo y gasto futuro a partir de tu historial, con tendencia por producto
-            para anticipar reposiciones y negociaciones.
+            Proyecta consumo y gasto para negociar antes de que suba el precio y evitar quiebres
+            de stock.
           </p>
         </div>
         <div className="card-head-tools">
@@ -95,6 +99,24 @@ export default function ForecastPage() {
 
       {error ? <div className="alert error">{error}</div> : null}
 
+      {!loading && !hasData ? (
+        <DemoDataBanner
+          title={
+            needsMoreHistory
+              ? "Ya tienes historial, faltan meses para proyectar"
+              : "Tu pronóstico empieza con el primer mes de compras"
+          }
+          description={
+            needsMoreHistory
+              ? "Necesitas al menos 3 meses de consumo del mismo producto para calcular una tendencia confiable. Puedes cargar datos demo para ver la vista completa."
+              : "Sube facturas o carga 12 meses de datos demo para proyectar consumo, gasto y reposiciones desde el primer minuto."
+          }
+          onLoaded={load}
+        />
+      ) : null}
+
+      {!loading && !hasData ? null : (
+        <>
       <section className="stats-grid">
         <StatCard
           label={`Gasto proyectado (${horizon} mes${horizon > 1 ? "es" : ""})`}
@@ -137,7 +159,7 @@ export default function ForecastPage() {
           <div className="empty-state">Calculando pronóstico de consumo…</div>
         ) : items.length === 0 ? (
           <div className="empty-state">
-            <p>Necesitas al menos dos meses de historial para generar pronósticos.</p>
+            <p>Necesitas al menos tres meses de historial para generar pronósticos confiables.</p>
           </div>
         ) : (
           <div className="table-wrapper">
@@ -179,6 +201,8 @@ export default function ForecastPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

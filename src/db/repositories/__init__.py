@@ -117,6 +117,15 @@ from src.db.repositories.items import (
     update_item_fields,
 )
 from src.db.repositories.organizations import delete_organization, get_organization, update_organization
+from src.db.repositories.price_catalog import (
+    create_price_catalog_item,
+    delete_price_catalog_item,
+    get_price_catalog_item,
+    import_from_approved_items,
+    list_price_catalog,
+    seed_demo_catalog,
+    update_price_catalog_item,
+)
 from src.db.repositories.savings_tracking import (
     list_savings_tracking,
     record_savings_tracking,
@@ -146,7 +155,9 @@ from src.db.repositories.users import (
     get_user_by_email,
     get_user_by_google_id,
     get_user_with_org,
+    list_user_search_history,
     list_users,
+    save_user_search_history,
     set_email_verified,
     set_password_hash,
     set_user_role,
@@ -301,6 +312,8 @@ __all__ = [
     "create_price_catalog_item",
     "update_price_catalog_item",
     "delete_price_catalog_item",
+    "import_from_approved_items",
+    "seed_demo_catalog",
     "save_user_search_history",
     "list_user_search_history",
     "update_supplier",

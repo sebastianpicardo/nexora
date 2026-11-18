@@ -157,6 +157,24 @@ async def price_opportunities(
             ),
         )
         rows = list(await cur.fetchall())
+        await cur.execute(
+            """
+            SELECT COUNT(*) AS total_items
+            FROM items_history i
+            WHERE i.org_id = %s
+              AND i.currency = %s
+              AND i.review_status <> 'rejected'
+              AND i.normalized_unit_price IS NOT NULL
+              AND i.normalized_unit_price > 0
+              AND i.price_date <= current_date
+              AND COALESCE(i.product_match_confirmed, i.canonical_product_id IS NULL)
+              AND i.price_date >= (current_date - (%s * interval '1 day'))
+            """,
+            (str(org_id), currency, days),
+        )
+        count_row = await cur.fetchone()
+
+    total_items = int((count_row or {}).get("total_items") or 0)
 
     items = []
     total_savings = 0.0
@@ -226,6 +244,8 @@ async def price_opportunities(
         "min_samples": min_samples,
         "summary": {
             "opportunities": len(items),
+            "total_items": total_items,
+            "data_available": total_items > 0,
             "total_potential_savings": _round(total_savings),
             "total_conservative_savings": _round(total_savings_min),
             "total_excess_cost": _round(total_excess),

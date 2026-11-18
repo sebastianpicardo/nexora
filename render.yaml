@@ -69,6 +69,8 @@
         value: https://nexora-web-g9td.onrender.com/?checkout=cancel
       - key: STRIPE_SECRET_KEY
         sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: MERCADOPAGO_ACCESS_TOKEN
         sync: false
       - key: FLOW_API_KEY
@@ -113,6 +115,22 @@
         value: "true"
       - key: WORKER_POLL_SECONDS
         value: "10"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: NEXORA
+      - key: SMTP_TLS
+        value: "true"
+      - key: SMTP_SSL
+        value: "false"
 
   - type: worker
     name: nexora-worker
