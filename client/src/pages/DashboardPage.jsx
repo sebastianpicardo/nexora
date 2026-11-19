@@ -11,6 +11,7 @@ import UploadCard from "../components/UploadCard";
 import AppBanner from "../components/AppBanner";
 import ActionEmptyState from "../components/ActionEmptyState";
 import QuickGuide from "../components/QuickGuide";
+import NextStepCard from "../components/NextStepCard";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 
 export default function DashboardPage({ onNavigate, onUpload }) {
@@ -99,6 +100,14 @@ export default function DashboardPage({ onNavigate, onUpload }) {
   const totalSavings = Number(summary?.total_savings || 0);
   const savingsRate = totalSpend > 0 ? Math.round((totalSavings / totalSpend) * 100) : 0;
   const spendSeries = (summary?.monthly_purchases || []).map((row) => Number(row.spend || 0));
+  const metricsAreZero =
+    Boolean(summary) &&
+    !showEmpty &&
+    totalSpend <= 0 &&
+    totalSavings <= 0 &&
+    Number(summary?.exceptions_pending || 0) === 0 &&
+    Number(summary?.approvals_pending || 0) === 0 &&
+    (Number(summary?.documents_pending || 0) > 0 || Number(summary?.suppliers_count || 0) === 0);
 
   return (
     <div className="page-stack">
@@ -150,45 +159,57 @@ export default function DashboardPage({ onNavigate, onUpload }) {
 
       {summary && !showEmpty ? (
         <>
+          {metricsAreZero ? (
+            <NextStepCard
+              summary={summary}
+              canOperate={canOperate}
+              onUpload={onUpload}
+              onNavigate={onNavigate}
+              onRefresh={retry}
+            />
+          ) : null}
+
           {/* KPIs principales */}
-          <section className="stats-grid">
-            <StatCard
-              label="Compra del mes"
-              value={formatMoney(totalSpend, activeCurrency)}
-              detail={`${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`}
-              icon={<DocumentsIcon />}
-              sparkline={spendSeries}
-            />
-            <StatCard
-              label="Ahorro estimado"
-              value={formatMoney(totalSavings, activeCurrency)}
-              detail={`${savingsRate}% de la compra auditada`}
-              tone="ok"
-              icon={<SparkIcon />}
-              trend={savingsRate}
-              trendHint="vs. gasto"
-            />
-            <StatCard
-              label="Excepciones pendientes"
-              value={loading ? "—" : summary?.exceptions_pending ?? 0}
-              detail={`${summary?.price_alerts_pending ?? 0} alertas de alza de precio`}
-              tone="warning"
-              icon={<ExceptionsIcon />}
-            />
-            <StatCard
-              label="Aprobaciones pendientes"
-              value={loading ? "—" : summary?.approvals_pending ?? 0}
-              detail={formatMoney(Number(summary?.approvals_amount || 0), activeCurrency)}
-              tone="brand"
-              icon={<CheckIcon />}
-            />
-            <StatCard
-              label="Proveedores activos"
-              value={loading ? "—" : summary?.suppliers_count ?? 0}
-              detail={`${summary?.scorecards_count ?? 0} con score calculado`}
-              icon={<SuppliersIcon />}
-            />
-          </section>
+          {!metricsAreZero ? (
+            <section className="stats-grid">
+              <StatCard
+                label="Compra del mes"
+                value={formatMoney(totalSpend, activeCurrency)}
+                detail={`${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`}
+                icon={<DocumentsIcon />}
+                sparkline={spendSeries}
+              />
+              <StatCard
+                label="Ahorro estimado"
+                value={formatMoney(totalSavings, activeCurrency)}
+                detail={`${savingsRate}% de la compra auditada`}
+                tone="ok"
+                icon={<SparkIcon />}
+                trend={savingsRate}
+                trendHint="vs. gasto"
+              />
+              <StatCard
+                label="Excepciones pendientes"
+                value={loading ? "—" : summary?.exceptions_pending ?? 0}
+                detail={`${summary?.price_alerts_pending ?? 0} alertas de alza de precio`}
+                tone="warning"
+                icon={<ExceptionsIcon />}
+              />
+              <StatCard
+                label="Aprobaciones pendientes"
+                value={loading ? "—" : summary?.approvals_pending ?? 0}
+                detail={formatMoney(Number(summary?.approvals_amount || 0), activeCurrency)}
+                tone="brand"
+                icon={<CheckIcon />}
+              />
+              <StatCard
+                label="Proveedores activos"
+                value={loading ? "—" : summary?.suppliers_count ?? 0}
+                detail={`${summary?.scorecards_count ?? 0} con score calculado`}
+                icon={<SuppliersIcon />}
+              />
+            </section>
+          ) : null}
 
           <div className="dashboard-grid">
             <section className="card chart-card">

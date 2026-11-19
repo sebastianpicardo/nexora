@@ -1111,3 +1111,41 @@ async def demo_counts(conn: AsyncConnection, org_id: UUID | str) -> dict:
         )
         row = await cur.fetchone() or {}
     return {key: int(value or 0) for key, value in row.items()}
+
+
+async def purge_demo_data(conn: AsyncConnection, org_id: UUID | str) -> dict:
+    """Elimina únicamente los registros marcados como demo de una organización.
+
+    Las aprobaciones demo se borran primero; al eliminar los documentos demo se
+    eliminan en cascada sus ítems y excepciones. Los proveedores demo se borran
+    al final (sus referencias usan ON DELETE SET NULL).
+    """
+
+    org = str(org_id)
+    async with conn.cursor() as cur:
+        await cur.execute(
+            "DELETE FROM purchase_approvals WHERE org_id = %s AND (metadata->>'demo')::boolean IS TRUE",
+            (org,),
+        )
+        approvals = cur.rowcount or 0
+        await cur.execute(
+            "DELETE FROM documents_log WHERE org_id = %s AND (metadata->>'demo')::boolean IS TRUE",
+            (org,),
+        )
+        documents = cur.rowcount or 0
+        await cur.execute(
+            """
+            DELETE FROM product_aliases
+            WHERE org_id = %s
+              AND supplier_id IN (
+                  SELECT id FROM suppliers WHERE org_id = %s AND email LIKE '%%@demo.nexora.cl'
+              )
+            """,
+            (org, org),
+        )
+        await cur.execute(
+            "DELETE FROM suppliers WHERE org_id = %s AND email LIKE '%%@demo.nexora.cl'",
+            (org,),
+        )
+        suppliers = cur.rowcount or 0
+    return {"approvals": approvals, "documents": documents, "suppliers": suppliers}

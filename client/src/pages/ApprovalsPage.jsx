@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { formatDateTime, formatMoney, labelize } from "../lib/format";
-import { CheckIcon, PlusIcon, XIcon, ArrowRightIcon, BellIcon } from "../components/Icons";
+import { CheckIcon, PlusIcon, XIcon } from "../components/Icons";
 import InfoHint from "../components/InfoHint";
 
 const EMPTY_FORM = {
@@ -25,7 +25,6 @@ export default function ApprovalsPage({ embedded = false }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [pending, setPending] = useState(false);
-  const [approvalIntegrationRunning, setApprovalIntegrationRunning] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,25 +88,6 @@ export default function ApprovalsPage({ embedded = false }) {
       setError(err.message || "No se pudo registrar la decisión.");
     } finally {
       setPending(false);
-    }
-  }
-
-  async function handleApprovalIntegration(approval, actionId) {
-    setApprovalIntegrationRunning(`${approval.id}:${actionId}`);
-    setError("");
-    setSuccess("");
-    try {
-      const provider = actionId === "send_approval" ? "erp" : "slack";
-      await api(`/api/integrations/native/${provider}/${actionId}`, {
-        method: "POST",
-        body: JSON.stringify({ approval_id: approval.id }),
-      });
-      setSuccess(actionId === "send_approval" ? "Enviada al ERP." : "Notificada en Slack.");
-      load();
-    } catch (err) {
-      setError(err.message || "No se pudo ejecutar la acción de integración.");
-    } finally {
-      setApprovalIntegrationRunning(null);
     }
   }
 
@@ -270,7 +250,6 @@ export default function ApprovalsPage({ embedded = false }) {
                   <th>Solicitante</th>
                   <th>Estado</th>
                   <th>Fecha</th>
-                  <th>Integraciones</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -289,28 +268,6 @@ export default function ApprovalsPage({ embedded = false }) {
                     <td>{approval.requested_by_name || "—"}</td>
                     <td><span className={`badge status-${approval.status}`}>{labelize(approval.status)}</span></td>
                     <td>{formatDateTime(approval.created_at)}</td>
-                    <td>
-                      <div className="table-actions">
-                        <button
-                          type="button"
-                          className="button ghost icon-only"
-                          onClick={() => handleApprovalIntegration(approval, "send_approval")}
-                          disabled={approvalIntegrationRunning?.startsWith(`${approval.id}:send_approval`)}
-                          title="Enviar al ERP"
-                        >
-                          <ArrowRightIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className="button ghost icon-only"
-                          onClick={() => handleApprovalIntegration(approval, "notify")}
-                          disabled={approvalIntegrationRunning?.startsWith(`${approval.id}:notify`)}
-                          title="Notificar en Slack"
-                        >
-                          <BellIcon />
-                        </button>
-                      </div>
-                    </td>
                     <td>
                       {canManage && approval.status === "pending" ? (
                         <div className="table-actions">

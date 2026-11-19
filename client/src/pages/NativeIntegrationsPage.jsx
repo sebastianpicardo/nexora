@@ -246,12 +246,13 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
   const providerHistory = recentSearches.filter(
     (h) => h.provider === provider.id && (h.action === "search_items" || h.action === "search_suppliers")
   );
-  const visibleActions = provider.actions.filter(
-    (action) => !(provider.id === "sii" && action.id === "validate_rut")
+  const runnableActions = provider.actions.filter(
+    (action) => action.enabled !== false && !(provider.id === "sii" && action.id === "validate_rut")
   );
   const validateRutAction = provider.actions.find((action) => action.id === "validate_rut");
   const maturity =
     status?.available === false ? "proximamente" : provider.maturity || "operativo";
+  const operational = maturity === "operativo" && status?.available !== false;
 
   return (
     <div className="integration-card">
@@ -269,54 +270,63 @@ function ProviderCard({ provider, status, onConfiguredAction, recentSearches }) 
           <p className="integration-desc">{provider.description}</p>
         </div>
       </div>
-      {provider.id === "sii" && validateRutAction ? (
+      {operational && provider.id === "sii" && validateRutAction ? (
         <RutValidator
           running={running === validateRutAction.id}
-          disabled={status?.available === false}
           onValidate={(config) => runAction(validateRutAction, config)}
         />
       ) : null}
-      <div className="integration-actions">
-        {visibleActions.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            className={`integration-button ${action.primary ? "integration-button-primary" : "integration-button-ghost"}`}
-            disabled={running === action.id || status?.available === false || action.enabled === false}
-            title={status?.available === false ? "Próximamente" : action.enabled === false ? "Acción no disponible todavía" : undefined}
-            onClick={() => {
-              if (action.id === "search_items" || action.id === "search_suppliers") {
-                openConfigure(action);
-              } else {
-                runAction(action, {});
-              }
-            }}
-          >
-            {running === action.id ? "Procesando…" : null}
-            {!running && <action.icon />}
-            {!running && action.label}
-          </button>
-        ))}
-        {providerHistory.length > 0 && (
-          <div className="recent-searches">
-            <strong>Tus búsquedas recientes:</strong>
-            {providerHistory.map((h) => (
-              <button
-                key={h.id}
-                type="button"
-                className="recent-search-chip"
-                onClick={() => {
-                  const action = provider.actions.find((a) => a.id === h.action);
-                  if (!action) return;
-                  runAction(action, historyConfig(h));
-                }}
-              >
-                {h.query}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {operational ? (
+        <div className="integration-actions">
+          {runnableActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className={`integration-button ${action.primary ? "integration-button-primary" : "integration-button-ghost"}`}
+              disabled={running === action.id}
+              onClick={() => {
+                if (action.id === "search_items" || action.id === "search_suppliers") {
+                  openConfigure(action);
+                } else {
+                  runAction(action, {});
+                }
+              }}
+            >
+              {running === action.id ? "Procesando…" : null}
+              {!running && <action.icon />}
+              {!running && action.label}
+            </button>
+          ))}
+          {providerHistory.length > 0 && (
+            <div className="recent-searches">
+              <strong>Tus búsquedas recientes:</strong>
+              {providerHistory.map((h) => (
+                <button
+                  key={h.id}
+                  type="button"
+                  className="recent-search-chip"
+                  onClick={() => {
+                    const action = provider.actions.find((a) => a.id === h.action);
+                    if (!action) return;
+                    runAction(action, historyConfig(h));
+                  }}
+                >
+                  {h.query}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="integration-unavailable">
+          <strong>Próximamente</strong>
+          <p>
+            {provider.id === "erp"
+              ? "La exportación de datos ya está disponible desde los módulos de Documentos, Excepciones y Proveedores."
+              : "Esta integración todavía no ejecuta acciones. La mostramos para que puedas planificar su adopción."}
+          </p>
+        </div>
+      )}
       {error ? <div className="integration-error">{error}</div> : null}
 
       {configureModal && (
@@ -1023,21 +1033,21 @@ export default function NativeIntegrationsPage() {
             <DocumentsIcon />
             <div>
               <strong>Documentos</strong>
-              <p>Buscar precios en ChileCompra, validar RUT en SII, guardar en Google Drive.</p>
+              <p>Buscar precios de referencia en ChileCompra y validar RUT con el algoritmo del SII.</p>
             </div>
           </div>
           <div className="context-item">
             <SuppliersIcon />
             <div>
               <strong>Proveedores</strong>
-              <p>Validar RUT chileno y buscar referencias en ChileCompra.</p>
+              <p>Validar RUT chileno y comparar referencias de precio por ítem.</p>
             </div>
           </div>
           <div className="context-item">
             <CheckIcon />
             <div>
               <strong>Aprobaciones</strong>
-              <p>Exportar orden al ERP y notificar al equipo por email o Slack.</p>
+              <p>Aprobar o rechazar compras en un clic, con historial y auditoría.</p>
             </div>
           </div>
         </div>

@@ -562,6 +562,10 @@ def test_enterprise_suite_end_to_end(live_database):
         onboarding = client.get("/api/enterprise/onboarding")
         assert onboarding.status_code == 200, onboarding.text
         assert onboarding.json()["steps"]["documents"] is True, onboarding.text
+        assert onboarding.json()["demo_seeded"] is True, onboarding.text
+        pending_approvals = client.get("/api/enterprise/approvals?status=pending&page_size=10")
+        assert pending_approvals.status_code == 200, pending_approvals.text
+        assert pending_approvals.json()["total"] >= 2, pending_approvals.text
         scorecards = client.get("/api/enterprise/suppliers/scorecards")
         assert scorecards.status_code == 200, scorecards.text
         assert scorecards.json()["items"], scorecards.text
@@ -612,6 +616,12 @@ def test_enterprise_suite_end_to_end(live_database):
             exported = client.get(f"/api/enterprise/roi/export?format={fmt}")
             assert exported.status_code == 200, exported.text
             assert exported.headers["content-type"].startswith(content_type), exported.headers
+
+        reset = client.delete("/api/enterprise/onboarding/demo")
+        assert reset.status_code == 200, reset.text
+        assert reset.json()["documents"] >= 1, reset.text
+        after_reset = client.get("/api/enterprise/onboarding")
+        assert after_reset.json()["demo_seeded"] is False, after_reset.text
 
 def test_tenant_isolation_and_role_matrix(live_database, monkeypatch):
     owner = asyncio.run(_seed_user())

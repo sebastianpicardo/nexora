@@ -10,7 +10,7 @@ export default function ActionEmptyState({
   onUpload,
   onLoaded,
   uploadLabel = "Subir primera factura",
-  demoLabel = "Cargar datos de demostración",
+  demoLabel = "Cargar demo realista (1 clic)",
 }) {
   const { canManage } = useAuth();
   const [pending, setPending] = useState(false);
@@ -27,7 +27,7 @@ export default function ActionEmptyState({
       setSuccess(
         result?.already_seeded
           ? "Los datos demo ya estaban cargados."
-          : "Datos demo cargados correctamente."
+          : "Demo realista cargada: 12 meses de historial, alzas de precio y aprobaciones pendientes."
       );
     } catch (err) {
       setError(err.message || "No se pudieron cargar los datos demo.");

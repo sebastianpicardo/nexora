@@ -1421,10 +1421,29 @@ function OnboardingTab({ onNavigate, onTab }) {
     setSuccess("");
     try {
       const result = await api("/api/enterprise/onboarding/demo", { method: "POST", body: "{}" });
-      setSuccess(result.already_seeded ? "Los datos demo ya estaban cargados." : "Datos demo cargados.");
+      setSuccess(
+        result.already_seeded
+          ? "Los datos demo ya estaban cargados."
+          : "Demo realista cargada: 12 meses de historial, alzas de precio y aprobaciones pendientes."
+      );
       load();
     } catch (err) {
       setError(err.message || "No se pudieron cargar los datos demo.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function resetDemo() {
+    setPending(true);
+    setError("");
+    setSuccess("");
+    try {
+      await api("/api/enterprise/onboarding/demo", { method: "DELETE" });
+      setSuccess("Datos demo eliminados. Ya puedes trabajar con tus datos reales.");
+      load();
+    } catch (err) {
+      setError(err.message || "No se pudieron eliminar los datos demo.");
     } finally {
       setPending(false);
     }
@@ -1462,8 +1481,13 @@ function OnboardingTab({ onNavigate, onTab }) {
           description="Completa los pasos clave para obtener valor desde el primer día."
         >
           <button type="button" className="button primary small" onClick={seedDemo} disabled={pending}>
-            <SparkIcon /> Cargar datos demo
+            <SparkIcon /> Cargar demo realista (1 clic)
           </button>
+          {data?.demo_seeded ? (
+            <button type="button" className="button ghost small" onClick={resetDemo} disabled={pending}>
+              Limpiar datos demo
+            </button>
+          ) : null}
           <button type="button" className="button ghost small" onClick={dismiss} disabled={pending || data?.dismissed}>
             Ocultar guía
           </button>

@@ -914,12 +914,17 @@ async def seed_demo_data(
 
         today = date.today()
         first_document_id = None
+        current_month_document_id = None
+        current_month_supplier_id = None
+        current_month_spend = Decimal("0")
         for month_offset in range(11, -1, -1):
             month_date = _add_months(today.replace(day=1), -month_offset)
             price_date = month_date
             document_id = uuid4()
             if first_document_id is None:
                 first_document_id = document_id
+            if month_offset == 0:
+                current_month_document_id = document_id
             await repositories.create_document(
                 conn,
                 document_id=document_id,
@@ -942,7 +947,8 @@ async def seed_demo_data(
                     else Decimal("1.00") if index % 3 == 1
                     else Decimal("1.08")
                 )
-                current_factor = Decimal("1.35") if month_offset == 0 and index in {0, 3, 6} else Decimal("1.00")
+                is_overpriced = month_offset == 0 and index in {0, 3, 6}
+                current_factor = Decimal("1.35") if is_overpriced else Decimal("1.00")
                 price = (base_price * supplier_factor * current_factor).quantize(Decimal("0.01"))
                 quantity = Decimal("10") + Decimal(index * 2)
                 canonical_id, confidence, confirmed = await repositories.resolve_product_alias(
@@ -994,6 +1000,33 @@ async def seed_demo_data(
                         reason="Confianza de extracción bajo el umbral configurado.",
                         evidence={"confidence": 0.62, "demo": True},
                     )
+                if is_overpriced:
+                    baseline_price = (base_price * supplier_factor).quantize(Decimal("0.01"))
+                    pct_change = 35.0
+                    await repositories.create_exception(
+                        conn,
+                        org_id=user["org_id"],
+                        document_id=document_id,
+                        item_id=row["id"],
+                        type="price_spike",
+                        severity="high",
+                        reason=(
+                            f"El precio unitario normalizado aumentó {pct_change:.1f}% "
+                            f"respecto de la mediana histórica ({baseline_price})."
+                        ),
+                        evidence={
+                            "current_price": str(price),
+                            "historical_median": str(baseline_price),
+                            "pct_change": pct_change,
+                            "threshold_pct": 10.0,
+                            "sample_size": 11,
+                            "previous_prices": [],
+                            "demo": True,
+                        },
+                    )
+                    if current_month_supplier_id is None:
+                        current_month_supplier_id = supplier["id"]
+                    current_month_spend += price * quantity
             await repositories.mark_processed(
                 conn,
                 org_id=user["org_id"],
@@ -1004,6 +1037,30 @@ async def seed_demo_data(
                 raw_text="Datos demo históricos generados por NEXORA",
                 metadata={"demo": True, "month": month_date.isoformat(), "item_count": len(products)},
             )
+
+        approvals_created = 0
+        for approval_title, amount, priority in [
+            ("Reposición de insumos de ferretería", current_month_spend, "high"),
+            (
+                "Compra de pintura y sellantes",
+                (current_month_spend * Decimal("0.35")).quantize(Decimal("0.01")),
+                "normal",
+            ),
+        ]:
+            await repositories.create_approval(
+                conn,
+                org_id=user["org_id"],
+                document_id=current_month_document_id,
+                supplier_id=current_month_supplier_id,
+                title=approval_title,
+                amount=float(amount),
+                currency=user["default_currency"],
+                priority=priority,
+                requested_by=user["id"],
+                notes="Solicitud de demostración generada por NEXORA.",
+                metadata={"demo": True},
+            )
+            approvals_created += 1
 
         progress = await repositories.get_onboarding(conn, user["org_id"])
         manual = progress.get("steps") if isinstance(progress.get("steps"), dict) else {}
@@ -1022,9 +1079,49 @@ async def seed_demo_data(
             action="onboarding.demo_seed",
             entity_type="organization",
             entity_id=str(user["org_id"]),
-            metadata={"months": 12, "products": len(products), "suppliers": len(suppliers)},
+            metadata={
+                "months": 12,
+                "products": len(products),
+                "suppliers": len(suppliers),
+                "approvals": approvals_created,
+            },
         )
-    return {"success": True, "already_seeded": False, "months": 12, "products": len(products), "documents": 12}
+    return {
+        "success": True,
+        "already_seeded": False,
+        "months": 12,
+        "products": len(products),
+        "documents": 12,
+        "approvals": approvals_created,
+    }
+
+
+@router.delete("/onboarding/demo")
+async def reset_demo_data(
+    user: dict = Depends(require_roles("owner", "admin")),
+):
+    async with get_pool().connection() as conn:
+        result = await repositories.purge_demo_data(conn, user["org_id"])
+        progress = await repositories.get_onboarding(conn, user["org_id"])
+        manual = progress.get("steps") if isinstance(progress.get("steps"), dict) else {}
+        manual["demo"] = False
+        await repositories.update_onboarding(
+            conn,
+            org_id=user["org_id"],
+            steps=manual,
+            dismissed=False,
+            completed=False,
+        )
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="onboarding.demo_reset",
+            entity_type="organization",
+            entity_id=str(user["org_id"]),
+            metadata=result,
+        )
+    return {"success": True, **result}
 
 
 @router.get("/security")
