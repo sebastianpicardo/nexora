@@ -32,6 +32,45 @@ async def record_savings_tracking(
     async with conn.cursor() as cur:
         await cur.execute(
             """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'savings_tracking'
+                  AND column_name = 'evidence'
+            ) AS extended
+            """
+        )
+        extended = bool((await cur.fetchone() or {}).get("extended"))
+        if not extended:
+            await cur.execute(
+                """
+                INSERT INTO savings_tracking (
+                    org_id, opportunity_key, status, realized_amount, currency, notes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (org_id, opportunity_key) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    realized_amount = EXCLUDED.realized_amount,
+                    currency = EXCLUDED.currency,
+                    notes = COALESCE(EXCLUDED.notes, savings_tracking.notes),
+                    updated_at = now()
+                RETURNING *
+                """,
+                (
+                    str(org_id),
+                    opportunity_key,
+                    status,
+                    max(float(realized_amount or 0), 0.0),
+                    (currency or "CLP").strip().upper(),
+                    notes,
+                ),
+            )
+            row = await cur.fetchone()
+            assert row is not None
+            return row
+
+        await cur.execute(
+            """
             INSERT INTO savings_tracking (
                 org_id, opportunity_key, status, realized_amount, currency, notes,
                 title, sku, product, supplier_before, supplier_after,
@@ -130,10 +169,29 @@ async def list_verified_savings(
     where = " AND ".join(filters)
     async with conn.cursor() as cur:
         await cur.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'savings_tracking'
+                  AND column_name = 'realized_at'
+            ) AS extended
+            """
+        )
+        has_realized_at = bool((await cur.fetchone() or {}).get("extended"))
+        if has_realized_at:
+            order_column = "coalesce(realized_at, updated_at)"
+        else:
+            order_column = "updated_at"
+            if month:
+                filters = ["org_id = %s", "status = 'realized'"]
+                filters.append("to_char(updated_at, 'YYYY-MM') = %s")
+                where = " AND ".join(filters)
+        await cur.execute(
             f"""
             SELECT * FROM savings_tracking
             WHERE {where}
-            ORDER BY coalesce(realized_at, updated_at) DESC, created_at DESC
+            ORDER BY {order_column} DESC, created_at DESC
             """,
             values,
         )

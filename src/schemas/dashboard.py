@@ -33,6 +33,10 @@ class DashboardSummary(BaseModel):
     recent_documents: list[DocumentOut]
     pending_exceptions: list[ExceptionOut]
     total_savings: float = 0.0
+    potential_savings: float = 0.0
+    verified_savings: float = 0.0
+    pending_savings: float = 0.0
+    savings_currency: str = "CLP"
     suppliers_count: int = 0
     scorecards_count: int = 0
     approvals_pending: int = 0

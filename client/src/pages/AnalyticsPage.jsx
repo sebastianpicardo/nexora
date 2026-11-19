@@ -14,6 +14,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
   const [currency, setCurrency] = useState(organization?.default_currency || "CLP");
   const [months, setMonths] = useState(6);
   const [data, setData] = useState(null);
+  const [verified, setVerified] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,8 +27,13 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
     setError("");
     try {
       const params = new URLSearchParams({ currency, months: String(months) });
-      const result = await api(`/api/insights/overview?${params.toString()}`);
-      setData(result);
+      const [overviewResult, verifiedResult] = await Promise.allSettled([
+        api(`/api/insights/overview?${params.toString()}`),
+        api("/api/insights/savings/verified"),
+      ]);
+      if (overviewResult.status === "rejected") throw overviewResult.reason;
+      setData(overviewResult.value);
+      setVerified(verifiedResult.status === "fulfilled" ? verifiedResult.value : null);
     } catch (err) {
       setError(err.message || "No se pudo cargar la analítica.");
     } finally {
@@ -122,7 +128,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
 
       {!loading && !hasData ? null : (
         <>
-      <section className="stats-grid">
+      <section className="stats-grid analytics-stats">
         <StatCard
           label="Índice de precios"
           value={loading ? "—" : formatNumber(summary.price_index ?? 100, 1)}
@@ -139,11 +145,22 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
           icon={<DollarIcon />}
         />
         <StatCard
-          label="Ahorro potencial"
+          label="Ahorro detectado"
           value={formatMoney(opportunities.total_potential_savings || 0, currency)}
-          detail={`${opportunities.opportunities ?? 0} oportunidad(es) detectada(s)`}
+          detail={
+            (opportunities.opportunities ?? 0) > 0
+              ? `${opportunities.opportunities} oportunidad(es) para recuperar`
+              : "Aún sin sobrecostos: faltan compras repetidas del mismo producto"
+          }
           tone="ok"
           icon={<SparkIcon />}
+        />
+        <StatCard
+          label="Ahorro verificado"
+          value={formatMoney(verified?.total_amount || 0, verified?.currency || currency)}
+          detail={`${verified?.count ?? 0} registro(s) con evidencia este mes`}
+          tone="brand"
+          icon={<CheckIcon />}
         />
         <StatCard
           label="Gasto proyectado"

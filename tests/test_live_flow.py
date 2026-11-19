@@ -575,6 +575,22 @@ def test_enterprise_suite_end_to_end(live_database):
         assert scorecards.status_code == 200, scorecards.text
         assert scorecards.json()["items"], scorecards.text
 
+        demo_dashboard = client.get("/api/dashboard/summary?currency=CLP")
+        assert demo_dashboard.status_code == 200, demo_dashboard.text
+        demo_metrics = demo_dashboard.json()
+        assert demo_metrics["potential_savings"] > 0, demo_metrics
+        assert demo_metrics["verified_savings"] > 0, demo_metrics
+        assert demo_metrics["pending_savings"] > 0, demo_metrics
+
+        demo_verified = client.get("/api/insights/savings/verified")
+        assert demo_verified.status_code == 200, demo_verified.text
+        assert demo_verified.json()["count"] >= 1, demo_verified.text
+        assert demo_verified.json()["total_amount"] > 0, demo_verified.text
+
+        demo_radar = client.get("/api/compra-agil/opportunities")
+        assert demo_radar.status_code == 200, demo_radar.text
+        assert len(demo_radar.json()["opportunities"]) >= 2, demo_radar.text
+
         branding = client.patch(
             "/api/enterprise/branding",
             json={"brand_name": "NEXORA Demo", "brand_primary_color": "#0ea5e9"},

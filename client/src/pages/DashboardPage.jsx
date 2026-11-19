@@ -14,6 +14,7 @@ import QuickGuide from "../components/QuickGuide";
 import NextStepCard from "../components/NextStepCard";
 import SiiCompletenessCard from "../components/SiiCompletenessCard";
 import LeakAuditCard from "../components/LeakAuditCard";
+import SavingsSpotlight from "../components/SavingsSpotlight";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 
 export default function DashboardPage({ onNavigate, onUpload }) {
@@ -100,13 +101,15 @@ export default function DashboardPage({ onNavigate, onUpload }) {
   // KPIs principales calculados
   const totalSpend = Number(primarySpend?.amount || 0);
   const totalSavings = Number(summary?.total_savings || 0);
-  const savingsRate = totalSpend > 0 ? Math.round((totalSavings / totalSpend) * 100) : 0;
+  const detectedSavings = Number(summary?.potential_savings ?? totalSavings);
+  const verifiedSavings = Number(summary?.verified_savings ?? totalSavings);
+  const savingsRate = totalSpend > 0 ? Math.round((detectedSavings / totalSpend) * 100) : 0;
   const spendSeries = (summary?.monthly_purchases || []).map((row) => Number(row.spend || 0));
   const metricsAreZero =
     Boolean(summary) &&
     !showEmpty &&
     totalSpend <= 0 &&
-    totalSavings <= 0 &&
+    detectedSavings <= 0 &&
     Number(summary?.exceptions_pending || 0) === 0 &&
     Number(summary?.approvals_pending || 0) === 0 &&
     (Number(summary?.documents_pending || 0) > 0 || Number(summary?.suppliers_count || 0) === 0);
@@ -115,6 +118,11 @@ export default function DashboardPage({ onNavigate, onUpload }) {
     <div className="page-stack">
       <AppBanner onNavigate={onNavigate} onUpload={canOperate ? onUpload : undefined} />
       <QuickGuide activeStep={1} />
+      <SavingsSpotlight
+        summary={summary}
+        currency={activeCurrency}
+        onNavigate={onNavigate}
+      />
       <LeakAuditCard onNavigate={onNavigate} />
       <SiiCompletenessCard onNavigate={onNavigate} />
 
@@ -184,12 +192,18 @@ export default function DashboardPage({ onNavigate, onUpload }) {
                 sparkline={spendSeries}
               />
               <StatCard
-                label="Ahorro estimado"
-                value={formatMoney(totalSavings, activeCurrency)}
-                detail={`${savingsRate}% de la compra auditada`}
+                label="Ahorro detectado"
+                value={formatMoney(detectedSavings, activeCurrency)}
+                detail={
+                  detectedSavings > 0
+                    ? `${formatMoney(verifiedSavings, activeCurrency)} ya verificado`
+                    : hasActivity
+                      ? "Sin sobrecostos aún: faltan compras repetidas del mismo producto"
+                      : "Carga documentos o el ejemplo de 90 días para calcularlo"
+                }
                 tone="ok"
                 icon={<SparkIcon />}
-                trend={savingsRate}
+                trend={detectedSavings > 0 ? savingsRate : null}
                 trendHint="vs. gasto"
               />
               <StatCard

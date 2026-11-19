@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import secrets
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlsplit
@@ -14,6 +14,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from psycopg.errors import UniqueViolation
+from psycopg.types.json import Jsonb
 
 from src.api.deps import CurrentUser, require_roles
 from src.core.config import settings
@@ -932,6 +933,7 @@ async def seed_demo_data(
         current_month_document_id = None
         current_month_supplier_id = None
         current_month_spend = Decimal("0")
+        demo_verified: dict | None = None
         for month_offset in range(months - 1, -1, -1):
             month_date = _add_months(today.replace(day=1), -month_offset)
             price_date = month_date
@@ -1042,6 +1044,17 @@ async def seed_demo_data(
                     if current_month_supplier_id is None:
                         current_month_supplier_id = supplier["id"]
                     current_month_spend += price * quantity
+                    if demo_verified is None:
+                        demo_verified = {
+                            "sku": sku,
+                            "product": description,
+                            "supplier_before": supplier["name"],
+                            "supplier_after": "Proveedor Demo Central",
+                            "unit_price_before": price,
+                            "unit_price_after": baseline_price,
+                            "quantity": quantity,
+                            "savings": (price - baseline_price) * quantity,
+                        }
             await repositories.mark_processed(
                 conn,
                 org_id=user["org_id"],
@@ -1054,6 +1067,98 @@ async def seed_demo_data(
             )
 
         catalog_items = await repositories.seed_demo_catalog(conn, user["org_id"])
+
+        if demo_verified is not None:
+            try:
+                async with conn.transaction():
+                    await repositories.record_savings_tracking(
+                        conn,
+                        org_id=user["org_id"],
+                        opportunity_key=f"demo-{user['org_id']}-verified",
+                        status="realized",
+                        realized_amount=float(demo_verified["savings"]),
+                        currency=user["default_currency"],
+                        title="Renegociación demo de ferretería",
+                        sku=demo_verified["sku"],
+                        product=demo_verified["product"],
+                        supplier_before=demo_verified["supplier_before"],
+                        supplier_after=demo_verified["supplier_after"],
+                        unit_price_before=float(demo_verified["unit_price_before"]),
+                        unit_price_after=float(demo_verified["unit_price_after"]),
+                        quantity=float(demo_verified["quantity"]),
+                        notes="Ahorro verificado de demostración con evidencia auditable.",
+                        evidence={"demo": True, "source": "onboarding_demo"},
+                    )
+            except Exception:
+                logger.warning("No se pudo crear el ahorro verificado demo", exc_info=True)
+
+        demo_opportunities = [
+            (
+                "DEMO-CA-1",
+                "Reposición de tornillos y fijaciones",
+                "Municipalidad Demo",
+                "Metropolitana",
+                today + timedelta(days=18),
+                Decimal("850000"),
+                [products[0]],
+            ),
+            (
+                "DEMO-CA-2",
+                "Pinturas y sellantes para mantención",
+                "Corporación Educacional Demo",
+                "Valparaíso",
+                today + timedelta(days=25),
+                Decimal("1250000"),
+                [products[3]],
+            ),
+        ]
+        for external_id, title, buyer, region, closes_at, budget, requested in demo_opportunities:
+            items = [
+                {
+                    "sku": sku,
+                    "description": description,
+                    "unit": unit,
+                    "quantity": float(Decimal("20") + Decimal(index * 5)),
+                }
+                for index, (sku, description, unit, _price) in enumerate(requested)
+            ]
+            try:
+                async with conn.transaction():
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO compra_agil_opportunities (
+                                org_id, external_id, title, buyer, region, closes_at, budget_clp,
+                                status, source, items, metadata
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'open', 'demo', %s, %s)
+                            ON CONFLICT (org_id, external_id) DO UPDATE SET
+                                title = EXCLUDED.title,
+                                buyer = EXCLUDED.buyer,
+                                region = EXCLUDED.region,
+                                closes_at = EXCLUDED.closes_at,
+                                budget_clp = EXCLUDED.budget_clp,
+                                items = EXCLUDED.items,
+                                updated_at = now()
+                            """,
+                            (
+                                user["org_id"],
+                                external_id,
+                                title,
+                                buyer,
+                                region,
+                                closes_at,
+                                budget,
+                                Jsonb(items),
+                                Jsonb({"demo": True}),
+                            ),
+                        )
+            except Exception:
+                logger.warning(
+                    "No se pudo crear la oportunidad demo %s",
+                    external_id,
+                    exc_info=True,
+                )
 
         approvals_created = 0
         for approval_title, amount, priority in [

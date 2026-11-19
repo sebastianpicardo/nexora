@@ -1153,4 +1153,36 @@ async def purge_demo_data(conn: AsyncConnection, org_id: UUID | str) -> dict:
             (org,),
         )
         catalog = cur.rowcount or 0
-    return {"approvals": approvals, "documents": documents, "suppliers": suppliers, "catalog": catalog}
+
+        opportunities = 0
+        await cur.execute(
+            "SELECT to_regclass('public.compra_agil_opportunities') IS NOT NULL AS available"
+        )
+        if (await cur.fetchone() or {}).get("available"):
+            await cur.execute(
+                """
+                DELETE FROM compra_agil_opportunities
+                WHERE org_id = %s AND (metadata->>'demo')::boolean IS TRUE
+                """,
+                (org,),
+            )
+            opportunities = cur.rowcount or 0
+
+        savings = 0
+        await cur.execute(
+            "SELECT to_regclass('public.savings_tracking') IS NOT NULL AS available"
+        )
+        if (await cur.fetchone() or {}).get("available"):
+            await cur.execute(
+                "DELETE FROM savings_tracking WHERE org_id = %s AND opportunity_key LIKE 'demo-%%'",
+                (org,),
+            )
+            savings = cur.rowcount or 0
+    return {
+        "approvals": approvals,
+        "documents": documents,
+        "suppliers": suppliers,
+        "catalog": catalog,
+        "opportunities": opportunities,
+        "savings": savings,
+    }

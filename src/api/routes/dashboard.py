@@ -48,26 +48,52 @@ async def dashboard_summary(
             )
             counts = await cur.fetchone() or {}
 
-            # Ahorro estimado: suma de ahorro de excepciones resueltas (price_spike aprobadas/resueltas)
+            # Ahorro detectado en excepciones de alza y ahorro ya verificado.
             await cur.execute(
                 """
-                SELECT coalesce(sum(
-                    greatest(coalesce(i.normalized_unit_price, 0) - coalesce(
-                        case when jsonb_typeof(e.evidence->'historical_median') = 'number'
-                             then (e.evidence->>'historical_median')::numeric
-                             else 0 end, 0), 0)
-                    * greatest(coalesce(i.quantity, 0), 0)
-                ), 0) AS total_savings
+                SELECT
+                    coalesce(sum(
+                        CASE WHEN e.status IN ('approved', 'resolved')
+                        THEN greatest(coalesce(i.normalized_unit_price, 0) - coalesce(
+                            case when jsonb_typeof(e.evidence->'historical_median') = 'number'
+                                 then (e.evidence->>'historical_median')::numeric
+                                 else 0 end, 0), 0)
+                        * greatest(coalesce(i.quantity, 0), 0) ELSE 0 END
+                    ), 0) AS verified_savings,
+                    coalesce(sum(
+                        CASE WHEN e.status = 'pending'
+                        THEN greatest(coalesce(i.normalized_unit_price, 0) - coalesce(
+                            case when jsonb_typeof(e.evidence->'historical_median') = 'number'
+                                 then (e.evidence->>'historical_median')::numeric
+                                 else 0 end, 0), 0)
+                        * greatest(coalesce(i.quantity, 0), 0) ELSE 0 END
+                    ), 0) AS pending_savings
                 FROM exceptions_log e
                 LEFT JOIN items_history i ON i.id = e.item_id
                 WHERE e.org_id = %s
                   AND e.type = 'price_spike'
-                  AND e.status IN ('approved', 'resolved')
                   AND (i.currency = %s OR i.currency IS NULL)
                 """,
                 (org_id, chart_currency),
             )
             savings_row = await cur.fetchone() or {}
+
+            await cur.execute(
+                "SELECT to_regclass('public.savings_tracking') IS NOT NULL AS available"
+            )
+            tracked_table = (await cur.fetchone() or {}).get("available")
+            tracked_row = {}
+            if tracked_table:
+                await cur.execute(
+                    """
+                    SELECT coalesce(sum(realized_amount), 0) AS tracked_savings
+                    FROM savings_tracking
+                    WHERE org_id = %s AND status = 'realized'
+                      AND upper(currency) = %s
+                    """,
+                    (org_id, chart_currency),
+                )
+                tracked_row = await cur.fetchone() or {}
 
             # Proveedores activos y con score
             await cur.execute(
@@ -205,6 +231,11 @@ async def dashboard_summary(
             )
         )
 
+    verified_savings = float(savings_row.get("verified_savings") or 0) + float(
+        tracked_row.get("tracked_savings") or 0
+    )
+    pending_savings = float(savings_row.get("pending_savings") or 0)
+
     return DashboardSummary(
         documents_total=_int(counts.get("documents_total")),
         documents_processed=_int(counts.get("documents_processed")),
@@ -212,7 +243,11 @@ async def dashboard_summary(
         items_total=_int(counts.get("items_total")),
         exceptions_pending=_int(counts.get("exceptions_pending")),
         price_alerts_pending=_int(counts.get("price_alerts_pending")),
-        total_savings=float(savings_row.get("total_savings") or 0),
+        total_savings=verified_savings,
+        potential_savings=round(verified_savings + pending_savings, 2),
+        verified_savings=round(verified_savings, 2),
+        pending_savings=round(pending_savings, 2),
+        savings_currency=chart_currency,
         suppliers_count=int(supplier_row.get("suppliers_count") or 0),
         scorecards_count=int(supplier_row.get("scorecards_count") or 0),
         approvals_pending=int(approval_row.get("approvals_pending") or 0),
