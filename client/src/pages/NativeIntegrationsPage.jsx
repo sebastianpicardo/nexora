@@ -18,15 +18,13 @@ import {
 const PROVIDERS = [
   {
     id: "chilecompra",
-    name: "ChileCompra",
+    name: "Compra Ágil (ChileCompra)",
     icon: SearchIcon,
-    description: "Explora precios y proveedores de demostración. Los datos son simulados y no provienen de Mercado Público.",
+    description: "Radar de oportunidades públicas de hasta 100 UTM. Usa la API configurada o carga un CSV; nunca mostramos datos inventados.",
     color: "#10b981",
     maturity: "operativo",
     actions: [
-      { id: "search_items", label: "Ver precios demo", primary: true, icon: SearchIcon },
-      { id: "search_suppliers", label: "Ver proveedores demo", icon: SuppliersIcon },
-      { id: "import_order", label: "Importar orden", icon: ArrowRightIcon },
+      { id: "search_items", label: "Ver oportunidades", primary: true, icon: SearchIcon },
     ],
   },
   {
@@ -516,7 +514,30 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
 
           {resultados.length > 0 ? (
             <div className="result-table-wrap">
-              {resultados[0].rut ? (
+              {resultados[0].external_id ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Oportunidad</th>
+                      <th>Comprador</th>
+                      <th>Cierre</th>
+                      <th>Ítems</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultados.map((r, i) => (
+                      <tr key={i}>
+                        <td className="mono">{r.external_id || "—"}</td>
+                        <td>{r.title || "—"}</td>
+                        <td>{r.buyer || "—"}</td>
+                        <td>{r.closes_at || "—"}</td>
+                        <td>{r.item_count ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : resultados[0].rut ? (
                 <table className="data-table">
                   <thead>
                     <tr>

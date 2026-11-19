@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { formatDate, formatMoney, formatNumber, percent } from "../lib/format";
 import StatCard from "../components/StatCard";
 import DemoDataBanner from "../components/DemoDataBanner";
+import VerifiedSavingsPanel from "../components/VerifiedSavingsPanel";
 import ActionEmptyState from "../components/ActionEmptyState";
 import { DollarIcon, ExceptionsIcon, PricesIcon, SuppliersIcon } from "../components/Icons";
 
@@ -304,6 +305,7 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
           </div>
         )}
       </section>
+      <VerifiedSavingsPanel />
         </>
       )}
     </div>

@@ -96,6 +96,17 @@ async def _deliver(
     return "skipped", "Canal no soportado"
 
 
+async def deliver_message(
+    *,
+    channel: dict,
+    subject: str,
+    text: str,
+    payload: dict,
+) -> tuple[str, str | None]:
+    """Entrega un mensaje ya redactado por un canal configurado."""
+    return await _deliver(channel=channel, subject=subject, text=text, payload=payload)
+
+
 async def dispatch_alerts(
     conn,
     *,

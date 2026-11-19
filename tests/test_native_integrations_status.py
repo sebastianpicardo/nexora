@@ -10,8 +10,9 @@ def test_native_integration_status_is_not_reversed():
     providers = {item["provider"]: item for item in data["providers"]}
 
     assert providers["chilecompra"]["available"] is True
-    assert providers["chilecompra"]["status"] == "Demo / datos simulados"
-    assert providers["chilecompra"]["simulated"] is True
+    assert providers["chilecompra"]["status"] == "Radar Compra Ágil (API o carga manual)"
+    assert providers["chilecompra"]["simulated"] is False
+    assert providers["compra_agil"]["status"] == "API configurable o carga CSV"
     assert providers["slack"]["available"] is False
     assert providers["slack"]["status"] == "Próximamente"
     assert providers["erp"]["status"] == "Exportación CSV real"

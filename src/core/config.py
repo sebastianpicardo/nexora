@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     auth_attempt_rate_limit_per_minute: int = Field(default=10, ge=1)
 
     inbound_email_domain: str = "inbox.nexora.app"
+    compra_agil_api_url: str = ""
+    compra_agil_api_key: str = ""
     whatsapp_api_url: str = "https://graph.facebook.com/v21.0"
     whatsapp_phone_id: str = ""
     whatsapp_token: str = ""

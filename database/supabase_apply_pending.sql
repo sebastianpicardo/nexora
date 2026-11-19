@@ -333,6 +333,80 @@ ALTER TABLE exceptions_log
         'invoice_discrepancy'
     ));
 
+-- ===========================================================================
+-- 017_rcv_documents.sql
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS rcv_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    period DATE NOT NULL,
+    tipo_doc TEXT NOT NULL DEFAULT '33',
+    folio TEXT NOT NULL,
+    rut_emisor TEXT NOT NULL DEFAULT '',
+    supplier_name TEXT,
+    net_amount NUMERIC(18, 2),
+    tax_amount NUMERIC(18, 2),
+    total_amount NUMERIC(18, 2) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'CLP',
+    source_file TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, period, tipo_doc, folio, rut_emisor)
+);
+
+CREATE INDEX IF NOT EXISTS rcv_documents_org_period_idx
+    ON rcv_documents (org_id, period DESC);
+CREATE INDEX IF NOT EXISTS rcv_documents_org_folio_idx
+    ON rcv_documents (org_id, folio);
+
+-- ===========================================================================
+-- 018_compra_agil.sql
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS compra_agil_opportunities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    buyer TEXT,
+    region TEXT,
+    closes_at DATE,
+    budget_clp NUMERIC(18, 2),
+    status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'closed', 'awarded', 'dismissed')),
+    source TEXT NOT NULL DEFAULT 'manual',
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS compra_agil_org_closes_idx
+    ON compra_agil_opportunities (org_id, closes_at);
+
+-- ===========================================================================
+-- 019_savings_evidence.sql
+-- ===========================================================================
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS sku TEXT;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS product TEXT;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS supplier_before TEXT;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS supplier_after TEXT;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS document_before_id UUID
+    REFERENCES documents_log(id) ON DELETE SET NULL;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS document_after_id UUID
+    REFERENCES documents_log(id) ON DELETE SET NULL;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS unit_price_before NUMERIC(18, 4);
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS unit_price_after NUMERIC(18, 4);
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS quantity NUMERIC(18, 4);
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS evidence JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE savings_tracking ADD COLUMN IF NOT EXISTS realized_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS savings_tracking_org_realized_idx
+    ON savings_tracking (org_id, realized_at DESC)
+    WHERE status = 'realized';
+
 COMMIT;
 
 -- Verificacion rapida: todas las columnas deben devolver true.
@@ -361,4 +435,12 @@ SELECT
         SELECT 1 FROM pg_constraint
         WHERE conname = 'exceptions_log_type_check'
           AND pg_get_constraintdef(oid) LIKE '%partial_import%'
-    ) AS exception_types_ok;
+    ) AS exception_types_ok,
+    to_regclass('public.rcv_documents') IS NOT NULL AS rcv_documents_ok,
+    to_regclass('public.compra_agil_opportunities') IS NOT NULL AS compra_agil_ok,
+    EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'savings_tracking'
+          AND column_name = 'evidence'
+    ) AS savings_evidence_ok;

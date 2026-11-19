@@ -781,9 +781,11 @@ def test_leak_audit_endpoints_report_real_findings(live_database):
                     )
                     document_id = (await cur.fetchone())["id"]
 
-                    for supplier_name, price, quantity in (
-                        ("Ferretería Norte", 1000, 10),
-                        ("Ferretería Sur", 1500, 5),
+                    from datetime import timedelta
+
+                    for supplier_name, price, quantity, days_ago in (
+                        ("Ferretería Norte", 1000, 10, 5),
+                        ("Ferretería Sur", 1500, 5, 0),
                     ):
                         await cur.execute(
                             """
@@ -801,7 +803,7 @@ def test_leak_audit_endpoints_report_real_findings(live_database):
                                 suppliers[supplier_name],
                                 quantity,
                                 price,
-                                date.today(),
+                                date.today() - timedelta(days=days_ago),
                             ),
                         )
 
@@ -853,6 +855,53 @@ def test_leak_audit_endpoints_report_real_findings(live_database):
         assert weekly.status_code == 200, weekly.text
         assert weekly.json()["summary"]["documents_processed"] == 1, weekly.text
 
+        weekly_sent = client.post("/api/leaks/weekly-report/send", json={})
+        assert weekly_sent.status_code == 200, weekly_sent.text
+        assert weekly_sent.json()["deliveries"], weekly_sent.text
+
+        guardian = client.get("/api/leaks/margin-guardian?target_margin=15&min_margin=8")
+        assert guardian.status_code == 200, guardian.text
+        guardian_items = {item["sku"]: item for item in guardian.json()["items"]}
+        assert guardian_items["CAB-1"]["status"] == "bajo_costo", guardian_items["CAB-1"]
+        assert guardian_items["CAB-1"]["cost_current"] == 1500, guardian_items["CAB-1"]
+        assert guardian_items["CAB-1"]["suggested_sale"] > 1500, guardian_items["CAB-1"]
+
+        pos_csv = client.get("/api/leaks/margin-guardian.csv?only_changes=true")
+        assert pos_csv.status_code == 200, pos_csv.text
+        assert "CAB-1" in pos_csv.content.decode("utf-8-sig"), pos_csv.text
+
+        tracked = client.post(
+            "/api/insights/savings/track",
+            json={
+                "opportunity_key": "CAB-1-2026-11",
+                "status": "realized",
+                "title": "Renegociación cable eléctrico",
+                "sku": "CAB-1",
+                "product": "Cable eléctrico",
+                "supplier_before": "Ferretería Sur",
+                "supplier_after": "Ferretería Norte",
+                "unit_price_before": 1500,
+                "unit_price_after": 1000,
+                "quantity": 5,
+                "evidence": {"source": "test"},
+            },
+        )
+        assert tracked.status_code == 200, tracked.text
+        assert tracked.json()["tracking"]["realized_amount"] == 2500.0, tracked.text
+
+        verified = client.get("/api/insights/savings/verified")
+        assert verified.status_code == 200, verified.text
+        assert verified.json()["count"] == 1, verified.text
+        assert verified.json()["total_amount"] == 2500.0, verified.text
+
+        verified_csv = client.get("/api/insights/savings/verified.csv")
+        assert verified_csv.status_code == 200, verified_csv.text
+        assert "CAB-1" in verified_csv.content.decode("utf-8-sig"), verified_csv.text
+
+        verified_pdf = client.get("/api/insights/savings/verified.pdf")
+        assert verified_pdf.status_code == 200, verified_pdf.text
+        assert verified_pdf.headers["content-type"].startswith("application/pdf")
+
         pdf = client.get("/api/leaks/audit.pdf?days=90")
         assert pdf.status_code == 200, pdf.text
         assert pdf.headers["content-type"].startswith("application/pdf"), pdf.headers
@@ -870,3 +919,106 @@ def test_leak_audit_endpoints_report_real_findings(live_database):
         )
         assert rcv.status_code == 200, rcv.text
         assert rcv.json()["counts"]["nuevos"] == 1, rcv.text
+
+        opportunities_csv = (
+            b"codigo,titulo,comprador,cierre,item,unidad,cantidad,sku\n"
+            b"CA-1,Reposicion tornillos,Municipalidad Demo,2026-12-31,Cable electrico,unidad,10,CAB-1\n"
+            b"CA-1,Reposicion tornillos,Municipalidad Demo,2026-12-31,Producto sin precio,unidad,1,NO-EXISTE\n"
+        )
+        imported_opportunities = client.post(
+            "/api/compra-agil/import",
+            files={"file": ("compra_agil.csv", opportunities_csv, "text/csv")},
+        )
+        assert imported_opportunities.status_code == 200, imported_opportunities.text
+        assert imported_opportunities.json()["opportunities"] == 1, imported_opportunities.text
+
+        radar = client.get("/api/compra-agil/opportunities")
+        assert radar.status_code == 200, radar.text
+        assert radar.json()["mode"] == "manual", radar.text
+        assert radar.json()["opportunities"][0]["external_id"] == "CA-1", radar.text
+
+        quote = client.get("/api/compra-agil/CA-1/quote?target_margin=25")
+        assert quote.status_code == 200, quote.text
+        quote_payload = quote.json()
+        assert quote_payload["lines"][0]["cost_price"] == 1000, quote_payload
+        assert quote_payload["lines"][0]["offer_price"] == 1333.33, quote_payload
+        assert quote_payload["missing"] == 1, quote_payload
+
+        quote_csv = client.get("/api/compra-agil/CA-1/quote.csv?target_margin=25")
+        assert quote_csv.status_code == 200, quote_csv.text
+        assert "CA-1" in quote_csv.content.decode("utf-8-sig"), quote_csv.text
+
+def test_rcv_completeness_identifies_missing_folios(live_database):
+    user = asyncio.run(_seed_user())
+    token = create_access_token(
+        user_id=user["id"],
+        email=user["email"],
+        org_id=user["org_id"],
+        role=user["role"],
+        name=user["name"],
+    )
+
+    async def _seed_documents() -> None:
+        from psycopg.types.json import Jsonb
+
+        await open_pool()
+        try:
+            async with get_pool().connection() as conn:
+                async with conn.cursor() as cur:
+                    for folio in ("100", "102"):
+                        await cur.execute(
+                            """
+                            INSERT INTO documents_log (
+                                org_id, original_filename, storage_path, file_hash, status, metadata
+                            )
+                            VALUES (%s, %s, %s, %s, 'processed', %s)
+                            """,
+                            (
+                                user["org_id"],
+                                f"factura-{folio}.xml",
+                                f"demo/{folio}.xml",
+                                f"rcv-demo-{folio}",
+                                Jsonb(
+                                    {
+                                        "document_number": folio,
+                                        "supplier_tax_id": "76.111.222-3",
+                                    }
+                                ),
+                            ),
+                        )
+        finally:
+            await close_pool()
+
+    asyncio.run(_seed_documents())
+
+    today = date.today()
+    csv_bytes = (
+        "Tipo Doc;Folio;Fecha;RUT Proveedor;Razon Social;Monto Neto;IVA;Total\n"
+        f"33;100;{today.isoformat()};76.111.222-3;Ferreteria Norte;1000;190;1190\n"
+        f"33;101;{today.isoformat()};76.222.333-4;Ferreteria Sur;2000;380;2380\n"
+        f"61;102;{today.isoformat()};76.111.222-3;Ferreteria Norte;-500;-95;-595\n"
+    ).encode()
+
+    from fastapi.testclient import TestClient
+
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", token)
+
+        imported = client.post(
+            "/api/leaks/rcv/register",
+            files={"file": ("rcv.csv", csv_bytes, "text/csv")},
+            data={"period": today.strftime("%Y-%m")},
+        )
+        assert imported.status_code == 200, imported.text
+        assert imported.json()["rows"] == 3, imported.text
+
+        completeness = client.get(f"/api/leaks/rcv/completeness?period={today.strftime('%Y-%m')}")
+        assert completeness.status_code == 200, completeness.text
+        payload = completeness.json()
+        assert payload["total_documents"] == 3, payload
+        assert payload["with_detail"] == 2, payload
+        assert payload["missing"] == 1, payload
+        assert payload["missing_documents"][0]["folio"] == "101", payload
+        assert "faltan 1" in payload["message"], payload

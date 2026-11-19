@@ -8,6 +8,7 @@ from typing import Any
 
 from src.core.errors import ExtractionError
 from src.parsers.extractors.base import ExtractedContent
+from src.parsers.extractors.dte import extract_dte_document, extract_xml_text
 from src.parsers.extractors.images import extract_image
 from src.parsers.extractors.pdf import extract_pdf
 from src.parsers.extractors.tabular import extract_tabular, extract_tabular_document
@@ -21,12 +22,15 @@ from src.parsers.schemas import AuditFlag, ExtractedDocument, NormalizationResul
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 TABULAR_EXTENSIONS = {".xlsx", ".xls", ".csv", ".txt"}
+XML_EXTENSIONS = {".xml", ".dte"}
 
 
 def extract_local(content: bytes, filename: str, mime_type: str | None = None) -> ExtractedContent:
     suffix = Path(filename).suffix.lower()
     if suffix == ".pdf" or mime_type == "application/pdf":
         return extract_pdf(content)
+    if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
+        return extract_xml_text(content)
     if suffix in TABULAR_EXTENSIONS:
         return extract_tabular(content, filename)
     if suffix in IMAGE_EXTENSIONS:
@@ -123,6 +127,13 @@ async def run_pipeline(
         if deterministic is not None:
             extraction, table_meta = deterministic
             provider_name = "tabular"
+            model_name = "deterministic"
+
+    if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
+        deterministic = await asyncio.to_thread(extract_dte_document, content, filename)
+        if deterministic is not None:
+            extraction, table_meta = deterministic
+            provider_name = "dte"
             model_name = "deterministic"
 
     if extraction is None:

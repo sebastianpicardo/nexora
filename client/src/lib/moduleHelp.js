@@ -42,6 +42,64 @@ export const MODULE_HELP = {
       { id: "documents", label: "Cargar documentos" },
     ],
   },
+  margin: {
+    eyebrow: "Inteligencia",
+    title: "Guardián de margen",
+    purpose:
+      "Conecta las alzas de costo con tu catálogo y calcula el precio de venta necesario para proteger el margen objetivo.",
+    steps: [
+      "Define el margen objetivo y el mínimo aceptable para tu negocio.",
+      "Revisa los productos bajo el costo o con alza de costo reciente.",
+      "Elige cómo trasladar el alza (50%, 75% o 100%) y aplica el precio sugerido.",
+      "Descarga el CSV y actualiza Bsale, Defontana u otro POS/ERP.",
+    ],
+    tips: [
+      "El costo actual usa el último precio de compra registrado en NEXORA.",
+      "Si no hay compras, se usa el costo del catálogo.",
+    ],
+    related: [
+      { id: "price-catalog", label: "Revisar catálogo" },
+      { id: "documents", label: "Cargar facturas" },
+    ],
+  },
+  compare: {
+    eyebrow: "Inteligencia",
+    title: "Comparador y compra óptima",
+    purpose:
+      "Compara listas de distintos proveedores y calcula a quién comprar cada producto considerando flete y monto mínimo.",
+    steps: [
+      "Agrega los productos de tu reposición al carrito.",
+      "Ingresa flete y monto mínimo por proveedor si corresponde.",
+      "Calcula la compra óptima y revisa el ahorro frente a un solo proveedor.",
+    ],
+    tips: [
+      "Si un proveedor no cumple el mínimo, la compra óptima lo evita o lo advierte.",
+      "Los precios se toman de los últimos 90 días de documentos cargados.",
+    ],
+    related: [
+      { id: "margin-guardian", label: "Guardián de margen" },
+      { id: "opportunities", label: "Oportunidades de ahorro" },
+    ],
+  },
+  "compra-agil": {
+    eyebrow: "Ventas",
+    title: "Radar Compra Ágil",
+    purpose:
+      "Detecta oportunidades públicas de hasta 100 UTM y arma una propuesta de cotización con tu costo real y margen objetivo.",
+    steps: [
+      "Conecta la API de Compra Ágil o carga un CSV de oportunidades.",
+      "Revisa comprador, cierre e ítems solicitados.",
+      "Genera la cotización con el margen objetivo y expórtala.",
+    ],
+    tips: [
+      "Sin API configurada, el modo manual mantiene el radar operativo.",
+      "Los ítems sin costo registrado se marcan para completar el catálogo.",
+    ],
+    related: [
+      { id: "price-catalog", label: "Completar catálogo" },
+      { id: "documents", label: "Cargar costos" },
+    ],
+  },
   analytics: {
     eyebrow: "Inteligencia",
     title: "Analítica ejecutiva",

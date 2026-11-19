@@ -10,10 +10,11 @@ from psycopg import AsyncConnection
 from src.core.logging import get_logger
 from src.db import repositories
 from src.db.pool import get_pool
+from src.services import compra_agil_service
 
 logger = get_logger(__name__)
 
-PROVIDERS = ["chilecompra", "sii", "erp", "slack", "webhook", "google_workspace"]
+PROVIDERS = ["chilecompra", "compra_agil", "sii", "erp", "slack", "webhook", "google_workspace"]
 
 
 async def _audit(
@@ -35,51 +36,14 @@ async def _audit(
     )
 
 
-# Precios de referencia para ferretería (estimados, sin credenciales de terceros)
-FERRETERIA_REFERENCIAS = [
-    {"categoria": "Tornillería", "item": "Tornillo acero inoxidable 6mm", "unit": "unidad", "precio": 120, "proveedor": "Ferretería del Norte"},
-    {"categoria": "Tornillería", "item": "Tornillo acero inoxidable 6mm", "unit": "unidad", "precio": 95, "proveedor": "Tornillería Central"},
-    {"categoria": "Tornillería", "item": "Tornillo acero inoxidable 6mm", "unit": "unidad", "precio": 140, "proveedor": "Hogar y Ferretería"},
-    {"categoria": "Tornillería", "item": "Tornillo acero inoxidable 8mm", "unit": "unidad", "precio": 180, "proveedor": "Ferretería del Norte"},
-    {"categoria": "Tornillería", "item": "Tornillo acero inoxidable 8mm", "unit": "unidad", "precio": 155, "proveedor": "Tornillería Central"},
-    {"categoria": "Pintura", "item": "Pintura esmalte blanco 1 galón", "unit": "galón", "precio": 8500, "proveedor": "Pinturas Sur"},
-    {"categoria": "Pintura", "item": "Pintura esmalte blanco 1 galón", "unit": "galón", "precio": 7900, "proveedor": "Color y Decoración"},
-    {"categoria": "Pintura", "item": "Pintura acrílica blanco 4 galones", "unit": "galón", "precio": 22000, "proveedor": "Pinturas Sur"},
-    {"categoria": "Pintura", "item": "Pintura acrílica blanco 4 galones", "unit": "galón", "precio": 19500, "proveedor": "Color y Decoración"},
-    {"categoria": "Fontanería", "item": "Tubería PVC 1/2 pulgada", "unit": "metro", "precio": 1500, "proveedor": "Fontanería Express"},
-    {"categoria": "Fontanería", "item": "Tubería PVC 1/2 pulgada", "unit": "metro", "precio": 1350, "proveedor": "Tuberías Chile"},
-    {"categoria": "Fontanería", "item": "Codo PVC 1/2 pulgada", "unit": "unidad", "precio": 450, "proveedor": "Fontanería Express"},
-    {"categoria": "Fontanería", "item": "Codo PVC 1/2 pulgada", "unit": "unidad", "precio": 380, "proveedor": "Tuberías Chile"},
-    {"categoria": "Eléctrica", "item": "Cable eléctrico 2.5mm", "unit": "metro", "precio": 650, "proveedor": "Eléctrica Moderna"},
-    {"categoria": "Eléctrica", "item": "Cable eléctrico 2.5mm", "unit": "metro", "precio": 580, "proveedor": "Voltaje y Cable"},
-    {"categoria": "Eléctrica", "item": "Interruptor simple", "unit": "unidad", "precio": 2500, "proveedor": "Eléctrica Moderna"},
-    {"categoria": "Eléctrica", "item": "Interruptor simple", "unit": "unidad", "precio": 2100, "proveedor": "Voltaje y Cable"},
-    {"categoria": "Ferretería general", "item": "Cinta métrica 5m", "unit": "unidad", "precio": 4500, "proveedor": "Ferretería Central"},
-    {"categoria": "Ferretería general", "item": "Cinta métrica 5m", "unit": "unidad", "precio": 3900, "proveedor": "Herramientas SA"},
-    {"categoria": "Ferretería general", "item": "Llave inglesa 8 pulgadas", "unit": "unidad", "precio": 6500, "proveedor": "Ferretería Central"},
-    {"categoria": "Ferretería general", "item": "Llave inglesa 8 pulgadas", "unit": "unidad", "precio": 5900, "proveedor": "Herramientas SA"},
-]
-
-# Proveedores de referencia para ChileCompra
-CHILECOMPRA_PROVEEDORES = [
-    {"rut": "76.000.000-0", "name": "Ferretería del Norte SpA", "region": "Metropolitana", "confianza": 85, "ranking": 1, "precio_promedio": 12500, "quejas": 3, "estado": "Activo", "contacto": "Carlos Méndez", "telefono": "+56 2 2345 6789", "email": "ventas@ferreteriadelnorte.cl"},
-    {"rut": "76.111.111-1", "name": "Tornillería Central Ltda", "region": "Metropolitana", "confianza": 92, "ranking": 2, "precio_promedio": 9800, "quejas": 1, "estado": "Activo", "contacto": "Andrea Rojas", "telefono": "+56 2 2123 4567", "email": "contacto@tornilleriacentral.cl"},
-    {"rut": "76.222.222-2", "name": "Pinturas Sur Limitada", "region": "Valparaíso", "confianza": 78, "ranking": 3, "precio_promedio": 15200, "quejas": 7, "estado": "Activo", "contacto": "Luis Valenzuela", "telefono": "+56 32 255 1234", "email": "ventas@pinturassur.cl"},
-    {"rut": "76.333.333-3", "name": "Fontanería Express SpA", "region": "Biobío", "confianza": 88, "ranking": 4, "precio_promedio": 11000, "quejas": 2, "estado": "Activo", "contacto": "Sofía Castro", "telefono": "+56 41 233 4455", "email": "sofia@fontaneriaexpress.cl"},
-    {"rut": "76.444.444-4", "name": "Eléctrica Moderna Ltda", "region": "Metropolitana", "confianza": 90, "ranking": 5, "precio_promedio": 10500, "quejas": 4, "estado": "Activo", "contacto": "Martín Silva", "telefono": "+56 2 2678 9012", "email": "martin@electricalmodern.cl"},
-    {"rut": "76.555.555-5", "name": "Herramientas SA", "region": "O'Higgins", "confianza": 75, "ranking": 6, "precio_promedio": 14500, "quejas": 9, "estado": "Activo", "contacto": "Patricia Gómez", "telefono": "+56 72 211 3344", "email": "patricia@herramientassa.cl"},
-    {"rut": "76.666.666-6", "name": "Color y Decoración SpA", "region": "Valparaíso", "confianza": 82, "ranking": 7, "precio_promedio": 13000, "quejas": 5, "estado": "Activo", "contacto": "Diego Muñoz", "telefono": "+56 32 244 5566", "email": "diego@colorydecoracion.cl"},
-    {"rut": "76.777.777-7", "name": "Tuberías Chile Ltda", "region": "Maule", "confianza": 80, "ranking": 8, "precio_promedio": 11800, "quejas": 3, "estado": "Activo", "contacto": "Carmen Ortiz", "telefono": "+56 71 222 3344", "email": "carmen@tuberiaschile.cl"},
-    {"rut": "76.888.888-8", "name": "Voltaje y Cable SpA", "region": "Metropolitana", "confianza": 86, "ranking": 9, "precio_promedio": 9900, "quejas": 2, "estado": "Activo", "contacto": "Francisca Díaz", "telefono": "+56 2 2777 8899", "email": "francisca@voltajeycable.cl"},
-    {"rut": "76.999.999-9", "name": "Hogar y Ferretería Ltda", "region": "Los Lagos", "confianza": 70, "ranking": 10, "precio_promedio": 16000, "quejas": 12, "estado": "Activo", "contacto": "Roberto Pino", "telefono": "+56 65 233 4455", "email": "roberto@hogaryferreteria.cl"},
-]
 
 
 async def list_native_integrations(user: dict) -> dict[str, Any]:
     """Estado de integraciones nativas. Siempre disponibles, sin configuración técnica."""
     providers: list[dict[str, Any]] = []
     integration_status = {
-        "chilecompra": (True, "Demo / datos simulados"),
+        "chilecompra": (True, "Radar Compra Ágil (API o carga manual)"),
+        "compra_agil": (True, "API configurable o carga CSV"),
         "sii": (True, "Validación local de RUT"),
         "erp": (True, "Exportación CSV real"),
         "slack": (False, "Próximamente"),
@@ -93,7 +57,7 @@ async def list_native_integrations(user: dict) -> dict[str, Any]:
                 "provider": provider,
                 "available": available,
                 "status": status,
-                "simulated": provider in {"chilecompra"},
+                "simulated": False,
                 "actions": _default_actions(provider),
             }
         )
@@ -103,9 +67,12 @@ async def list_native_integrations(user: dict) -> dict[str, Any]:
 def _default_actions(provider: str) -> list[dict]:
     base = {
         "chilecompra": [
-            {"id": "search_items", "label": "Ver precios demo (simulado)", "icon": "SearchIcon", "primary": True},
-            {"id": "search_suppliers", "label": "Ver proveedores demo (simulado)", "icon": "SuppliersIcon"},
+            {"id": "search_items", "label": "Ver oportunidades Compra Ágil", "icon": "SearchIcon", "primary": True},
+            {"id": "search_suppliers", "label": "Buscar proveedores", "icon": "SuppliersIcon"},
             {"id": "import_order", "label": "Importar orden de compra", "icon": "ArrowRightIcon"},
+        ],
+        "compra_agil": [
+            {"id": "opportunities", "label": "Ver oportunidades", "icon": "SearchIcon", "primary": True},
         ],
         "sii": [
             {"id": "validate_rut", "label": "Validar formato de RUT", "icon": "CheckIcon", "primary": True},
@@ -130,7 +97,7 @@ def _default_actions(provider: str) -> list[dict]:
         ],
     }.get(provider, [])
     disabled_actions = {
-        "chilecompra": {"import_order"},
+        "chilecompra": {"search_suppliers", "import_order"},
         "sii": {"fetch_invoices", "reconcile"},
         "slack": {"notify", "approve_from_slack"},
         "webhook": {"send_event"},
@@ -159,95 +126,65 @@ def _validar_rut_chileno(rut: str) -> bool:
     return dv == dv_esperado
 
 
-# ---- Acciones ChileCompra (sin credenciales, datos de referencia) ----
+# ---- Compra Ágil / ChileCompra (datos reales de API o carga manual) ----
 
 async def chilecompra_search_items(user: dict, payload: dict) -> dict[str, Any]:
-    query = (payload.get("query") or "").lower()
-    mode = payload.get("mode") or "all"  # all, cheapest
+    query = str(payload.get("query") or "").strip()
     limit = int(payload.get("limit", 50))
-
-    resultados = [
-        r
-        for r in FERRETERIA_REFERENCIAS
-        if not query or query in r["item"].lower() or query in r["categoria"].lower()
-    ]
-
-    if mode == "cheapest":
-        # Agrupar por item y quedarse con el precio más bajo
-        mejor_por_item: dict[str, dict] = {}
-        for r in resultados:
-            key = r["item"]
-            if key not in mejor_por_item or r["precio"] < mejor_por_item[key]["precio"]:
-                mejor_por_item[key] = r
-        resultados = list(mejor_por_item.values())
-        resultados.sort(key=lambda x: x["precio"])
-    else:
-        resultados.sort(key=lambda x: (x["categoria"], x["precio"]))
-
-    resultados = resultados[:limit]
-
+    result = await compra_agil_service.list_opportunities(user, search=query or None, limit=limit)
     async with get_pool().connection() as conn:
-        meta = {"query": query, "mode": mode}
         await _audit(
             conn,
             user,
             "integration.chilecompra.search_items",
             "integration",
             "chilecompra",
-            meta,
+            {"query": query, "mode": result.get("mode")},
         )
     return {
         "provider": "chilecompra",
         "action": "search_items",
         "query": query,
-        "mode": mode,
-        "results": resultados,
-        "total": len(resultados),
-        "simulated": True,
-        "source": "Demo interno (simulado)",
-        "note": "Datos de demostración. No provienen de ChileCompra ni de Mercado Público.",
+        "results": result["opportunities"],
+        "total": len(result["opportunities"]),
+        "configured": result["configured"],
+        "source": "API Compra Ágil" if result["mode"] == "api" else "Carga manual",
+        "note": result["message"],
     }
 
 
-async def chilecompra_search_suppliers(user: dict, payload: dict) -> dict[str, Any]:
-    name = (payload.get("name") or "").lower()
-    order_by = payload.get("order_by") or "ranking"  # ranking, confidence, price, complaints
-
-    proveedores = [
-        p
-        for p in CHILECOMPRA_PROVEEDORES
-        if not name or name in p["name"].lower()
-    ]
-
-    if order_by == "confidence":
-        proveedores.sort(key=lambda x: x["confianza"], reverse=True)
-    elif order_by == "price":
-        proveedores.sort(key=lambda x: x["precio_promedio"])
-    elif order_by == "complaints":
-        proveedores.sort(key=lambda x: x["quejas"])
-    else:  # ranking
-        proveedores.sort(key=lambda x: x["ranking"])
-
+async def compra_agil_opportunities(user: dict, payload: dict) -> dict[str, Any]:
+    query = str(payload.get("query") or "").strip()
+    limit = int(payload.get("limit", 50))
+    result = await compra_agil_service.list_opportunities(user, search=query or None, limit=limit)
     async with get_pool().connection() as conn:
-        meta = {"name": name, "order_by": order_by}
+        await _audit(
+            conn,
+            user,
+            "integration.compra_agil.opportunities",
+            "integration",
+            "compra_agil",
+            {"query": query, "mode": result.get("mode")},
+        )
+    return {"provider": "compra_agil", "action": "opportunities", **result}
+
+
+async def chilecompra_search_suppliers(user: dict, payload: dict) -> dict[str, Any]:
+    async with get_pool().connection() as conn:
         await _audit(
             conn,
             user,
             "integration.chilecompra.search_suppliers",
             "integration",
             "chilecompra",
-            meta,
+            {},
         )
     return {
         "provider": "chilecompra",
         "action": "search_suppliers",
-        "name": name,
-        "order_by": order_by,
-        "results": proveedores,
-        "total": len(proveedores),
-        "simulated": True,
-        "source": "Demo interno (simulado)",
-        "note": "Proveedores de demostración. No provienen de ChileCompra ni de Mercado Público.",
+        "results": [],
+        "total": 0,
+        "note": "La búsqueda de proveedores requiere una fuente oficial configurada. No mostramos datos inventados.",
     }
 
 
@@ -262,7 +199,6 @@ async def chilecompra_import_order(user: dict, payload: dict) -> dict[str, Any]:
         "action": "import_order",
         "order_id": order_id,
         "status": "no_disponible",
-        "simulated": True,
         "note": "La importación de órdenes reales requiere credenciales de ChileCompra. Sube el archivo manualmente.",
     }
 
@@ -491,6 +427,9 @@ ACTION_HANDLERS = {
         "search_items": chilecompra_search_items,
         "search_suppliers": chilecompra_search_suppliers,
         "import_order": chilecompra_import_order,
+    },
+    "compra_agil": {
+        "opportunities": compra_agil_opportunities,
     },
     "sii": {
         "validate_rut": sii_validate_rut,

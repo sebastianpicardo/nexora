@@ -4,6 +4,7 @@ import { api, downloadFile } from "../lib/api";
 import { formatDate, formatMoney, labelize } from "../lib/format";
 import PageTabs from "../components/PageTabs";
 import StatCard from "../components/StatCard";
+import RcvCompletenessPanel from "../components/RcvCompletenessPanel";
 import {
   AlertTriangleIcon,
   CheckIcon,
@@ -634,7 +635,9 @@ export default function AuditExpressPage({ onNavigate }) {
       ) : null}
 
       {tab === "rcv" ? (
-        <div className="audit-grid">
+        <div className="page-stack">
+          <RcvCompletenessPanel />
+          <div className="audit-grid">
           <section className="card">
             <div className="card-head">
               <div>
@@ -773,6 +776,7 @@ export default function AuditExpressPage({ onNavigate }) {
               ) : null}
             </section>
           </aside>
+          </div>
         </div>
       ) : null}
     </div>

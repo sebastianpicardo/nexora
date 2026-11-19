@@ -8364,3 +8364,279 @@ body.modal-open {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ── Guardián de margen, compra óptima y ahorro verificado ────────────────── */
+.verified-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.verified-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.verified-summary span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.verified-summary strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quantity-input {
+  width: 92px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  text-align: right;
+}
+
+.optimizer-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.search-field select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.82rem;
+  width: 100%;
+}
+
+.optimizer-settings {
+  margin-top: 20px;
+}
+
+.optimizer-settings h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.optimizer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.radar-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.radar-mode.api {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: var(--brand-soft);
+}
+
+.radar-mode.manual {
+  background: var(--warn-soft);
+  border-color: rgba(251, 191, 36, 0.32);
+}
+
+.radar-mode span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.radar-import {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.radar-import > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--brand);
+}
+
+.rcv-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  margin-bottom: 16px;
+}
+
+.rcv-status.warning {
+  border-color: rgba(251, 191, 36, 0.32);
+}
+
+.rcv-status.ok {
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.rcv-status > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rcv-status span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.rcv-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.rcv-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-dark), var(--brand));
+}
+
+.rcv-pct {
+  color: var(--brand);
+  font-size: 1.1rem;
+}
+
+.rcv-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.rcv-upload > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--brand);
+}
+
+.rcv-completeness .table-wrap {
+  margin-top: 12px;
+}
+
+.sii-status-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+.sii-status-card > div:nth-child(2) {
+  flex: 1;
+}
+
+.sii-status-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.sii-status-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.sii-status-card.warning .sii-status-icon {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.sii-status-card.ok .sii-status-icon {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.leak-audit-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-color: rgba(16, 185, 129, 0.28);
+  background:
+    radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.12), transparent 45%),
+    var(--surface);
+}
+
+.leak-audit-card > div:nth-child(2) {
+  flex: 1;
+}
+
+.leak-audit-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 860px) {
+  .rcv-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sii-status-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+.privacy-notice {
+  margin: 4px 0 18px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(16, 185, 129, 0.26);
+  background: var(--brand-soft);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.privacy-notice strong {
+  color: var(--ink);
+}
+
+.privacy-notice p {
+  margin: 6px 0 8px;
+}
+
+.privacy-notice ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}

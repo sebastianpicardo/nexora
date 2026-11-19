@@ -940,6 +940,18 @@ CREATE TABLE IF NOT EXISTS savings_tracking (
         CHECK (realized_amount >= 0),
     currency TEXT NOT NULL DEFAULT 'CLP',
     notes TEXT,
+    title TEXT,
+    sku TEXT,
+    product TEXT,
+    supplier_before TEXT,
+    supplier_after TEXT,
+    document_before_id UUID REFERENCES documents_log(id) ON DELETE SET NULL,
+    document_after_id UUID REFERENCES documents_log(id) ON DELETE SET NULL,
+    unit_price_before NUMERIC(18, 4),
+    unit_price_after NUMERIC(18, 4),
+    quantity NUMERIC(18, 4),
+    evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+    realized_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (org_id, opportunity_key)
@@ -947,6 +959,10 @@ CREATE TABLE IF NOT EXISTS savings_tracking (
 
 CREATE INDEX IF NOT EXISTS savings_tracking_org_status_idx
     ON savings_tracking (org_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS savings_tracking_org_realized_idx
+    ON savings_tracking (org_id, realized_at DESC)
+    WHERE status = 'realized';
 
 
 CREATE INDEX IF NOT EXISTS items_history_org_product_match_idx
@@ -956,3 +972,51 @@ CREATE INDEX IF NOT EXISTS items_history_org_product_match_idx
         base_unit,
         price_date DESC
     );
+
+-- ── RCV del SII: documentos declarados por período ──────────────────────────
+CREATE TABLE IF NOT EXISTS rcv_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    period DATE NOT NULL,
+    tipo_doc TEXT NOT NULL DEFAULT '33',
+    folio TEXT NOT NULL,
+    rut_emisor TEXT NOT NULL DEFAULT '',
+    supplier_name TEXT,
+    net_amount NUMERIC(18, 2),
+    tax_amount NUMERIC(18, 2),
+    total_amount NUMERIC(18, 2) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'CLP',
+    source_file TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, period, tipo_doc, folio, rut_emisor)
+);
+
+CREATE INDEX IF NOT EXISTS rcv_documents_org_period_idx
+    ON rcv_documents (org_id, period DESC);
+CREATE INDEX IF NOT EXISTS rcv_documents_org_folio_idx
+    ON rcv_documents (org_id, folio);
+
+-- ── Radar de Compra Ágil ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS compra_agil_opportunities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    buyer TEXT,
+    region TEXT,
+    closes_at DATE,
+    budget_clp NUMERIC(18, 2),
+    status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'closed', 'awarded', 'dismissed')),
+    source TEXT NOT NULL DEFAULT 'manual',
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (org_id, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS compra_agil_org_closes_idx
+    ON compra_agil_opportunities (org_id, closes_at);

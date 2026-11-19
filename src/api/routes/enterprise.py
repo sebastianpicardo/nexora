@@ -52,7 +52,21 @@ def _add_months(value: date, months: int) -> date:
 router = APIRouter(prefix="/api/enterprise", tags=["enterprise"])
 inbound_router = APIRouter(prefix="/api/inbound-email", tags=["inbound-email"])
 
-ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".csv", ".txt", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".xml",
+    ".dte",
+    ".xlsx",
+    ".xls",
+    ".csv",
+    ".txt",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".tif",
+    ".tiff",
+}
 ONBOARDING_STEPS = [
     ("branding", "Personaliza tu marca"),
     ("documents", "Carga tu primer documento"),

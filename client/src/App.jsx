@@ -37,6 +37,9 @@ const LEGACY_VIEWS = {
   forecast: ["intelligence", "forecast"],
   suppliers: ["directory", "suppliers"],
   "price-catalog": ["directory", "catalog"],
+  "margin-guardian": ["intelligence", "margin"],
+  "optimal-purchase": ["intelligence", "compare"],
+  "compra-agil": ["intelligence", "compra-agil"],
 };
 
 const HELP_TOPICS = {
@@ -45,6 +48,9 @@ const HELP_TOPICS = {
   intelligence: {
     overview: "analytics",
     opportunities: "opportunities",
+    margin: "margin",
+    compare: "compare",
+    "compra-agil": "compra-agil",
     forecast: "forecast",
   },
   directory: { suppliers: "suppliers", catalog: "price-catalog" },

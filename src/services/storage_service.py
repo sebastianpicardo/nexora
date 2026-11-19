@@ -26,6 +26,8 @@ _MIME_BY_SUFFIX = {
     ".xls": "application/vnd.ms-excel",
     ".csv": "text/csv",
     ".txt": "text/plain",
+    ".xml": "application/xml",
+    ".dte": "application/xml",
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -34,8 +36,10 @@ _MIME_BY_SUFFIX = {
     ".tiff": "image/tiff",
 }
 _TEXT_SUFFIXES = {".csv", ".txt"}
+_XML_SUFFIXES = {".xml", ".dte"}
 _OFFICE_SUFFIXES = {".xlsx", ".xls"}
 _OFFICE_WRAPPERS = {"application/zip", "application/octet-stream", "application/vnd.ms-excel"}
+_XML_MIMES = {"application/xml", "text/xml"}
 
 
 def resolve_upload_mime(filename: str, detected_mime: str | None, declared_mime: str | None) -> str:
@@ -46,13 +50,19 @@ def resolve_upload_mime(filename: str, detected_mime: str | None, declared_mime:
     if detected:
         if detected == expected or (suffix in _TEXT_SUFFIXES and detected.startswith("text/")):
             return detected
+        if suffix in _XML_SUFFIXES and detected in _XML_MIMES:
+            return detected
         if suffix in _OFFICE_SUFFIXES and detected in _OFFICE_WRAPPERS:
             return detected
         raise ValueError("El contenido del archivo no coincide con su extensión.")
     if declared and (declared == expected or (suffix in _TEXT_SUFFIXES and declared.startswith("text/"))):
         return declared
+    if suffix in _XML_SUFFIXES and declared in _XML_MIMES:
+        return declared
     if suffix in _TEXT_SUFFIXES:
         return declared or "text/plain"
+    if suffix in _XML_SUFFIXES:
+        return declared or "application/xml"
     if suffix in _OFFICE_SUFFIXES and declared in _OFFICE_WRAPPERS:
         return declared
     raise ValueError("No se pudo verificar el tipo de archivo subido.")

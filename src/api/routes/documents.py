@@ -30,6 +30,8 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 ALLOWED_EXTENSIONS = {
     ".pdf",
+    ".xml",
+    ".dte",
     ".xlsx",
     ".xls",
     ".csv",

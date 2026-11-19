@@ -12,6 +12,8 @@ import AppBanner from "../components/AppBanner";
 import ActionEmptyState from "../components/ActionEmptyState";
 import QuickGuide from "../components/QuickGuide";
 import NextStepCard from "../components/NextStepCard";
+import SiiCompletenessCard from "../components/SiiCompletenessCard";
+import LeakAuditCard from "../components/LeakAuditCard";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 
 export default function DashboardPage({ onNavigate, onUpload }) {
@@ -113,6 +115,8 @@ export default function DashboardPage({ onNavigate, onUpload }) {
     <div className="page-stack">
       <AppBanner onNavigate={onNavigate} onUpload={canOperate ? onUpload : undefined} />
       <QuickGuide activeStep={1} />
+      <LeakAuditCard onNavigate={onNavigate} />
+      <SiiCompletenessCard onNavigate={onNavigate} />
 
       {error && summary ? (
         <div className="alert error">

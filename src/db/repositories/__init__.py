@@ -132,6 +132,7 @@ from src.db.repositories.price_catalog import (
 )
 from src.db.repositories.savings_tracking import (
     list_savings_tracking,
+    list_verified_savings,
     record_savings_tracking,
     summarize_savings_tracking,
 )
@@ -191,6 +192,7 @@ __all__ = [
     "record_savings_tracking",
     "summarize_savings_tracking",
     "list_savings_tracking",
+    "list_verified_savings",
     "summarize_ai_usage",
     "create_api_key",
     "create_approval",

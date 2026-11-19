@@ -9,6 +9,7 @@ from src.api.routes import (
     auth,
     backup,
     billing,
+    compra_agil,
     dashboard,
     documents,
     enterprise,
@@ -33,6 +34,7 @@ api_router.include_router(profile.router)
 api_router.include_router(organizations.router)
 api_router.include_router(team.router)
 api_router.include_router(billing.router)
+api_router.include_router(compra_agil.router)
 api_router.include_router(admin.router)
 api_router.include_router(suppliers.router)
 api_router.include_router(documents.router)

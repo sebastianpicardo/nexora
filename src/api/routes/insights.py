@@ -1,12 +1,14 @@
 ﻿from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from src.api.deps import CurrentUser, require_roles
 from src.core.config import settings
 from src.db import repositories
 from src.db.pool import get_pool
+from src.services import savings_report_service
 
 router = APIRouter(prefix="/api/insights", tags=["insights"])
 
@@ -17,6 +19,17 @@ class SavingsTrackingRequest(BaseModel):
     realized_amount: float = Field(default=0.0, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     notes: str | None = Field(default=None, max_length=1000)
+    title: str | None = Field(default=None, max_length=240)
+    sku: str | None = Field(default=None, max_length=120)
+    product: str | None = Field(default=None, max_length=300)
+    supplier_before: str | None = Field(default=None, max_length=200)
+    supplier_after: str | None = Field(default=None, max_length=200)
+    document_before_id: str | None = None
+    document_after_id: str | None = None
+    unit_price_before: float | None = Field(default=None, ge=0)
+    unit_price_after: float | None = Field(default=None, ge=0)
+    quantity: float | None = Field(default=None, ge=0)
+    evidence: dict | None = None
 
 
 class AutoApproveRequest(BaseModel):
@@ -163,15 +176,40 @@ async def track_savings(
     user: dict = Depends(require_roles("owner", "admin", "analyst")),
 ):
     active_currency = (payload.currency or user["default_currency"] or "CLP").strip().upper()
+    realized = payload.realized_amount
+    if (
+        payload.status == "realized"
+        and realized <= 0
+        and payload.unit_price_before is not None
+        and payload.unit_price_after is not None
+        and payload.quantity
+    ):
+        realized = round(abs(payload.unit_price_before - payload.unit_price_after) * payload.quantity, 2)
+    evidence = {
+        **(payload.evidence or {}),
+        "source": (payload.evidence or {}).get("source", "manual"),
+        "verified": payload.status == "realized",
+    }
     async with get_pool().connection() as conn:
         row = await repositories.record_savings_tracking(
             conn,
             org_id=user["org_id"],
             opportunity_key=payload.opportunity_key,
             status=payload.status,
-            realized_amount=payload.realized_amount,
+            realized_amount=realized,
             currency=active_currency,
             notes=payload.notes,
+            title=payload.title,
+            sku=payload.sku,
+            product=payload.product,
+            supplier_before=payload.supplier_before,
+            supplier_after=payload.supplier_after,
+            document_before_id=payload.document_before_id,
+            document_after_id=payload.document_after_id,
+            unit_price_before=payload.unit_price_before,
+            unit_price_after=payload.unit_price_after,
+            quantity=payload.quantity,
+            evidence=evidence,
         )
     return {"success": True, "tracking": row}
 
@@ -182,6 +220,55 @@ async def list_savings(user: CurrentUser, status_filter: str | None = Query(defa
         items = await repositories.list_savings_tracking(conn, user["org_id"], status=status_filter)
         summary = await repositories.summarize_savings_tracking(conn, user["org_id"])
     return {"items": items, "summary": summary}
+
+
+@router.get("/savings/verified")
+async def verified_savings(
+    user: CurrentUser,
+    month: str | None = Query(default=None, max_length=7),
+):
+    try:
+        return await savings_report_service.build_verified_report(user, month=month)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/savings/verified.csv")
+async def verified_savings_csv(
+    user: CurrentUser,
+    month: str | None = Query(default=None, max_length=7),
+):
+    try:
+        report = await savings_report_service.build_verified_report(user, month=month)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    content = savings_report_service.report_to_csv(report)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="ahorro_verificado_{report["month"]}.csv"'
+        },
+    )
+
+
+@router.get("/savings/verified.pdf")
+async def verified_savings_pdf(
+    user: CurrentUser,
+    month: str | None = Query(default=None, max_length=7),
+):
+    try:
+        report = await savings_report_service.build_verified_report(user, month=month)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    content = savings_report_service.report_to_pdf(report, org_name=str(user.get("org_name") or ""))
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="ahorro_verificado_{report["month"]}.pdf"'
+        },
+    )
 
 
 @router.post("/auto-approve")

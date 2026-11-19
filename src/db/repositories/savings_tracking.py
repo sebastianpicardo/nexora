@@ -4,6 +4,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 
 
 async def record_savings_tracking(
@@ -15,20 +16,50 @@ async def record_savings_tracking(
     realized_amount: Decimal | float | int = 0,
     currency: str = "CLP",
     notes: str | None = None,
+    title: str | None = None,
+    sku: str | None = None,
+    product: str | None = None,
+    supplier_before: str | None = None,
+    supplier_after: str | None = None,
+    document_before_id: UUID | str | None = None,
+    document_after_id: UUID | str | None = None,
+    unit_price_before: Decimal | float | None = None,
+    unit_price_after: Decimal | float | None = None,
+    quantity: Decimal | float | None = None,
+    evidence: dict | None = None,
 ) -> dict:
     status = status if status in {"identified", "contacted", "negotiated", "realized", "dismissed"} else "identified"
     async with conn.cursor() as cur:
         await cur.execute(
             """
             INSERT INTO savings_tracking (
-                org_id, opportunity_key, status, realized_amount, currency, notes
+                org_id, opportunity_key, status, realized_amount, currency, notes,
+                title, sku, product, supplier_before, supplier_after,
+                document_before_id, document_after_id, unit_price_before, unit_price_after,
+                quantity, evidence, realized_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    CASE WHEN %s = 'realized' THEN now() ELSE NULL END)
             ON CONFLICT (org_id, opportunity_key) DO UPDATE SET
                 status = EXCLUDED.status,
                 realized_amount = EXCLUDED.realized_amount,
                 currency = EXCLUDED.currency,
                 notes = COALESCE(EXCLUDED.notes, savings_tracking.notes),
+                title = COALESCE(EXCLUDED.title, savings_tracking.title),
+                sku = COALESCE(EXCLUDED.sku, savings_tracking.sku),
+                product = COALESCE(EXCLUDED.product, savings_tracking.product),
+                supplier_before = COALESCE(EXCLUDED.supplier_before, savings_tracking.supplier_before),
+                supplier_after = COALESCE(EXCLUDED.supplier_after, savings_tracking.supplier_after),
+                document_before_id = COALESCE(EXCLUDED.document_before_id, savings_tracking.document_before_id),
+                document_after_id = COALESCE(EXCLUDED.document_after_id, savings_tracking.document_after_id),
+                unit_price_before = COALESCE(EXCLUDED.unit_price_before, savings_tracking.unit_price_before),
+                unit_price_after = COALESCE(EXCLUDED.unit_price_after, savings_tracking.unit_price_after),
+                quantity = COALESCE(EXCLUDED.quantity, savings_tracking.quantity),
+                evidence = COALESCE(EXCLUDED.evidence, savings_tracking.evidence),
+                realized_at = CASE
+                    WHEN EXCLUDED.status = 'realized' THEN COALESCE(savings_tracking.realized_at, now())
+                    ELSE savings_tracking.realized_at
+                END,
                 updated_at = now()
             RETURNING *
             """,
@@ -39,6 +70,18 @@ async def record_savings_tracking(
                 max(float(realized_amount or 0), 0.0),
                 (currency or "CLP").strip().upper(),
                 notes,
+                title,
+                sku,
+                product,
+                supplier_before,
+                supplier_after,
+                str(document_before_id) if document_before_id else None,
+                str(document_after_id) if document_after_id else None,
+                unit_price_before,
+                unit_price_after,
+                quantity,
+                Jsonb(evidence or {}),
+                status,
             ),
         )
         row = await cur.fetchone()
@@ -69,6 +112,30 @@ async def list_savings_tracking(
             LIMIT %s
             """,
             [*values, limit],
+        )
+        return list(await cur.fetchall())
+
+
+async def list_verified_savings(
+    conn: AsyncConnection,
+    org_id: UUID | str,
+    *,
+    month: str | None = None,
+) -> list[dict]:
+    filters = ["org_id = %s", "status = 'realized'"]
+    values: list = [str(org_id)]
+    if month:
+        filters.append("to_char(coalesce(realized_at, updated_at), 'YYYY-MM') = %s")
+        values.append(month)
+    where = " AND ".join(filters)
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"""
+            SELECT * FROM savings_tracking
+            WHERE {where}
+            ORDER BY coalesce(realized_at, updated_at) DESC, created_at DESC
+            """,
+            values,
         )
         return list(await cur.fetchall())
 

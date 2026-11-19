@@ -1124,9 +1124,23 @@ function SecurityTab() {
 
       <section className="card">
         <SectionHead
-          title="SSO, privacidad IA y auditoría"
+          title="Privacidad (Ley 21.719), SSO y auditoría"
           description="Restringe el acceso por dominio, define consentimiento IA, minimización de datos y retención de auditoría."
         />
+        <div className="privacy-notice">
+          <strong>Tratamiento de datos y proveedores de IA</strong>
+          <p>
+            NEXORA procesa los documentos que subes para extraer compras y precios. Los PDF no
+            estructurados o imágenes solo se envían a proveedores de IA si autorizas el
+            consentimiento explícito. Los XML DTE, Excel, CSV y RCV se procesan de forma
+            determinística sin IA.
+          </p>
+          <ul>
+            <li>Datos procesados: documentos, ítems, precios, proveedores y evidencia de auditoría.</li>
+            <li>Retención de datos IA: {form.ai_data_retention_days} días, configurable.</li>
+            <li>Puedes revocar el consentimiento, exportar información y solicitar depuración.</li>
+          </ul>
+        </div>
         <form onSubmit={saveSecurity}>
           <div className="form-grid">
             <label className="form-field checkbox-field">

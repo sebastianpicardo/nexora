@@ -238,7 +238,7 @@ export default function UploadCard({ onUploaded }) {
       <div className="card-head">
         <div>
           <h2>Subir documento</h2>
-          <p>Cotizaciones, facturas o listas de precios en PDF, Excel, CSV o imagen.</p>
+          <p>Facturas XML DTE, PDF, Excel/CSV o imagen. El RCV se importa desde Auditoría Express.</p>
         </div>
       </div>
 
@@ -264,7 +264,7 @@ export default function UploadCard({ onUploaded }) {
                 ref={inputRef}
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp,.tif,.tiff"
+                accept=".pdf,.xml,.dte,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp,.tif,.tiff"
                 onChange={(event) => selectFiles(event.target.files)}
               />
               <span className="dropzone-icon">
