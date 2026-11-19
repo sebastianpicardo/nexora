@@ -54,6 +54,17 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
   const approvals = data?.approvals?.summary || {};
   const hasData = !loading && ((summary.items ?? 0) > 0 || monthly.length > 0);
   const lowData = !loading && hasData && monthly.length < 2;
+  const noSavings = !loading && hasData && Number(opportunities.total_potential_savings || 0) <= 0;
+  const noForecast = !loading && hasData && Number(forecast.projected_spend || 0) <= 0;
+  const needsDemo = lowData || noSavings || noForecast;
+  const savingsDetail =
+    (opportunities.opportunities ?? 0) > 0
+      ? `${opportunities.opportunities} oportunidad(es) para recuperar`
+      : "Aún sin sobrecostos: requiere compras repetidas del mismo producto en distintos documentos";
+  const forecastDetail =
+    Number(forecast.projected_spend || 0) > 0
+      ? `Próximo mes · ${forecast.products_rising ?? 0} producto(s) al alza`
+      : "Requiere al menos 3 meses de historial del mismo producto para proyectar";
 
   return (
     <div className="page-stack">
@@ -117,11 +128,27 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
         />
       ) : null}
 
-      {lowData ? (
+      {needsDemo ? (
         <DemoDataBanner
           compact
-          title="Aún hay pocos meses para comparar"
-          description="Con dos o más meses de historial podrás ver tendencias más confiables. También puedes cargar datos demo para explorar la vista completa."
+          title={
+            lowData
+              ? "Aún hay pocos meses para comparar"
+              : noSavings && noForecast
+                ? "Faltan datos para detectar ahorro y proyectar"
+                : noSavings
+                  ? "Aún no se detectan sobrecostos"
+                  : "Aún no hay gasto proyectado"
+          }
+          description={
+            lowData
+              ? "Con dos o más meses de historial podrás ver tendencias más confiables. También puedes cargar datos demo para explorar la vista completa."
+              : noSavings && noForecast
+                ? "Para detectar ahorro se necesitan compras repetidas del mismo producto en distintos documentos; para proyectar, al menos 3 meses de historial. También puedes cargar el ejemplo de 90 días."
+                : noSavings
+                  ? "Aún sin sobrecostos: requiere compras repetidas del mismo producto en distintos documentos. También puedes cargar el ejemplo de 90 días."
+                  : "Requiere al menos 3 meses de historial del mismo producto para proyectar. También puedes cargar el ejemplo de 90 días."
+          }
           onLoaded={load}
         />
       ) : null}
@@ -147,11 +174,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
         <StatCard
           label="Ahorro detectado"
           value={formatMoney(opportunities.total_potential_savings || 0, currency)}
-          detail={
-            (opportunities.opportunities ?? 0) > 0
-              ? `${opportunities.opportunities} oportunidad(es) para recuperar`
-              : "Aún sin sobrecostos: faltan compras repetidas del mismo producto"
-          }
+          detail={savingsDetail}
           tone="ok"
           icon={<SparkIcon />}
         />
@@ -165,7 +188,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
         <StatCard
           label="Gasto proyectado"
           value={formatMoney(forecast.projected_spend || 0, currency)}
-          detail={`Próximo mes · ${forecast.products_rising ?? 0} producto(s) al alza`}
+          detail={forecastDetail}
           tone="brand"
           icon={<CheckIcon />}
         />

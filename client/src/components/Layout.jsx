@@ -57,6 +57,9 @@ export default function Layout({ active, onNavigate, helpView, children }) {
   const notificationRef = useRef(null);
   const quota = billing?.usage;
   const subscription = billing?.subscription;
+  const billingLoaded = billing !== null;
+  const planName = subscription?.plan_name || (billingLoaded ? "Free" : "Cargando…");
+  const planStatus = subscription?.status;
   const width = quota?.unlimited ? 100 : Math.min(Number(quota?.percentage) || 0, 100);
   const quotaTone = quota?.exceeded ? "danger" : quota?.warning ? "warning" : "ok";
 
@@ -175,30 +178,34 @@ export default function Layout({ active, onNavigate, helpView, children }) {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="plan-widget">
-            <div className="plan-widget-head">
-              <span><SparkIcon /> Plan {subscription?.plan_name || "Free"}</span>
-              <strong>{quota?.unlimited ? "∞" : percent(width, 0)}</strong>
-            </div>
-            <div className="quota-track small">
-              <span className={`quota-fill ${quotaTone}`} style={{ width: `${width}%` }} />
-            </div>
-            <div className="plan-widget-foot">
-              <span>
-                {quota?.unlimited
-                  ? "Documentos ilimitados"
-                  : `${quota?.used ?? 0} / ${quota?.limit ?? 0} documentos`}
-              </span>
-              {canManage ? (
-                <button type="button" className="link-button" onClick={() => onNavigate("billing")}>
-                  Gestionar
-                </button>
+            <div className="plan-widget">
+              <div className="plan-widget-head">
+                <span><SparkIcon /> Plan {planName}</span>
+                <strong>{quota?.unlimited ? "∞" : billingLoaded ? percent(width, 0) : "—"}</strong>
+              </div>
+              <div className="quota-track small">
+                <span className={`quota-fill ${quotaTone}`} style={{ width: `${width}%` }} />
+              </div>
+              <div className="plan-widget-foot">
+                <span>
+                  {billingLoaded
+                    ? quota?.unlimited
+                      ? "Documentos ilimitados"
+                      : `${quota?.used ?? 0} / ${quota?.limit ?? 0} documentos`
+                    : "Cargando cuota…"}
+                </span>
+                {canManage ? (
+                  <button type="button" className="link-button" onClick={() => onNavigate("billing")}>
+                    Gestionar
+                  </button>
+                ) : null}
+              </div>
+              {planStatus && planStatus !== "active" ? (
+                <div className="plan-widget-cycle">Estado: {labelize(planStatus)}</div>
+              ) : quota?.period_end ? (
+                <div className="plan-widget-cycle">Renueva {formatDate(quota.period_end)}</div>
               ) : null}
             </div>
-            {quota?.period_end ? (
-              <div className="plan-widget-cycle">Renueva {formatDate(quota.period_end)}</div>
-            ) : null}
-          </div>
 
           <div className="org-chip">
             <span className="org-dot" />

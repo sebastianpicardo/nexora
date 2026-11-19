@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { formatMoney, formatNumber, labelize } from "../lib/format";
+import { formatMoney, formatMonth, formatNumber, labelize } from "../lib/format";
 import DocumentsTable from "../components/DocumentsTable";
 import ExceptionsTable from "../components/ExceptionsTable";
 import QuotaCard from "../components/QuotaCard";
@@ -123,7 +123,7 @@ export default function DashboardPage({ onNavigate, onUpload }) {
         currency={activeCurrency}
         onNavigate={onNavigate}
       />
-      <LeakAuditCard onNavigate={onNavigate} />
+      <LeakAuditCard onNavigate={onNavigate} summary={summary} />
       <SiiCompletenessCard onNavigate={onNavigate} />
 
       {error && summary ? (
@@ -187,7 +187,15 @@ export default function DashboardPage({ onNavigate, onUpload }) {
               <StatCard
                 label="Compra del mes"
                 value={formatMoney(totalSpend, activeCurrency)}
-                detail={`${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`}
+                detail={
+                  totalSpend > 0
+                    ? `${summary?.documents_total ?? 0} documentos · ${summary?.items_total ?? 0} ítems`
+                    : summary?.items_total > 0
+                      ? `Sin compras en ${formatMonth(
+                          `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+                        )}; ${summary.items_total} ítems registrados en otros períodos`
+                      : "Sin compras registradas este mes"
+                }
                 icon={<DocumentsIcon />}
                 sparkline={spendSeries}
               />
