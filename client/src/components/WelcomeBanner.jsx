@@ -9,7 +9,7 @@ export default function WelcomeBanner({ canOperate = false, onNavigate }) {
     setSeeding(true);
     setError("");
     try {
-      await api("/api/enterprise/onboarding/demo", { method: "POST" });
+      await api("/api/enterprise/onboarding/demo?months=3", { method: "POST" });
       window.location.reload();
     } catch (err) {
       setError(err.message || "No se pudo cargar la demo.");
@@ -23,7 +23,7 @@ export default function WelcomeBanner({ canOperate = false, onNavigate }) {
         <span className="eyebrow">Bienvenido</span>
         <h2>Empieza a auditar tus compras</h2>
         <p className="muted">
-          Sube tu primer documento o carga 12 meses de historial demo para ver ahorro real,
+          Sube tu primer documento o carga el ejemplo de ferretería de 90 días para ver ahorro real,
           pronósticos y excepciones desde el primer minuto.
         </p>
         {error ? <div className="alert error">{error}</div> : null}
@@ -31,7 +31,7 @@ export default function WelcomeBanner({ canOperate = false, onNavigate }) {
       <div className="welcome-banner-actions">
         {canOperate ? (
           <button type="button" className="button primary" disabled={seeding} onClick={loadDemo}>
-            {seeding ? "Cargando demo..." : "Cargar demo de 12 meses"}
+            {seeding ? "Cargando ejemplo..." : "Cargar ejemplo de ferretería (90 días)"}
           </button>
         ) : null}
         <button type="button" className="primary-button" onClick={() => onNavigate?.("documents")}>

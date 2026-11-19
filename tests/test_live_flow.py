@@ -628,6 +628,11 @@ def test_enterprise_suite_end_to_end(live_database):
         after_reset = client.get("/api/enterprise/onboarding")
         assert after_reset.json()["demo_seeded"] is False, after_reset.text
 
+        demo_90 = client.post("/api/enterprise/onboarding/demo?months=3")
+        assert demo_90.status_code == 200, demo_90.text
+        assert demo_90.json()["documents"] == 3, demo_90.text
+        assert demo_90.json()["months"] == 3, demo_90.text
+
 def test_tenant_isolation_and_role_matrix(live_database, monkeypatch):
     owner = asyncio.run(_seed_user())
     viewer = asyncio.run(_create_member(owner["org_id"], "viewer@nexora.test", "viewer"))

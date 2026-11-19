@@ -10,7 +10,7 @@ export default function ActionEmptyState({
   onUpload,
   onLoaded,
   uploadLabel = "Subir primera factura",
-  demoLabel = "Cargar demo realista (1 clic)",
+  demoLabel = "Cargar ejemplo de ferretería (90 días)",
 }) {
   const { canManage } = useAuth();
   const [pending, setPending] = useState(false);
@@ -22,12 +22,12 @@ export default function ActionEmptyState({
     setError("");
     setSuccess("");
     try {
-      const result = await api("/api/enterprise/onboarding/demo", { method: "POST" });
+      const result = await api("/api/enterprise/onboarding/demo?months=3", { method: "POST" });
       await onLoaded?.();
       setSuccess(
         result?.already_seeded
-          ? "Los datos demo ya estaban cargados."
-          : "Demo realista cargada: 12 meses de historial, alzas de precio y aprobaciones pendientes."
+          ? "Los datos de ejemplo ya estaban cargados."
+          : "Ejemplo de ferretería cargado: 90 días de compras, sobrecostos, margen en riesgo y ahorro recuperable."
       );
     } catch (err) {
       setError(err.message || "No se pudieron cargar los datos demo.");

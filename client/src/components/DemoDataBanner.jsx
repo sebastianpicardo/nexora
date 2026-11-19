@@ -5,7 +5,7 @@ import { SparkIcon } from "./Icons";
 
 export default function DemoDataBanner({
   title = "Aún no hay datos para mostrar",
-  description = "Sube una factura o carga 12 meses de datos demo para ver esta vista funcionando desde el primer minuto.",
+  description = "Sube una factura o carga el ejemplo de ferretería de 90 días para ver esta vista funcionando desde el primer minuto.",
   onLoaded,
   compact = false,
 }) {
@@ -19,12 +19,12 @@ export default function DemoDataBanner({
     setError("");
     setSuccess("");
     try {
-      const result = await api("/api/enterprise/onboarding/demo", { method: "POST" });
+      const result = await api("/api/enterprise/onboarding/demo?months=3", { method: "POST" });
       await onLoaded?.();
       setSuccess(
         result?.already_seeded
-          ? "Los datos demo ya estaban cargados."
-          : "Datos demo cargados. La información ya está disponible."
+          ? "Los datos de ejemplo ya estaban cargados."
+          : "Ejemplo de ferretería cargado. La información ya está disponible."
       );
     } catch (err) {
       setError(err.message || "No se pudieron cargar los datos demo.");
@@ -51,7 +51,7 @@ export default function DemoDataBanner({
       </div>
       {canManage ? (
         <button type="button" className="button primary" disabled={pending} onClick={loadDemo}>
-          {pending ? "Cargando demo..." : "Cargar datos demo"}
+          {pending ? "Cargando ejemplo..." : "Cargar ejemplo (90 días)"}
         </button>
       ) : null}
     </section>

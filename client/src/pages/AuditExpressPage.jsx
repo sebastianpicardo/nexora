@@ -10,7 +10,6 @@ import {
   CheckIcon,
   DocumentsIcon,
   DownloadIcon,
-  ExceptionsIcon,
   PricesIcon,
   SearchIcon,
   SparkIcon,
@@ -61,21 +60,30 @@ export default function AuditExpressPage({ onNavigate }) {
   const [rcvResult, setRcvResult] = useState(null);
   const [rcvBusy, setRcvBusy] = useState(false);
   const [rcvError, setRcvError] = useState("");
+  const [onboarding, setOnboarding] = useState(null);
+  const [opportunities, setOpportunities] = useState([]);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoNotice, setDemoNotice] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [auditData, comparatorData, negotiationData, weeklyData] = await Promise.all([
-        api(`/api/leaks/audit?days=${days}`),
-        api("/api/leaks/comparator?limit=40"),
-        api("/api/leaks/negotiation?limit=25"),
-        api("/api/leaks/weekly-report"),
-      ]);
+      const [auditData, comparatorData, negotiationData, weeklyData, onboardingData, radarData] =
+        await Promise.all([
+          api(`/api/leaks/audit?days=${days}`),
+          api("/api/leaks/comparator?limit=40"),
+          api("/api/leaks/negotiation?limit=25"),
+          api("/api/leaks/weekly-report"),
+          api("/api/enterprise/onboarding"),
+          api("/api/compra-agil/opportunities?limit=100"),
+        ]);
       setAudit(auditData);
       setComparator(comparatorData);
       setNegotiation(negotiationData);
       setWeekly(weeklyData);
+      setOnboarding(onboardingData);
+      setOpportunities(radarData.opportunities || []);
     } catch (err) {
       setError(err.message || "No se pudo cargar la auditoría.");
     } finally {
@@ -87,9 +95,57 @@ export default function AuditExpressPage({ onNavigate }) {
     loadAll();
   }, [loadAll]);
 
+  async function seedDemo() {
+    setDemoBusy(true);
+    setError("");
+    setDemoNotice("");
+    try {
+      await api("/api/enterprise/onboarding/demo?months=3", { method: "POST", body: "{}" });
+      setDemoNotice("Ejemplo de ferretería cargado: 90 días de compras, precios y márgenes.");
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "No se pudo cargar el ejemplo de ferretería.");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
+  async function clearDemo() {
+    setDemoBusy(true);
+    setError("");
+    setDemoNotice("");
+    try {
+      await api("/api/enterprise/onboarding/demo", { method: "DELETE" });
+      setDemoNotice("Datos de ejemplo eliminados. Puedes cargar tus propios documentos.");
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "No se pudieron limpiar los datos de ejemplo.");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
   const findings = audit?.findings || [];
   const summary = audit?.summary || {};
   const actionPlan = audit?.action_plan || [];
+  const coverage = audit?.coverage || {};
+  const demoSeeded = Boolean(onboarding?.demo_seeded);
+  const recoverToday =
+    Number(summary.price_overpay || 0) + Number(summary.invoice_discrepancy || 0);
+  const marginProtected = Number(summary.margin_bleed || 0);
+  const secured = Number(summary.realized_savings || 0);
+  const salesPotential = opportunities.reduce(
+    (total, item) => total + Number(item.budget_clp || 0),
+    0,
+  );
+  const hasCoverage = Number(coverage.documents || 0) > 0;
+  const metricsAtZero =
+    recoverToday <= 0 && marginProtected <= 0 && secured <= 0 && findings.length === 0;
+  const showDemoCta = canManage && (!hasCoverage || metricsAtZero);
+  const marginFindings = findings.filter((item) => item.category === "margin_bleed").length;
+  const priceFindings = findings.filter((item) => item.category === "price_overpay").length;
+  const invoiceFindings = findings.filter((item) => item.category === "invoice_discrepancy").length;
+  const currencyLabel = audit?.currency || currency;
   const filterValue = search.trim().toLowerCase();
   const filteredComparisons = useMemo(() => {
     const items = comparator?.items || [];
@@ -125,30 +181,65 @@ export default function AuditExpressPage({ onNavigate }) {
 
   return (
     <div className="page-stack audit-page">
-      <section className="page-intro audit-hero">
-        <div>
-          <div className="eyebrow">Auditoría Express · 90 días</div>
-          <h2>Diagnóstico de Fugas y Sobrecostos</h2>
+      <section className="page-intro audit-hero audit-hero-rich">
+        <div className="audit-hero-copy">
+          <div className="eyebrow">
+            Auditoría Express · {days} días
+            {demoSeeded ? <span className="audit-demo-tag">Datos de ejemplo</span> : null}
+          </div>
+          <h2>Aquí está la plata que puedes recuperar y ganar esta semana</h2>
           <p>
-            Cruza tus facturas, precios de proveedores y catálogo para encontrar dónde se te
-            escapa plata: sobrecostos, márgenes bajo el objetivo y facturas mal conciliadas.
+            {hasCoverage
+              ? `Detectamos ${money(recoverToday, currencyLabel)} recuperables por precios y hasta ${money(
+                  marginProtected,
+                  currencyLabel,
+                )} de margen que puedes proteger al ajustar tu lista de precios.`
+              : "Carga tus facturas, listas o el RCV, o parte con un ejemplo de ferretería para ver montos reales en menos de un minuto."}
           </p>
+          <div className="audit-hero-chips">
+            <span>
+              <PricesIcon /> Sobrecostos: {money(summary.price_overpay, currencyLabel)}
+            </span>
+            <span>
+              <TrendUpIcon /> Margen en riesgo: {money(marginProtected, currencyLabel)}
+            </span>
+            <span>
+              <AlertTriangleIcon />{" "}
+              {hasCoverage
+                ? `Fuga ${summary.leakage_pct || 0}% sobre ${money(summary.spend_total, currencyLabel)}`
+                : "Sin compras auditadas todavía"}
+            </span>
+          </div>
           <div className="audit-hero-actions">
-            <button
-              type="button"
-              className="button primary"
-              onClick={() =>
-                downloadFile(
-                  `/api/leaks/audit.pdf?days=${days}`,
-                  "auditoria_express_nexora.pdf",
-                )
-              }
-            >
-              <DownloadIcon /> Descargar informe PDF
-            </button>
-            <button type="button" className="button ghost" onClick={loadAll}>
-              Actualizar análisis
-            </button>
+            {showDemoCta ? (
+              <button
+                type="button"
+                className="button primary"
+                onClick={seedDemo}
+                disabled={demoBusy}
+              >
+                <SparkIcon />{" "}
+                {demoBusy ? "Cargando ejemplo…" : "Cargar ejemplo de ferretería (90 días)"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button primary"
+                onClick={() =>
+                  downloadFile(
+                    `/api/leaks/audit.pdf?days=${days}`,
+                    "auditoria_express_nexora.pdf",
+                  )
+                }
+              >
+                <DownloadIcon /> Descargar informe PDF
+              </button>
+            )}
+            {demoSeeded ? (
+              <button type="button" className="button ghost" onClick={clearDemo} disabled={demoBusy}>
+                Limpiar datos de ejemplo
+              </button>
+            ) : null}
             {onNavigate ? (
               <button
                 type="button"
@@ -158,46 +249,102 @@ export default function AuditExpressPage({ onNavigate }) {
                 <DocumentsIcon /> Cargar documentos
               </button>
             ) : null}
+            <button type="button" className="button ghost" onClick={() => setTab("rcv")}>
+              <UploadIcon /> Importar RCV
+            </button>
+            <button type="button" className="button ghost" onClick={loadAll}>
+              Actualizar análisis
+            </button>
           </div>
         </div>
-        <div className="audit-hero-badge">
-          <SparkIcon />
-          <strong>Informe listo en minutos</strong>
-          <span>No requiere conectar tu ERP para empezar.</span>
+        <div className="audit-money-card">
+          <span className="audit-money-eyebrow">Puedes recuperar hoy</span>
+          <strong>{loading && !audit ? "—" : money(recoverToday, currencyLabel)}</strong>
+          <div className="audit-money-rows">
+            <div>
+              <span>Diferencia entre proveedores</span>
+              <b>{money(summary.price_overpay, currencyLabel)}</b>
+            </div>
+            <div>
+              <span>Facturas por conciliar</span>
+              <b>{money(summary.invoice_discrepancy, currencyLabel)}</b>
+            </div>
+            <div>
+              <span>Margen que proteges</span>
+              <b>{money(marginProtected, currencyLabel)}</b>
+            </div>
+          </div>
+          <div className="audit-money-secured">
+            <CheckIcon />
+            <span>
+              Ahorro ya asegurado
+              <b>{money(secured, currencyLabel)}</b>
+            </span>
+          </div>
         </div>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+      {demoNotice ? <div className="alert success">{demoNotice}</div> : null}
 
       <section className="stats-grid audit-stats">
         <StatCard
-          label="Ahorro potencial"
-          value={loading && !audit ? "—" : money(summary.potential_savings, audit?.currency)}
-          detail={`${summary.findings_total || 0} hallazgos en ${audit?.window_days || days} días`}
+          label="Recuperable hoy"
+          value={loading && !audit ? "—" : money(recoverToday, currencyLabel)}
+          detail={
+            priceFindings
+              ? `${priceFindings} productos con sobreprecio detectado`
+              : findings.length
+                ? "Hay hallazgos sin monto: faltan precios o volumen para estimarlo"
+                : "Sin sobrecostos detectados en la ventana"
+          }
           tone="ok"
           icon={<SparkIcon />}
         />
         <StatCard
-          label="Fuga sobre compra auditada"
-          value={loading && !audit ? "—" : `${summary.leakage_pct || 0}%`}
-          detail={`Compra auditada: ${money(summary.spend_total, audit?.currency)}`}
+          label="Margen que proteges"
+          value={loading && !audit ? "—" : money(marginProtected, currencyLabel)}
+          detail={
+            marginFindings
+              ? `${marginFindings} productos bajo el margen objetivo`
+              : "Todos los márgenes están sobre el mínimo"
+          }
           tone="warning"
-          icon={<AlertTriangleIcon />}
+          icon={<PricesIcon />}
         />
         <StatCard
-          label="Hallazgos críticos"
-          value={loading && !audit ? "—" : summary.critical || 0}
-          detail={`${summary.high || 0} de prioridad alta`}
+          label="Ahorro ya asegurado"
+          value={loading && !audit ? "—" : money(secured, currencyLabel)}
+          detail={
+            secured > 0
+              ? "Verificado con evidencia y documento de respaldo"
+              : hasCoverage
+                ? "Cierra una negociación y registra el ahorro verificado"
+                : "Aún no hay documentos auditados"
+          }
           tone="brand"
-          icon={<ExceptionsIcon />}
-        />
-        <StatCard
-          label="Ahorro ya capturado"
-          value={loading && !audit ? "—" : money(summary.realized_savings, audit?.currency)}
-          detail={`${audit?.coverage?.documents || 0} documentos · ${audit?.coverage?.suppliers || 0} proveedores`}
           icon={<CheckIcon />}
         />
+        <StatCard
+          label="Nuevas ventas · Compra Ágil"
+          value={loading && !audit ? "—" : money(salesPotential, currencyLabel)}
+          detail={
+            opportunities.length
+              ? `${opportunities.length} oportunidades abiertas para cotizar`
+              : "Sin oportunidades cargadas: importa un CSV o conecta la API"
+          }
+          icon={<TrendUpIcon />}
+        />
       </section>
+
+      <p className="audit-coverage-note">
+        {hasCoverage
+          ? `Analizando ${coverage.documents} documentos, ${coverage.items} ítems y ${coverage.suppliers} proveedores · ${coverage.catalog_items || 0} productos en catálogo.`
+          : "Aún no hay compras auditadas. Carga documentos, importa el RCV o usa el ejemplo de ferretería para ver el impacto en CLP."}
+        {invoiceFindings
+          ? ` Hay ${invoiceFindings} diferencias de factura por conciliar que podrían ajustar el monto recuperable.`
+          : ""}
+      </p>
 
       <div className="audit-toolbar">
         <PageTabs tabs={TABS} active={tab} onChange={setTab} label="Auditoría Express" />

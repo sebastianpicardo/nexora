@@ -23,7 +23,7 @@ export default function NextStepCard({ summary, canOperate, onUpload, onNavigate
     setPending(true);
     setError("");
     try {
-      await api("/api/enterprise/onboarding/demo", { method: "POST", body: "{}" });
+      await api("/api/enterprise/onboarding/demo?months=3", { method: "POST", body: "{}" });
       setDemoSeeded(true);
       onRefresh?.();
     } catch (err) {
@@ -93,7 +93,7 @@ export default function NextStepCard({ summary, canOperate, onUpload, onNavigate
             onClick={demoSeeded ? () => onNavigate("enterprise") : seedDemo}
             disabled={pending}
           >
-            <SparkIcon /> {demoSeeded ? "Gestionar datos demo" : "Cargar demo realista"}
+            <SparkIcon /> {demoSeeded ? "Gestionar datos demo" : "Cargar ejemplo de ferretería (90 días)"}
           </button>
         ) : null}
       </div>

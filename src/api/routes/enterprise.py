@@ -890,6 +890,7 @@ async def update_onboarding(
 
 @router.post("/onboarding/demo")
 async def seed_demo_data(
+    months: int = Query(default=12, ge=3, le=12),
     user: dict = Depends(require_roles("owner", "admin")),
 ):
     async with get_pool().connection() as conn:
@@ -931,7 +932,7 @@ async def seed_demo_data(
         current_month_document_id = None
         current_month_supplier_id = None
         current_month_spend = Decimal("0")
-        for month_offset in range(11, -1, -1):
+        for month_offset in range(months - 1, -1, -1):
             month_date = _add_months(today.replace(day=1), -month_offset)
             price_date = month_date
             document_id = uuid4()
@@ -1033,7 +1034,7 @@ async def seed_demo_data(
                             "historical_median": str(baseline_price),
                             "pct_change": pct_change,
                             "threshold_pct": 10.0,
-                            "sample_size": 11,
+                            "sample_size": max(months - 1, 1),
                             "previous_prices": [],
                             "demo": True,
                         },
@@ -1096,7 +1097,7 @@ async def seed_demo_data(
             entity_type="organization",
             entity_id=str(user["org_id"]),
             metadata={
-                "months": 12,
+                "months": months,
                 "products": len(products),
                 "suppliers": len(suppliers),
                 "catalog": catalog_items,
@@ -1106,9 +1107,9 @@ async def seed_demo_data(
     return {
         "success": True,
         "already_seeded": False,
-        "months": 12,
+        "months": months,
         "products": len(products),
-        "documents": 12,
+        "documents": months,
         "approvals": approvals_created,
         "catalog": catalog_items,
     }
