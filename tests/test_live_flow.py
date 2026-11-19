@@ -1033,3 +1033,124 @@ def test_rcv_completeness_identifies_missing_folios(live_database):
         assert payload["missing"] == 1, payload
         assert payload["missing_documents"][0]["folio"] == "101", payload
         assert "faltan 1" in payload["message"], payload
+
+def test_insights_overview_handles_empty_and_partial_data(live_database, monkeypatch):
+    user = asyncio.run(_seed_user())
+    token = create_access_token(
+        user_id=user["id"],
+        email=user["email"],
+        org_id=user["org_id"],
+        role=user["role"],
+        name=user["name"],
+    )
+
+    from fastapi.testclient import TestClient
+
+    from src.db import repositories
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", token)
+
+        for months in (1, 3, 6, 12, 24):
+            response = client.get(f"/api/insights/overview?currency=CLP&months={months}")
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            assert payload["currency"] == "CLP"
+            assert payload["months"] == months
+            assert payload["analytics"]["monthly"] == []
+            assert payload["analytics"]["summary"]["items"] == 0
+            assert payload["opportunities"]["items"] == []
+            assert payload["forecast"]["items"] == []
+            assert payload["approvals"]["items"] == []
+            assert payload["partial"] is False
+
+        for path in (
+            "/api/insights/analytics?currency=CLP&months=6",
+            "/api/insights/opportunities?currency=CLP&days=90",
+            "/api/insights/forecast?currency=CLP&history_months=6",
+            "/api/insights/approvals?currency=CLP&days=120",
+        ):
+            empty = client.get(path)
+            assert empty.status_code == 200, (path, empty.text)
+
+        async def broken_query(*args, **kwargs):
+            raise RuntimeError('relation "canonical_products" does not exist')
+
+        monkeypatch.setattr(repositories, "price_opportunities", broken_query)
+        partial = client.get("/api/insights/overview?currency=CLP&months=6")
+        assert partial.status_code == 200, partial.text
+        partial_payload = partial.json()
+        assert partial_payload["partial"] is True, partial_payload
+        assert partial_payload["warnings"], partial_payload
+        assert "migraciones" in partial_payload["warnings"][0].lower(), partial_payload
+        assert partial_payload["opportunities"]["summary"]["data_available"] is False
+        assert partial_payload["analytics"]["summary"]["items"] == 0
+
+def test_insights_overview_with_partial_currency_data(live_database):
+    user = asyncio.run(_seed_user())
+
+    async def _seed_partial() -> None:
+        from datetime import date
+
+        from psycopg.types.json import Jsonb
+
+        await open_pool()
+        try:
+            async with get_pool().connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        INSERT INTO documents_log (
+                            org_id, original_filename, storage_path, file_hash, status, metadata
+                        )
+                        VALUES (%s, 'parcial.csv', 'demo/parcial.csv', 'insights-partial', 'processed', %s)
+                        RETURNING id
+                        """,
+                        (user["org_id"], Jsonb({"document_number": "P-1"})),
+                    )
+                    document_id = (await cur.fetchone())["id"]
+                    await cur.execute(
+                        """
+                        INSERT INTO items_history (
+                            org_id, document_id, sku, original_description, normalized_description,
+                            base_unit, quantity, normalized_unit_price, currency, price_date,
+                            confidence, review_status
+                        )
+                        VALUES (%s, %s, 'PAR-1', 'Cable parcial', 'Cable parcial',
+                                'unidad', 2, 1000, 'CLP', %s, 0.95, 'auto_approved')
+                        """,
+                        (user["org_id"], document_id, date.today()),
+                    )
+        finally:
+            await close_pool()
+
+    asyncio.run(_seed_partial())
+    token = create_access_token(
+        user_id=user["id"],
+        email=user["email"],
+        org_id=user["org_id"],
+        role=user["role"],
+        name=user["name"],
+    )
+
+    from fastapi.testclient import TestClient
+
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", token)
+
+        clp = client.get("/api/insights/overview?currency=CLP&months=6")
+        assert clp.status_code == 200, clp.text
+        payload = clp.json()
+        assert payload["analytics"]["summary"]["items"] >= 1, payload
+        assert payload["analytics"]["summary"]["products"] >= 1, payload
+        assert len(payload["analytics"]["monthly"]) == 1, payload
+        assert payload["opportunities"]["summary"]["opportunities"] == 0, payload
+        assert payload["partial"] is False, payload
+
+        usd = client.get("/api/insights/overview?currency=USD&months=3")
+        assert usd.status_code == 200, usd.text
+        assert usd.json()["analytics"]["summary"]["items"] == 0, usd.text
+        assert usd.json()["analytics"]["monthly"] == [], usd.text

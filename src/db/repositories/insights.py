@@ -52,7 +52,7 @@ async def price_opportunities(
             r.canonical_product_id,
             r.product_match_confidence,
             r.product_match_confirmed,
-            cp.name AS comparable_product_name,
+            r.comparable_product_name,
             r.base_unit,
             r.currency,
             r.quantity,

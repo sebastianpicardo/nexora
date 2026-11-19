@@ -138,7 +138,22 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
         </div>
       </section>
 
-      {error ? <div className="alert error">{error}</div> : null}
+      {error ? (
+        <div className="alert error">
+          <span>{error}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
+      {data?.warnings?.length ? (
+        <div className="alert warning">
+          <span>{data.warnings.join(" ")}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
       {savingsError ? <div className="alert error">{savingsError}</div> : null}
 
       {!loading && !hasData ? (

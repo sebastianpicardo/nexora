@@ -1,5 +1,8 @@
 ﻿from __future__ import annotations
 
+import logging
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -10,7 +13,121 @@ from src.db import repositories
 from src.db.pool import get_pool
 from src.services import savings_report_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/insights", tags=["insights"])
+
+
+def _empty_analytics(currency: str, months: int) -> dict:
+    return {
+        "currency": currency,
+        "months": months,
+        "summary": {
+            "products": 0,
+            "suppliers": 0,
+            "items": 0,
+            "avg_confidence": 0.0,
+            "price_index": 100.0,
+            "price_index_products": 0,
+            "price_index_basis": "sin datos suficientes",
+            "price_change_pct": 0.0,
+        },
+        "monthly": [],
+        "top_increases": [],
+    }
+
+
+def _empty_opportunities(currency: str) -> dict:
+    return {
+        "currency": currency,
+        "days": 90,
+        "min_overprice_pct": 10.0,
+        "min_samples": settings.min_history_samples,
+        "summary": {
+            "opportunities": 0,
+            "total_items": 0,
+            "data_available": False,
+            "total_potential_savings": 0.0,
+            "total_conservative_savings": 0.0,
+            "total_excess_cost": 0.0,
+            "suppliers_affected": 0,
+        },
+        "top_suppliers": [],
+        "items": [],
+    }
+
+
+def _empty_forecast(currency: str) -> dict:
+    return {
+        "currency": currency,
+        "history_months": 6,
+        "horizon": 1,
+        "summary": {
+            "products": 0,
+            "projected_spend": 0.0,
+            "products_rising": 0,
+            "products_falling": 0,
+            "skipped_low_history": 0,
+        },
+        "items": [],
+    }
+
+
+def _empty_approvals(currency: str) -> dict:
+    return {
+        "currency": currency,
+        "threshold": 0.9,
+        "days": 120,
+        "max_amount": settings.auto_approve_max_amount,
+        "summary": {
+            "pending": 0,
+            "auto_eligible": 0,
+            "needs_review": 0,
+            "auto_amount": 0.0,
+            "review_amount": 0.0,
+        },
+        "items": [],
+    }
+
+
+def _warning_for(section: str, exc: Exception) -> str:
+    message = str(exc).lower()
+    if "undefinedtable" in message or "does not exist" in message or "undefinedcolumn" in message:
+        return (
+            f"No pudimos calcular {section} porque falta una tabla o columna en la base de datos. "
+            "Aplica las migraciones pendientes de Supabase y vuelve a intentar."
+        )
+    return f"No pudimos calcular {section}. El resto del panel sigue disponible."
+
+
+async def _safe_section(conn, label: str, awaitable, fallback, warnings: list[str]):
+    try:
+        async with conn.transaction():
+            return await awaitable
+    except Exception as exc:  # noqa: BLE001 - la sección se degrada sin tumbar el panel
+        logger.exception("Error calculando sección de insights: %s", label)
+        warnings.append(_warning_for(label, exc))
+        return fallback
+
+
+async def _verified_report(user: dict, month: str | None) -> dict:
+    try:
+        return await savings_report_service.build_verified_report(user, month=month)
+    except ValueError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Error cargando ahorro verificado")
+        selected = month or date.today().strftime("%Y-%m")
+        return {
+            "month": selected,
+            "available_months": [],
+            "currency": user.get("default_currency") or "CLP",
+            "count": 0,
+            "total_amount": 0.0,
+            "items": [],
+            "warnings": [_warning_for("el ahorro verificado", exc)],
+            "note": "No se pudo leer la evidencia histórica en este momento.",
+        }
 
 
 class SavingsTrackingRequest(BaseModel):
@@ -49,37 +166,65 @@ async def insights_overview(
     months: int = Query(default=6, ge=1, le=24),
 ):
     active_currency = _currency(user, currency)
+    warnings: list[str] = []
     async with get_pool().connection() as conn:
-        analytics = await repositories.analytics_overview(
-            conn, user["org_id"], currency=active_currency, months=months
-        )
-        opportunities = await repositories.price_opportunities(
+        analytics = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            days=90,
-            min_overprice_pct=10.0,
-            min_samples=settings.min_history_samples,
-            limit=5,
+            "la analítica de gasto",
+            repositories.analytics_overview(
+                conn, user["org_id"], currency=active_currency, months=months
+            ),
+            _empty_analytics(active_currency, months),
+            warnings,
         )
-        forecast = await repositories.consumption_forecast(
+        opportunities = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            history_months=6,
-            horizon=1,
-            limit=5,
+            "las oportunidades de ahorro",
+            repositories.price_opportunities(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                days=90,
+                min_overprice_pct=10.0,
+                min_samples=settings.min_history_samples,
+                limit=5,
+            ),
+            _empty_opportunities(active_currency),
+            warnings,
         )
-        queue = await repositories.approval_queue(
+        forecast = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            threshold=0.9,
-            days=120,
-            max_amount=settings.auto_approve_max_amount,
+            "el pronóstico de compras",
+            repositories.consumption_forecast(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                history_months=6,
+                horizon=1,
+                limit=5,
+            ),
+            _empty_forecast(active_currency),
+            warnings,
+        )
+        queue = await _safe_section(
+            conn,
+            "la cola de aprobaciones",
+            repositories.approval_queue(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                threshold=0.9,
+                days=120,
+                max_amount=settings.auto_approve_max_amount,
+            ),
+            _empty_approvals(active_currency),
+            warnings,
         )
     return {
         "currency": active_currency,
+        "months": months,
+        "partial": bool(warnings),
+        "warnings": warnings,
         "analytics": analytics,
         "opportunities": {
             "summary": opportunities["summary"],
@@ -92,7 +237,7 @@ async def insights_overview(
         },
         "approvals": {
             "summary": queue["summary"],
-            "items": [item for item in queue["items"] if item["auto_eligible"]][:5],
+            "items": [item for item in queue["items"] if item.get("auto_eligible")][:5],
         },
     }
 
@@ -106,16 +251,26 @@ async def price_opportunities(
     limit: int = Query(default=100, ge=1, le=500),
 ):
     active_currency = _currency(user, currency)
+    warnings: list[str] = []
     async with get_pool().connection() as conn:
-        return await repositories.price_opportunities(
+        data = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            days=days,
-            min_overprice_pct=min_overprice_pct,
-            min_samples=settings.min_history_samples,
-            limit=limit,
+            "las oportunidades de ahorro",
+            repositories.price_opportunities(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                days=days,
+                min_overprice_pct=min_overprice_pct,
+                min_samples=settings.min_history_samples,
+                limit=limit,
+            ),
+            _empty_opportunities(active_currency),
+            warnings,
         )
+    data["partial"] = bool(warnings)
+    data["warnings"] = warnings
+    return data
 
 
 @router.get("/forecast")
@@ -127,15 +282,25 @@ async def consumption_forecast(
     limit: int = Query(default=100, ge=1, le=500),
 ):
     active_currency = _currency(user, currency)
+    warnings: list[str] = []
     async with get_pool().connection() as conn:
-        return await repositories.consumption_forecast(
+        data = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            history_months=history_months,
-            horizon=horizon,
-            limit=limit,
+            "el pronóstico de compras",
+            repositories.consumption_forecast(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                history_months=history_months,
+                horizon=horizon,
+                limit=limit,
+            ),
+            _empty_forecast(active_currency),
+            warnings,
         )
+    data["partial"] = bool(warnings)
+    data["warnings"] = warnings
+    return data
 
 
 @router.get("/analytics")
@@ -145,10 +310,20 @@ async def analytics(
     months: int = Query(default=6, ge=1, le=24),
 ):
     active_currency = _currency(user, currency)
+    warnings: list[str] = []
     async with get_pool().connection() as conn:
-        return await repositories.analytics_overview(
-            conn, user["org_id"], currency=active_currency, months=months
+        data = await _safe_section(
+            conn,
+            "la analítica de gasto",
+            repositories.analytics_overview(
+                conn, user["org_id"], currency=active_currency, months=months
+            ),
+            _empty_analytics(active_currency, months),
+            warnings,
         )
+    data["partial"] = bool(warnings)
+    data["warnings"] = warnings
+    return data
 
 
 @router.get("/approvals")
@@ -159,15 +334,25 @@ async def approval_queue(
     days: int = Query(default=120, ge=1, le=730),
 ):
     active_currency = _currency(user, currency)
+    warnings: list[str] = []
     async with get_pool().connection() as conn:
-        return await repositories.approval_queue(
+        data = await _safe_section(
             conn,
-            user["org_id"],
-            currency=active_currency,
-            threshold=threshold,
-            days=days,
-            max_amount=settings.auto_approve_max_amount,
+            "la cola de aprobaciones",
+            repositories.approval_queue(
+                conn,
+                user["org_id"],
+                currency=active_currency,
+                threshold=threshold,
+                days=days,
+                max_amount=settings.auto_approve_max_amount,
+            ),
+            _empty_approvals(active_currency),
+            warnings,
         )
+    data["partial"] = bool(warnings)
+    data["warnings"] = warnings
+    return data
 
 
 @router.post("/savings/track")
@@ -228,7 +413,7 @@ async def verified_savings(
     month: str | None = Query(default=None, max_length=7),
 ):
     try:
-        return await savings_report_service.build_verified_report(user, month=month)
+        return await _verified_report(user, month)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -239,7 +424,7 @@ async def verified_savings_csv(
     month: str | None = Query(default=None, max_length=7),
 ):
     try:
-        report = await savings_report_service.build_verified_report(user, month=month)
+        report = await _verified_report(user, month)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     content = savings_report_service.report_to_csv(report)
@@ -258,7 +443,7 @@ async def verified_savings_pdf(
     month: str | None = Query(default=None, max_length=7),
 ):
     try:
-        report = await savings_report_service.build_verified_report(user, month=month)
+        report = await _verified_report(user, month)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     content = savings_report_service.report_to_pdf(report, org_name=str(user.get("org_name") or ""))

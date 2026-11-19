@@ -79,13 +79,33 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
         </div>
       </section>
 
-      {error ? <div className="alert error">{error}</div> : null}
+      {error ? (
+        <div className="alert error">
+          <span>{error}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
+
+      {data?.warnings?.length ? (
+        <div className="alert warning">
+          <span>{data.warnings.join(" ")}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
 
       {!loading && !hasData ? (
         <ActionEmptyState
           icon={<PricesIcon />}
-          title="Tu analítica empieza con la primera factura"
-          description="Sube una factura para ver gasto, precios y ahorro potencial sin planillas. También puedes explorar la vista completa con datos de demostración."
+          title={error ? "No pudimos cargar la analítica" : "Tu analítica empieza con la primera factura"}
+          description={
+            error
+              ? "El resto de NEXORA sigue disponible. Reintenta o carga el ejemplo de ferretería de 90 días para revisar la vista con datos."
+              : "Sube una factura para ver gasto, precios y ahorro potencial sin planillas. También puedes explorar la vista completa con datos de demostración."
+          }
           onUpload={onUpload}
           onLoaded={load}
         />

@@ -69,8 +69,8 @@ export default function AuditExpressPage({ onNavigate }) {
     setLoading(true);
     setError("");
     try {
-      const [auditData, comparatorData, negotiationData, weeklyData, onboardingData, radarData] =
-        await Promise.all([
+      const [auditResult, comparatorResult, negotiationResult, weeklyResult, onboardingResult, radarResult] =
+        await Promise.allSettled([
           api(`/api/leaks/audit?days=${days}`),
           api("/api/leaks/comparator?limit=40"),
           api("/api/leaks/negotiation?limit=25"),
@@ -78,12 +78,15 @@ export default function AuditExpressPage({ onNavigate }) {
           api("/api/enterprise/onboarding"),
           api("/api/compra-agil/opportunities?limit=100"),
         ]);
-      setAudit(auditData);
-      setComparator(comparatorData);
-      setNegotiation(negotiationData);
-      setWeekly(weeklyData);
-      setOnboarding(onboardingData);
-      setOpportunities(radarData.opportunities || []);
+      if (auditResult.status === "rejected") throw auditResult.reason;
+      setAudit(auditResult.value);
+      setComparator(comparatorResult.status === "fulfilled" ? comparatorResult.value : null);
+      setNegotiation(negotiationResult.status === "fulfilled" ? negotiationResult.value : null);
+      setWeekly(weeklyResult.status === "fulfilled" ? weeklyResult.value : null);
+      setOnboarding(onboardingResult.status === "fulfilled" ? onboardingResult.value : null);
+      setOpportunities(
+        radarResult.status === "fulfilled" ? radarResult.value.opportunities || [] : [],
+      );
     } catch (err) {
       setError(err.message || "No se pudo cargar la auditoría.");
     } finally {

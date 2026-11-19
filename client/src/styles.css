@@ -8356,6 +8356,23 @@ body.modal-open {
   margin-bottom: 14px;
 }
 
+.alert.error,
+.alert.warning,
+.alert.success {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.alert.error > span,
+.alert.warning > span,
+.alert.success > span {
+  flex: 1;
+  min-width: 220px;
+}
+
 @media (max-width: 1180px) {
   .audit-grid {
     grid-template-columns: minmax(0, 1fr);

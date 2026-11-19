@@ -97,20 +97,40 @@ export default function ForecastPage({ embedded = false, onUpload }) {
         </div>
       </section>
 
-      {error ? <div className="alert error">{error}</div> : null}
+      {error ? (
+        <div className="alert error">
+          <span>{error}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
+
+      {data?.warnings?.length ? (
+        <div className="alert warning">
+          <span>{data.warnings.join(" ")}</span>
+          <button type="button" className="button ghost small" onClick={load}>
+            Reintentar
+          </button>
+        </div>
+      ) : null}
 
       {!loading && !hasData ? (
         <ActionEmptyState
           icon={<ClockIcon />}
           title={
-            needsMoreHistory
-              ? "Ya tienes historial, faltan meses para proyectar"
-              : "Tu pronóstico empieza con el primer mes de compras"
+            error
+              ? "No pudimos cargar el pronóstico"
+              : needsMoreHistory
+                ? "Ya tienes historial, faltan meses para proyectar"
+                : "Tu pronóstico empieza con el primer mes de compras"
           }
           description={
-            needsMoreHistory
-              ? "Necesitas al menos 3 meses de consumo del mismo producto para calcular una tendencia confiable. También puedes cargar datos de demostración."
-              : "Sube facturas para proyectar consumo, gasto y reposiciones desde el primer minuto. También puedes explorar la vista con datos de demostración."
+            error
+              ? "El resto de NEXORA sigue disponible. Reintenta o carga el ejemplo de ferretería de 90 días para revisar la vista con datos."
+              : needsMoreHistory
+                ? "Necesitas al menos 3 meses de consumo del mismo producto para calcular una tendencia confiable. También puedes cargar datos de demostración."
+                : "Sube facturas para proyectar consumo, gasto y reposiciones desde el primer minuto. También puedes explorar la vista con datos de demostración."
           }
           onUpload={onUpload}
           onLoaded={load}
