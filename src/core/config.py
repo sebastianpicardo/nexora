@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     inbound_email_domain: str = "inbox.nexora.app"
     compra_agil_api_url: str = ""
     compra_agil_api_key: str = ""
+    cron_secret: str = ""
     whatsapp_api_url: str = "https://graph.facebook.com/v21.0"
     whatsapp_phone_id: str = ""
     whatsapp_token: str = ""

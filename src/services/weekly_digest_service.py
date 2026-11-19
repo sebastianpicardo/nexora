@@ -51,6 +51,59 @@ def _compose(report: dict, org_name: str) -> tuple[str, str, str]:
     return subject, text, html_body
 
 
+async def run_scheduled_digests(org_id: str | None = None) -> dict[str, Any]:
+    """Ejecuta el resumen semanal para una organización o para todas (job programado)."""
+    async with get_pool().connection() as conn:
+        async with conn.cursor() as cur:
+            filters = ["u.role = 'owner'", "u.active IS TRUE"]
+            values: list[Any] = []
+            if org_id:
+                filters.append("o.id = %s")
+                values.append(org_id)
+            await cur.execute(
+                f"""
+                SELECT o.id AS org_id, o.name AS org_name, o.default_currency,
+                       u.id AS user_id, u.email, u.name
+                FROM organizations o
+                JOIN users u ON u.org_id = o.id
+                WHERE {" AND ".join(filters)}
+                ORDER BY o.name
+                """,
+                values,
+            )
+            rows = await cur.fetchall()
+
+    results = []
+    for row in rows:
+        user = {
+            "org_id": row["org_id"],
+            "org_name": row["org_name"],
+            "id": row["user_id"],
+            "email": row["email"],
+            "name": row["name"],
+            "role": "owner",
+            "default_currency": row["default_currency"],
+        }
+        try:
+            result = await send_weekly_digest(user)
+            results.append(
+                {
+                    "org_id": str(row["org_id"]),
+                    "org_name": row["org_name"],
+                    "deliveries": result["deliveries"],
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "org_id": str(row["org_id"]),
+                    "org_name": row["org_name"],
+                    "error": exc.__class__.__name__,
+                }
+            )
+    return {"organizations": len(results), "results": results}
+
+
 async def send_weekly_digest(
     user: dict,
     *,
@@ -131,7 +184,7 @@ async def send_weekly_digest(
         "deliveries": deliveries,
         "summary": report["summary"],
         "note": (
-            "Envío listo para cron: llama este endpoint cada lunes o programa un job que use "
-            "send_weekly_digest."
+            "Programa un cron que llame POST /api/leaks/weekly-report/run con el header "
+            "X-Cron-Secret, o usa send_weekly_digest desde un job."
         ),
     }

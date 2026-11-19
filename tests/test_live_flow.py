@@ -859,6 +859,12 @@ def test_leak_audit_endpoints_report_real_findings(live_database):
         assert weekly_sent.status_code == 200, weekly_sent.text
         assert weekly_sent.json()["deliveries"], weekly_sent.text
 
+        cron_denied = client.post(
+            "/api/leaks/weekly-report/run",
+            headers={"X-Cron-Secret": "incorrecto"},
+        )
+        assert cron_denied.status_code == 401, cron_denied.text
+
         guardian = client.get("/api/leaks/margin-guardian?target_margin=15&min_margin=8")
         assert guardian.status_code == 200, guardian.text
         guardian_items = {item["sku"]: item for item in guardian.json()["items"]}

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import secrets as pysecrets
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from src.api.deps import CurrentUser, require_roles
+from src.core.config import settings
 from src.services import leak_audit_service as leaks
 from src.services import (
     margin_guardian_service,
@@ -135,6 +137,17 @@ async def send_weekly_report(
         email=payload.email,
         channel_id=payload.channel_id,
     )
+
+
+@router.post("/weekly-report/run")
+async def run_weekly_report(
+    org_id: str | None = Query(default=None, max_length=80),
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+) -> dict[str, Any]:
+    expected = settings.cron_secret
+    if not expected or not x_cron_secret or not pysecrets.compare_digest(x_cron_secret, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Secreto de cron inválido.")
+    return await weekly_digest_service.run_scheduled_digests(org_id)
 
 
 @router.post("/rcv")
