@@ -3,11 +3,27 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 
 from src.api.deps import require_roles
 from src.services import native_integrations_service as ni
 
 router = APIRouter(prefix="/api/integrations/native", tags=["native-integrations"])
+
+
+@router.get("/erp/export/{kind}.csv")
+async def erp_export(
+    kind: str,
+    user: dict = Depends(require_roles("owner", "admin", "analyst", "user")),
+):
+    if kind not in ni.ERP_EXPORTS:
+        raise HTTPException(status_code=404, detail="Exportación ERP no soportada.")
+    filename, content, _rows = await ni.erp_export_csv(kind, user)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/status")
@@ -31,7 +47,7 @@ async def native_integration_action(
     handlers = ni.ACTION_HANDLERS.get(provider, {})
     handler = handlers.get(action)
     if handler is None:
-        raise HTTPException(status_code=404, detail="Acci��n no soportada para este proveedor.")
+        raise HTTPException(status_code=404, detail="Acción no soportada para este proveedor.")
     provider_status = await ni.list_native_integrations(user)
     current = next((item for item in provider_status["providers"] if item["provider"] == provider), None)
     action_status = next((item for item in (current or {}).get("actions", []) if item["id"] == action), None)

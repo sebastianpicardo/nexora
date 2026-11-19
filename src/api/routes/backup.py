@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from src.api.deps import require_super_admin
 from src.services import backup_service
@@ -17,12 +17,12 @@ BACKUP_DIR = Path("./backups").resolve()
 def _safe_backup_path(filename: str) -> Path:
     """Valida que el nombre de archivo no escape del directorio de backups."""
     if not filename or ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Nombre de archivo no vÃ¡lido.")
+        raise HTTPException(status_code=400, detail="Nombre de archivo no válido.")
     if not filename.endswith(".sql"):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos .sql.")
     resolved = (BACKUP_DIR / filename).resolve()
     if not str(resolved).startswith(str(BACKUP_DIR)):
-        raise HTTPException(status_code=400, detail="Ruta de archivo no vÃ¡lida.")
+        raise HTTPException(status_code=400, detail="Ruta de archivo no válida.")
     return resolved
 
 
@@ -55,13 +55,14 @@ async def download_backup(
     filename: str,
     user: dict = Depends(require_super_admin),
 ):
-    filepath = _safe_backup_path(filename)
-    if not filepath.exists():
+    _safe_backup_path(filename)
+    content = backup_service.read_backup_bytes(filename)
+    if content is None:
         raise HTTPException(status_code=404, detail="Backup no encontrado.")
-    return FileResponse(
-        path=str(filepath),
-        filename=filename,
+    return Response(
+        content=content,
         media_type="application/sql",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -70,8 +71,8 @@ async def restore_backup(
     filename: str,
     user: dict = Depends(require_super_admin),
 ) -> dict[str, Any]:
-    filepath = _safe_backup_path(filename)
-    if not filepath.exists():
+    _safe_backup_path(filename)
+    if backup_service.read_backup_bytes(filename) is None:
         raise HTTPException(status_code=404, detail="Backup no encontrado.")
     try:
         return backup_service.restore_backup(filename)

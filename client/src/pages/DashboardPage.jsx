@@ -240,6 +240,13 @@ export default function DashboardPage({ onNavigate, onUpload }) {
             <section className="stack">
               <QuotaCard quota={quota} planName={planName} />
               <div className="quick-actions">
+                <button type="button" className="quick-action" onClick={() => onNavigate("audit-express")}>
+                  <span className="quick-icon"><SparkIcon /></span>
+                  <span>
+                    <strong>Auditoría Express</strong>
+                    <small>Fugas, sobrecostos y márgenes</small>
+                  </span>
+                </button>
                 {canOperate ? (
                   <button type="button" className="quick-action" onClick={onUpload}>
                     <span className="quick-icon"><DocumentsIcon /></span>

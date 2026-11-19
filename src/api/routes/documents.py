@@ -67,16 +67,16 @@ async def ingest_document(
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Formato no permitido: {suffix or 'sin extensiÃ³n'}",
+            detail=f"Formato no permitido: {suffix or 'sin extensión'}",
         )
 
     content = await file.read(settings.max_upload_bytes + 1)
     if not content:
-        raise HTTPException(status_code=400, detail="El archivo estÃ¡ vacÃ­o")
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
     if len(content) > settings.max_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"El archivo supera el lÃ­mite de {settings.max_upload_mb} MB",
+            detail=f"El archivo supera el límite de {settings.max_upload_mb} MB",
         )
 
     kind = filetype.guess(content)
@@ -121,14 +121,14 @@ async def ingest_document(
     if billing["usage"]["exceeded"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Alcanzaste el lÃ­mite de documentos de tu plan. Actualiza tu suscripciÃ³n para continuar.",
+            detail="Alcanzaste el límite de documentos de tu plan. Actualiza tu suscripción para continuar.",
         )
 
     async with get_pool().connection() as conn:
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Alcanzaste el lÃ­mite mensual de uso de IA. Actualiza tu suscripciÃ³n para continuar.",
+                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
             )
 
     document_id = uuid4()
@@ -326,7 +326,7 @@ async def export_processed_document(
         "Fecha",
         "Proveedor",
         "SKU",
-        "DescripciÃ³n",
+        "Descripción",
         "Unidad original",
         "Cantidad",
         "Precio original",
@@ -352,8 +352,8 @@ async def export_processed_document(
         for row in result["items"]
     ]
     subtitle = (
-        f"NEXORA Â· {document.get('original_filename') or document_id} Â· "
-        f"{len(rows)} Ã­tems Â· Generado el {date.today().isoformat()}"
+        f"NEXORA · {document.get('original_filename') or document_id} · "
+        f"{len(rows)} ítems · Generado el {date.today().isoformat()}"
     )
     if fmt == "pdf":
         content = build_pdf("Documento procesado", subtitle, headers, rows)
@@ -385,11 +385,11 @@ async def reprocess_document(
         if existing is None:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         if existing["status"] == "processing":
-            raise HTTPException(status_code=409, detail="El documento ya se estÃ¡ procesando")
+            raise HTTPException(status_code=409, detail="El documento ya se está procesando")
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="document_extraction"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Alcanzaste el lÃ­mite mensual de uso de IA. Actualiza tu suscripciÃ³n para continuar.",
+                detail="Alcanzaste el límite mensual de uso de IA. Actualiza tu suscripción para continuar.",
             )
         row = await repositories.reset_document_for_reprocess(
             conn,

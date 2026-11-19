@@ -19,6 +19,18 @@ ORG_ADMIN_ROLES = {"owner", "admin"}
 AUDIT_ROLES = {"owner", "admin", "analyst", "user"}
 READ_ROLES = {"owner", "admin", "analyst", "user", "auditor", "viewer"}
 
+# Matriz explícita de privilegios: cada rol puede satisfacer únicamente los
+# roles listados. No se usan equivalencias implícitas (p. ej. `user` no puede
+# actuar como `analyst` ni `viewer` como `auditor`).
+ROLE_GRANTS: dict[str, set[str]] = {
+    "owner": {"owner", "admin", "analyst", "user", "auditor", "viewer"},
+    "admin": {"admin", "analyst", "user", "auditor", "viewer"},
+    "analyst": {"analyst", "user", "viewer"},
+    "user": {"user", "viewer"},
+    "auditor": {"auditor", "viewer"},
+    "viewer": {"viewer"},
+}
+
 
 async def get_current_user(request: Request) -> dict:
     token = request.cookies.get(settings.cookie_name)
@@ -31,10 +43,10 @@ async def get_current_user(request: Request) -> dict:
         raw_session_id = payload.get("sid")
         session_id = UUID(raw_session_id) if raw_session_id else None
     except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="SesiÃ³n invÃ¡lida") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida") from exc
 
     if session_id is None and settings.is_production:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="SesiÃ³n invÃ¡lida")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida")
 
     async with get_pool().connection() as conn:
         user = await repositories.get_user_with_org(conn, user_id, session_id=session_id)
@@ -62,19 +74,11 @@ def require_roles(*roles: str):
             return user
         if role in roles:
             return user
-        if role == "owner" and "admin" in roles:
-            return user
-        if role == "analyst" and "user" in roles:
-            return user
-        if role == "viewer" and "auditor" in roles:
-            return user
-        if role == "user" and "analyst" in roles:
-            return user
-        if role == "auditor" and "viewer" in roles:
+        if ROLE_GRANTS.get(role, set()) & set(roles):
             return user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permisos para esta acciÃ³n",
+            detail="No tienes permisos para esta acción",
         )
 
     return dependency
@@ -301,7 +305,7 @@ class OriginGuardMiddleware:
 
 
 class SecurityHeadersMiddleware:
-    """AÃ±ade encabezados de seguridad a todas las respuestas HTTP."""
+    """Añade encabezados de seguridad a todas las respuestas HTTP."""
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -318,10 +322,10 @@ class SecurityHeadersMiddleware:
                 headers["X-Frame-Options"] = "DENY"
                 # Prevenir MIME sniffing
                 headers["X-Content-Type-Options"] = "nosniff"
-                # PolÃ­tica de remitente
+                # Política de remitente
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-                # HSTS solo en producciÃ³n (HTTPS)
+                # HSTS solo en producción (HTTPS)
                 if settings.is_production:
                     headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
                 # Content Security Policy con soporte para Google reCAPTCHA v3.

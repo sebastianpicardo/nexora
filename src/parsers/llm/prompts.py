@@ -23,7 +23,9 @@ Reglas obligatorias:
    clara o el precio no se pueda asociar con seguridad a una línea.
 9. En evidence_text copia el fragmento literal que respalda la línea. En page indica
    el número de página si lo conoces.
-10. Responde únicamente con el objeto JSON solicitado por el esquema. Sin markdown.
+10. Indica prices_include_tax=true si los precios del documento ya incluyen IVA/impuestos;
+    en caso contrario false. Informa tax_rate como fracción (por ejemplo 0.19 para IVA 19%).
+11. Responde únicamente con el objeto JSON solicitado por el esquema. Sin markdown.
 """.strip()
 
 

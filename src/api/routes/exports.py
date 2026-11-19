@@ -22,7 +22,7 @@ EXCEPTION_LABELS = {
     "unit_mismatch": "Unidad inconsistente",
     "price_mismatch": "Total inconsistente",
     "missing_price": "Precio faltante",
-    "extraction_failed": "ExtracciÃ³n fallida",
+    "extraction_failed": "Extracción fallida",
     "pending": "Pendiente",
     "approved": "Aprobado",
     "rejected": "Rechazado",
@@ -30,7 +30,7 @@ EXCEPTION_LABELS = {
     "low": "Baja",
     "medium": "Media",
     "high": "Alta",
-    "critical": "CrÃ­tica",
+    "critical": "Crítica",
 }
 
 ITEM_LABELS = {
@@ -90,7 +90,7 @@ async def export_exceptions(
             page_size=2000,
         )
 
-    headers = ["Severidad", "Tipo", "Proveedor", "Documento", "Ãtem", "SKU", "Motivo", "Estado", "Fecha"]
+    headers = ["Severidad", "Tipo", "Proveedor", "Documento", "Ítem", "SKU", "Motivo", "Estado", "Fecha"]
     rows = [
         [
             EXCEPTION_LABELS.get(row["severity"], row["severity"]),
@@ -108,8 +108,8 @@ async def export_exceptions(
 
     if fmt == "pdf":
         content = build_pdf(
-            "Excepciones de auditorÃ­a",
-            f"NEXORA Â· {len(rows)} registros Â· Generado el {date.today().isoformat()}",
+            "Excepciones de auditoría",
+            f"NEXORA · {len(rows)} registros · Generado el {date.today().isoformat()}",
             headers,
             rows,
             column_widths=[20 * 2.5, 32 * 2.5, 34 * 2.5, 38 * 2.5, 48 * 2.5, 18 * 2.5, 70 * 2.5, 22 * 2.5, 22 * 2.5],
@@ -147,7 +147,7 @@ async def export_items(
         "Fecha",
         "Proveedor",
         "SKU",
-        "DescripciÃ³n",
+        "Descripción",
         "Unidad original",
         "Cantidad",
         "Precio original",
@@ -176,7 +176,7 @@ async def export_items(
     if fmt == "pdf":
         content = build_pdf(
             "Precios auditados",
-            f"NEXORA Â· {len(rows)} registros Â· Generado el {date.today().isoformat()}",
+            f"NEXORA · {len(rows)} registros · Generado el {date.today().isoformat()}",
             headers,
             rows,
             column_widths=[

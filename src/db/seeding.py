@@ -10,29 +10,31 @@ PLANS_SEED_SQL = """
             'Free',
             'Para probar la auditoría con un volumen acotado.',
             0,
-            'USD',
+            'CLP',
             25,
             jsonb_build_array(
                 '25 documentos al mes',
                 'Auditoría de precios',
                 'Dashboard mensual',
-                'Exportaciones básicas'
+                'Exportaciones básicas',
+                '1 usuario'
             ),
             10
         ),
         (
             'pro',
             'Pro',
-            'Para equipos de compras que necesitan control continuo.',
-            49,
-            'USD',
+            'Para ferreterías y distribuidores que necesitan control continuo.',
+            39990,
+            'CLP',
             500,
             jsonb_build_array(
                 '500 documentos al mes',
-                'Equipo con roles',
-                'Alertas de cuota',
+                'Hasta 5 usuarios con roles',
+                'Alertas de cuota y precio',
                 'Exportaciones PDF y Excel',
-                'Historial de 6 meses'
+                'Historial de 12 meses',
+                'Copiloto de IA con cuota mensual'
             ),
             20
         ),
@@ -40,13 +42,14 @@ PLANS_SEED_SQL = """
             'enterprise',
             'Enterprise',
             'Para operaciones multi-sucursal y alto volumen.',
-            150000,
+            149990,
             'CLP',
             NULL,
             jsonb_build_array(
                 'Documentos ilimitados',
+                'Usuarios y sucursales ilimitadas',
                 'Panel multi-tenant',
-                'Auditoría avanzada',
+                'Auditoría avanzada y RCV',
                 'Exportaciones masivas',
                 'Gestión centralizada'
             ),

@@ -10,9 +10,11 @@ def test_native_integration_status_is_not_reversed():
     providers = {item["provider"]: item for item in data["providers"]}
 
     assert providers["chilecompra"]["available"] is True
-    assert providers["chilecompra"]["status"] == "Referencia"
+    assert providers["chilecompra"]["status"] == "Demo / datos simulados"
+    assert providers["chilecompra"]["simulated"] is True
     assert providers["slack"]["available"] is False
     assert providers["slack"]["status"] == "Próximamente"
+    assert providers["erp"]["status"] == "Exportación CSV real"
 
 
 def test_unavailable_native_actions_are_disabled():

@@ -70,9 +70,9 @@ class OpenAIProvider(LLMProvider):
 
         message = completion.choices[0].message
         if getattr(message, "refusal", None):
-            raise LLMError(f"OpenAI rechazÃ³ la extracciÃ³n: {message.refusal}")
+            raise LLMError(f"OpenAI rechazó la extracción: {message.refusal}")
         if message.parsed is None:
-            raise LLMError("OpenAI no devolviÃ³ una extracciÃ³n estructurada vÃ¡lida.")
+            raise LLMError("OpenAI no devolvió una extracción estructurada válida.")
 
         if completion.usage:
             logger.info(

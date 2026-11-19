@@ -28,7 +28,6 @@ PHYSICAL_UNITS: dict[str, tuple[str, str, str, str]] = {
     "tons": ("ton", "metric_ton", "mass", "kg"),
     "tonelada": ("ton", "metric_ton", "mass", "kg"),
     "toneladas": ("ton", "metric_ton", "mass", "kg"),
-    "t": ("ton", "metric_ton", "mass", "kg"),
     "lb": ("lb", "pound", "mass", "kg"),
     "lbs": ("lb", "pound", "mass", "kg"),
     "libra": ("lb", "pound", "mass", "kg"),
@@ -69,9 +68,13 @@ COUNT_UNITS = {
     "unidades",
     "un",
     "und",
+    "unds",
+    "unid",
+    "unids",
     "u",
     "pza",
     "pzas",
+    "pz",
     "pieza",
     "piezas",
     "item",
@@ -80,6 +83,28 @@ COUNT_UNITS = {
     "ea",
     "docena",
     "docenas",
+    "par",
+    "pares",
+    "plancha",
+    "planchas",
+    "barra",
+    "barras",
+    "tira",
+    "tiras",
+    "pliego",
+    "pliegos",
+    "malla",
+    "mallas",
+    "tabla",
+    "tablas",
+    "tubo",
+    "tubos",
+    "perfil",
+    "perfiles",
+    "lamina",
+    "laminas",
+    "lam",
+    "lamas",
 }
 
 PACKAGING_UNITS = {
@@ -182,6 +207,26 @@ def normalize_unit(
     if physical:
         return physical
 
+    if normalized == "t":
+        factor = _factor_to_base("ton", "metric_ton", "kg")
+        if "tonelada" in description_text or "toneladas" in description_text:
+            return UnitNormalization(
+                original_unit=raw,
+                base_unit="kg",
+                factor=factor,
+                dimension="mass",
+                requires_review=False,
+                reason=None,
+            )
+        return UnitNormalization(
+            original_unit=raw or None,
+            base_unit="kg",
+            factor=factor,
+            dimension="mass",
+            requires_review=True,
+            reason="La unidad 't' es ambigua; confirma si corresponde a tonelada.",
+        )
+
     tokens = normalized.split()
     first = tokens[0] if tokens else ""
     is_packaging = normalized in PACKAGING_UNITS or first in PACKAGING_UNITS
@@ -233,6 +278,15 @@ def normalize_unit(
                 original_unit=raw,
                 base_unit="unidad",
                 factor=Decimal(12),
+                dimension="count",
+                requires_review=False,
+                reason=None,
+            )
+        if normalized in {"par", "pares"}:
+            return UnitNormalization(
+                original_unit=raw,
+                base_unit="unidad",
+                factor=Decimal(2),
                 dimension="count",
                 requires_review=False,
                 reason=None,

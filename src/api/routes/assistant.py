@@ -32,7 +32,7 @@ async def assistant_chat(
         if await ai_usage_service.quota_exceeded(conn, user["org_id"], kind="assistant"):
             raise HTTPException(
                 status_code=403,
-                detail="Alcanzaste el lÃ­mite mensual de uso de IA del asistente. Actualiza tu plan.",
+                detail="Alcanzaste el límite mensual de uso de IA del asistente. Actualiza tu plan.",
             )
     answer, provider = await assistant_service.answer_question(
         payload.message.strip(),

@@ -82,6 +82,8 @@ class ExtractedDocument(BaseModel):
     items: list[ExtractedItem] = Field(default_factory=list)
     confidence: float | None = Field(default=None, ge=0, le=1)
     notes: str | None = None
+    prices_include_tax: bool | None = None
+    tax_rate: float | None = None
 
     @field_validator("items", mode="before")
     @classmethod
@@ -112,6 +114,17 @@ class ExtractedDocument(BaseModel):
     @classmethod
     def _parse_money(cls, value: object) -> float | None:
         return _number(value)
+
+    @field_validator("tax_rate", mode="before")
+    @classmethod
+    def _parse_tax_rate(cls, value: object) -> float | None:
+        parsed = parse_decimal(value)
+        if parsed is None:
+            return None
+        number = float(parsed)
+        if number > 1:
+            number = number / 100
+        return max(0.0, min(number, 1.0))
 
 
 @dataclass
@@ -151,6 +164,7 @@ class NormalizationResult:
     provider: str = ""
     model: str = ""
     usage: dict[str, int] | None = None
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def token_usage(self) -> dict[str, int] | None:

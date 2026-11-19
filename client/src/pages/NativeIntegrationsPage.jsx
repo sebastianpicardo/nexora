@@ -20,12 +20,12 @@ const PROVIDERS = [
     id: "chilecompra",
     name: "ChileCompra",
     icon: SearchIcon,
-    description: "Compara precios de referencia del mercado público y busca proveedores para tus compras de ferretería.",
+    description: "Explora precios y proveedores de demostración. Los datos son simulados y no provienen de Mercado Público.",
     color: "#10b981",
     maturity: "operativo",
     actions: [
-      { id: "search_items", label: "Buscar precios", primary: true, icon: SearchIcon },
-      { id: "search_suppliers", label: "Buscar proveedores", icon: SuppliersIcon },
+      { id: "search_items", label: "Ver precios demo", primary: true, icon: SearchIcon },
+      { id: "search_suppliers", label: "Ver proveedores demo", icon: SuppliersIcon },
       { id: "import_order", label: "Importar orden", icon: ArrowRightIcon },
     ],
   },
@@ -33,7 +33,7 @@ const PROVIDERS = [
     id: "sii",
     name: "SII",
     icon: CheckIcon,
-    description: "Valida el formato RUT de tus proveedores y prepara documentos para conciliación tributaria.",
+    description: "Valida el dígito verificador del RUT de tus proveedores. No consulta datos tributarios reales.",
     color: "#059669",
     maturity: "operativo",
     actions: [
@@ -46,13 +46,13 @@ const PROVIDERS = [
     id: "erp",
     name: "ERP / Contabilidad",
     icon: ArrowRightIcon,
-    description: "Exporta proveedores, órdenes de compra y facturas en archivos listos para importar a cualquier sistema.",
+    description: "Exporta proveedores, órdenes de compra y facturas a CSV real, listo para importar a tu sistema.",
     color: "#0f766e",
-    maturity: "a_medida",
+    maturity: "operativo",
     actions: [
       { id: "sync_suppliers", label: "Exportar proveedores", primary: true, icon: SuppliersIcon },
-      { id: "send_approval", label: "Enviar aprobación", icon: ArrowRightIcon },
-      { id: "import_invoices", label: "Importar facturas", icon: DocumentsIcon },
+      { id: "send_approval", label: "Exportar órdenes", icon: ArrowRightIcon },
+      { id: "import_invoices", label: "Exportar facturas", icon: DocumentsIcon },
     ],
   },
   {
@@ -576,7 +576,7 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
                 </table>
               )}
               <p className="muted small">
-                Precios de referencia estimados. No son cotizaciones oficiales de ChileCompra.
+                {result.note || "Datos de demostración. No son cotizaciones oficiales de ChileCompra."}
               </p>
             </div>
           ) : invoices.length > 0 ? (
@@ -604,14 +604,28 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
             </div>
           ) : null}
 
-          {(result.file || result.archivo) && (
+          {(result.file || result.archivo || result.download_url) && (
             <div className="result-file">
-              <strong>Archivo listo:</strong> {result.file || result.archivo}
+              <strong>Archivo listo:</strong> {result.filename || result.file || result.archivo}
               <p className="muted small">{result.note || ""}</p>
+              {result.download_url && (
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={() =>
+                    downloadFile(
+                      result.download_url,
+                      result.filename || "exportacion_nexora.csv",
+                    )
+                  }
+                >
+                  Descargar CSV
+                </button>
+              )}
             </div>
           )}
 
-          {!result.file && !resultados.length && !invoices.length && (
+          {!result.file && !result.download_url && !resultados.length && !invoices.length && (
             <div className="result-note">
               <p>{result.note || result.mensaje || "Ejecutado correctamente."}</p>
               {result.payload && (
@@ -623,7 +637,7 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
               {!result.payload && (
                 <div className="result-details">
                   {Object.entries(result).map(([key, value]) => {
-                    const skip = ["provider", "action", "note", "mensaje", "payload", "results", "invoices", "file", "archivo", "query", "mode", "order_by", "name", "total"];
+                    const skip = ["provider", "action", "note", "mensaje", "payload", "results", "invoices", "file", "archivo", "filename", "download_url", "rows", "query", "mode", "order_by", "name", "total"];
                     if (skip.includes(key) || value === undefined || value === null) return null;
                     const label = key
                       .replace(/([A-Z])/g, " $1")

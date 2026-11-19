@@ -1,6 +1,8 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import csv
+import io
 from typing import Any
 
 from psycopg import AsyncConnection
@@ -77,9 +79,9 @@ async def list_native_integrations(user: dict) -> dict[str, Any]:
     """Estado de integraciones nativas. Siempre disponibles, sin configuración técnica."""
     providers: list[dict[str, Any]] = []
     integration_status = {
-        "chilecompra": (True, "Referencia"),
-        "sii": (True, "Validación local"),
-        "erp": (True, "Exportación manual / Beta"),
+        "chilecompra": (True, "Demo / datos simulados"),
+        "sii": (True, "Validación local de RUT"),
+        "erp": (True, "Exportación CSV real"),
         "slack": (False, "Próximamente"),
         "webhook": (False, "Próximamente"),
         "google_workspace": (False, "Próximamente"),
@@ -91,6 +93,7 @@ async def list_native_integrations(user: dict) -> dict[str, Any]:
                 "provider": provider,
                 "available": available,
                 "status": status,
+                "simulated": provider in {"chilecompra"},
                 "actions": _default_actions(provider),
             }
         )
@@ -100,19 +103,19 @@ async def list_native_integrations(user: dict) -> dict[str, Any]:
 def _default_actions(provider: str) -> list[dict]:
     base = {
         "chilecompra": [
-            {"id": "search_items", "label": "Buscar precios en ChileCompra", "icon": "SearchIcon", "primary": True},
-            {"id": "search_suppliers", "label": "Buscar proveedores", "icon": "SuppliersIcon"},
+            {"id": "search_items", "label": "Ver precios demo (simulado)", "icon": "SearchIcon", "primary": True},
+            {"id": "search_suppliers", "label": "Ver proveedores demo (simulado)", "icon": "SuppliersIcon"},
             {"id": "import_order", "label": "Importar orden de compra", "icon": "ArrowRightIcon"},
         ],
         "sii": [
-            {"id": "validate_rut", "label": "Validar RUT en SII", "icon": "CheckIcon", "primary": True},
+            {"id": "validate_rut", "label": "Validar formato de RUT", "icon": "CheckIcon", "primary": True},
             {"id": "fetch_invoices", "label": "Obtener facturas electrónicas", "icon": "DocumentsIcon"},
             {"id": "reconcile", "label": "Conciliar documentos", "icon": "CheckIcon"},
         ],
         "erp": [
-            {"id": "sync_suppliers", "label": "Exportar proveedores (Excel)", "icon": "SuppliersIcon", "primary": True},
-            {"id": "send_approval", "label": "Enviar aprobación al ERP", "icon": "ArrowRightIcon"},
-            {"id": "import_invoices", "label": "Importar facturas (Excel)", "icon": "DocumentsIcon"},
+            {"id": "sync_suppliers", "label": "Exportar proveedores (CSV)", "icon": "SuppliersIcon", "primary": True},
+            {"id": "send_approval", "label": "Exportar órdenes (CSV)", "icon": "ArrowRightIcon"},
+            {"id": "import_invoices", "label": "Exportar facturas (CSV)", "icon": "DocumentsIcon"},
         ],
         "slack": [
             {"id": "notify", "label": "Notificar por email/Slack", "icon": "BellIcon", "primary": True},
@@ -127,6 +130,7 @@ def _default_actions(provider: str) -> list[dict]:
         ],
     }.get(provider, [])
     disabled_actions = {
+        "chilecompra": {"import_order"},
         "sii": {"fetch_invoices", "reconcile"},
         "slack": {"notify", "approve_from_slack"},
         "webhook": {"send_event"},
@@ -199,8 +203,9 @@ async def chilecompra_search_items(user: dict, payload: dict) -> dict[str, Any]:
         "mode": mode,
         "results": resultados,
         "total": len(resultados),
-        "source": "Referencia de mercado (estimada)",
-        "note": "Precios de referencia para ferretería. Son estimados, no cotizaciones oficiales de ChileCompra.",
+        "simulated": True,
+        "source": "Demo interno (simulado)",
+        "note": "Datos de demostración. No provienen de ChileCompra ni de Mercado Público.",
     }
 
 
@@ -240,7 +245,9 @@ async def chilecompra_search_suppliers(user: dict, payload: dict) -> dict[str, A
         "order_by": order_by,
         "results": proveedores,
         "total": len(proveedores),
-        "note": "Resultado de referencia. Para consultas reales en ChileCompra se requieren credenciales del portal.",
+        "simulated": True,
+        "source": "Demo interno (simulado)",
+        "note": "Proveedores de demostración. No provienen de ChileCompra ni de Mercado Público.",
     }
 
 
@@ -254,8 +261,9 @@ async def chilecompra_import_order(user: dict, payload: dict) -> dict[str, Any]:
         "provider": "chilecompra",
         "action": "import_order",
         "order_id": order_id,
-        "status": "generado",
-        "note": "Orden de compra generada en formato listo para importar a tu sistema.",
+        "status": "no_disponible",
+        "simulated": True,
+        "note": "La importación de órdenes reales requiere credenciales de ChileCompra. Sube el archivo manualmente.",
     }
 
 
@@ -272,9 +280,11 @@ async def sii_validate_rut(user: dict, payload: dict) -> dict[str, Any]:
         "rut": rut,
         "valido": es_valido,
         "estado": "Formato válido" if es_valido else "Formato inválido",
-        "giro": "Comercio al por mayor y al detalle",
-        "direccion": "Sin datos del SII",
-        "note": "Validación de formato RUT chileno. Para datos reales del SII se requieren credenciales tributarias.",
+        "giro": None,
+        "direccion": None,
+        "simulated": False,
+        "source": "Validación local del dígito verificador",
+        "note": "Solo valida el formato del RUT. No consulta datos tributarios reales del SII.",
     }
 
 
@@ -306,44 +316,110 @@ async def sii_reconcile(user: dict, payload: dict) -> dict[str, Any]:
     }
 
 
-# ---- Acciones ERP (exportación universal, sin configuración por cliente) ----
+# ---- Acciones ERP (exportación CSV real, sin configuración por cliente) ----
+
+ERP_EXPORTS = {
+    "suppliers": (
+        "proveedores_nexora.csv",
+        ["Nombre", "RUT", "Email", "Creado"],
+        "SELECT name, tax_id, email, created_at FROM suppliers WHERE org_id = %s ORDER BY name",
+    ),
+    "approvals": (
+        "ordenes_compra_nexora.csv",
+        ["Título", "Proveedor", "Monto", "Moneda", "Prioridad", "Estado", "Solicitado por", "Creado"],
+        """
+        SELECT a.title, coalesce(s.name, '') AS supplier_name, a.amount, a.currency,
+               a.priority, a.status, coalesce(u.name, '') AS requested_by_name, a.created_at
+        FROM purchase_approvals a
+        LEFT JOIN suppliers s ON s.id = a.supplier_id
+        LEFT JOIN users u ON u.id = a.requested_by
+        WHERE a.org_id = %s
+        ORDER BY a.created_at DESC
+        """,
+    ),
+    "invoices": (
+        "facturas_nexora.csv",
+        ["Archivo", "Tipo", "Estado", "Proveedor", "Número", "Fecha", "Neto", "IVA", "Total", "Creado"],
+        """
+        SELECT d.original_filename, d.doc_type, d.status, coalesce(s.name, '') AS supplier_name,
+               coalesce(d.metadata->>'document_number', '') AS document_number,
+               coalesce(d.metadata->>'document_date', '') AS document_date,
+               coalesce(d.metadata->>'subtotal', '') AS subtotal,
+               coalesce(d.metadata->>'tax', '') AS tax,
+               coalesce(d.metadata->>'total', '') AS total,
+               d.created_at
+        FROM documents_log d
+        LEFT JOIN suppliers s ON s.id = d.supplier_id
+        WHERE d.org_id = %s
+        ORDER BY d.created_at DESC
+        """,
+    ),
+}
+
+
+def _csv_value(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(("=", "+", "-", "@")):
+        text = f"'{text}"
+    return text
+
+
+async def erp_export_csv(kind: str, user: dict) -> tuple[str, bytes, int]:
+    """Genera un CSV real (UTF-8 con BOM) para ERP o contabilidad."""
+    export = ERP_EXPORTS.get(kind)
+    if export is None:
+        raise ValueError("Exportación ERP no soportada.")
+    filename, headers, query = export
+    async with get_pool().connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(query, (str(user["org_id"]),))
+            rows = await cur.fetchall()
+        await _audit(conn, user, f"integration.erp.export_{kind}", "integration", "erp", {"rows": len(rows)})
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    writer.writerow(headers)
+    for row in rows:
+        values = list(row.values())
+        writer.writerow([_csv_value(value) for value in values])
+    return filename, buffer.getvalue().encode("utf-8-sig"), len(rows)
+
 
 async def erp_sync_suppliers(user: dict, payload: dict) -> dict[str, Any]:
-    async with get_pool().connection() as conn:
-        await _audit(conn, user, "integration.erp.sync_suppliers", "integration", "erp", {})
+    filename, _content, rows = await erp_export_csv("suppliers", user)
     return {
         "provider": "erp",
         "action": "sync_suppliers",
-        "synced": 0,
-        "file": "proveedores_nexora.csv",
-        "note": "Archivo listo para descargar e importar a cualquier ERP (Excel, Contab, SAP, etc.).",
+        "rows": rows,
+        "filename": filename,
+        "download_url": "/api/integrations/native/erp/export/suppliers.csv",
+        "note": "CSV real generado con tus proveedores. Descárgalo e impórtalo a tu ERP.",
     }
 
 
 async def erp_send_approval(user: dict, payload: dict) -> dict[str, Any]:
-    approval_id = payload.get("approval_id") or ""
-    meta = {"approval_id": str(approval_id)}
-    async with get_pool().connection() as conn:
-        await _audit(conn, user, "integration.erp.send_approval", "integration", "erp", meta)
+    filename, _content, rows = await erp_export_csv("approvals", user)
     return {
         "provider": "erp",
         "action": "send_approval",
-        "approval_id": approval_id,
-        "status": "archivo_listo",
-        "file": f"orden_compra_{approval_id}.csv",
-        "note": "Orden de compra generada en CSV. Descárgala e impórtala a tu ERP.",
+        "rows": rows,
+        "filename": filename,
+        "download_url": "/api/integrations/native/erp/export/approvals.csv",
+        "note": "CSV real generado con tus órdenes y aprobaciones.",
     }
 
 
 async def erp_import_invoices(user: dict, payload: dict) -> dict[str, Any]:
-    async with get_pool().connection() as conn:
-        await _audit(conn, user, "integration.erp.import_invoices", "integration", "erp", {})
+    filename, _content, rows = await erp_export_csv("invoices", user)
     return {
         "provider": "erp",
         "action": "import_invoices",
-        "imported": 0,
-        "file": "facturas_para_erp.csv",
-        "note": "Archivo con facturas listo para importar a tu sistema de facturación.",
+        "rows": rows,
+        "filename": filename,
+        "download_url": "/api/integrations/native/erp/export/invoices.csv",
+        "note": "CSV real generado con tus facturas y documentos.",
     }
 
 
@@ -358,9 +434,9 @@ async def slack_notify(user: dict, payload: dict) -> dict[str, Any]:
         "provider": "slack",
         "action": "notify",
         "channel": channel,
-        "enviado": True,
+        "enviado": False,
         "mensaje": message or "Nueva compra pendiente de revisión en NEXORA.",
-        "note": "Notificación preparada. Puedes copiar el mensaje y enviarlo a tu canal de Slack o por email.",
+        "note": "Mensaje preparado localmente. La integración con Slack aún no está habilitada.",
     }
 
 
@@ -373,8 +449,8 @@ async def slack_approve_from_slack(user: dict, payload: dict) -> dict[str, Any]:
         "provider": "slack",
         "action": "approve_from_slack",
         "approval_id": approval_id,
-        "estado": "aprobado",
-        "note": "Compra aprobada. Puedes notificar al proveedor por email desde NEXORA.",
+        "estado": "no_disponible",
+        "note": "La aprobación desde Slack no está habilitada. Usa la bandeja de aprobaciones de NEXORA.",
     }
 
 
@@ -404,9 +480,9 @@ async def google_save_drive(user: dict, payload: dict) -> dict[str, Any]:
         "provider": "google_workspace",
         "action": "save_drive",
         "document_id": document_id,
-        "guardado": True,
+        "guardado": False,
         "archivo": f"documento_{document_id}.pdf",
-        "note": "Documento listo para descargar y subir a Google Drive manualmente.",
+        "note": "La integración con Google Drive no está habilitada. Descarga el documento y súbelo manualmente.",
     }
 
 

@@ -20,6 +20,28 @@ export const MODULE_HELP = {
       { id: "analytics", label: "Analítica ejecutiva" },
     ],
   },
+  "audit-express": {
+    eyebrow: "Auditoría Express",
+    title: "Diagnóstico de fugas y sobrecostos",
+    purpose:
+      "Cruza facturas, precios de proveedores y catálogo para estimar cuánto dinero se está fugando en sobrecostos, márgenes bajo el objetivo y facturas mal conciliadas.",
+    steps: [
+      "Define la ventana de análisis (30, 90, 180 o 365 días) según el volumen de compras.",
+      "Revisa los hallazgos priorizados: cada uno indica el proveedor, el precio actual y la referencia más barata.",
+      "Sigue el plan de acción para negociar, corregir márgenes o conciliar facturas.",
+      "Descarga el PDF para compartirlo con gerencia o usa el informe semanal como seguimiento.",
+    ],
+    tips: [
+      "Los ahorros de precio se estiman con el volumen de la última compra registrada.",
+      "El margen bajo se calcula por unidad de catálogo, no por ventas históricas.",
+      "Importa el RCV para actualizar costos sin enviar datos a un modelo de IA.",
+    ],
+    related: [
+      { id: "exceptions", label: "Conciliar excepciones" },
+      { id: "price-catalog", label: "Revisar catálogo" },
+      { id: "documents", label: "Cargar documentos" },
+    ],
+  },
   analytics: {
     eyebrow: "Inteligencia",
     title: "Analítica ejecutiva",

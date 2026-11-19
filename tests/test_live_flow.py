@@ -189,6 +189,10 @@ def test_full_ingestion_review_and_reprocess_flow(live_database, monkeypatch):
         return await real_run_pipeline(**kwargs, provider=FakeProvider())
 
     monkeypatch.setattr(document_service, "run_pipeline", patched_pipeline)
+    monkeypatch.setattr(
+        "src.parsers.pipeline.extract_tabular_document",
+        lambda *args, **kwargs: (None, {}),
+    )
 
     from fastapi.testclient import TestClient
 
@@ -326,7 +330,8 @@ def test_empty_database_bootstraps_plans_and_returns_empty_dashboard(live_databa
         assert payload["usage"]["limit"] == 25, payload
         assert {plan["id"] for plan in payload["plans"]} == {"free", "pro", "enterprise"}
         enterprise = next(plan for plan in payload["plans"] if plan["id"] == "enterprise")
-        assert enterprise["price_monthly"] == 150000, enterprise
+        assert enterprise["price_monthly"] == 149990, enterprise
+        assert enterprise["currency"] == "CLP", enterprise
         assert enterprise["currency"] == "CLP", enterprise
 
         dashboard = client.get("/api/dashboard/summary")
@@ -734,3 +739,134 @@ def test_ai_usage_retention_purges_old_rows(live_database):
             await close_pool()
 
     assert asyncio.run(_exercise_retention()) == 1
+
+def test_leak_audit_endpoints_report_real_findings(live_database):
+    user = asyncio.run(_seed_user())
+    token = create_access_token(
+        user_id=user["id"],
+        email=user["email"],
+        org_id=user["org_id"],
+        role=user["role"],
+        name=user["name"],
+    )
+
+    async def _seed_data() -> None:
+        from datetime import date
+
+        await open_pool()
+        try:
+            async with get_pool().connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        INSERT INTO suppliers (org_id, name, normalized_name)
+                        VALUES (%s, 'Ferretería Norte', 'ferreteria norte'),
+                               (%s, 'Ferretería Sur', 'ferreteria sur')
+                        RETURNING id, name
+                        """,
+                        (user["org_id"], user["org_id"]),
+                    )
+                    supplier_rows = await cur.fetchall()
+                    suppliers = {row["name"]: row["id"] for row in supplier_rows}
+
+                    await cur.execute(
+                        """
+                        INSERT INTO documents_log (
+                            org_id, supplier_id, original_filename, storage_path, file_hash, status
+                        )
+                        VALUES (%s, %s, 'compras.csv', 'uploads/compras.csv', 'hash-demo', 'processed')
+                        RETURNING id
+                        """,
+                        (user["org_id"], suppliers["Ferretería Norte"]),
+                    )
+                    document_id = (await cur.fetchone())["id"]
+
+                    for supplier_name, price, quantity in (
+                        ("Ferretería Norte", 1000, 10),
+                        ("Ferretería Sur", 1500, 5),
+                    ):
+                        await cur.execute(
+                            """
+                            INSERT INTO items_history (
+                                org_id, document_id, supplier_id, sku, original_description,
+                                normalized_description, base_unit, quantity, normalized_unit_price,
+                                currency, price_date, confidence, review_status
+                            )
+                            VALUES (%s, %s, %s, 'CAB-1', 'Cable eléctrico', 'Cable eléctrico',
+                                    'unidad', %s, %s, 'CLP', %s, 0.95, 'auto_approved')
+                            """,
+                            (
+                                user["org_id"],
+                                document_id,
+                                suppliers[supplier_name],
+                                quantity,
+                                price,
+                                date.today(),
+                            ),
+                        )
+
+                    await cur.execute(
+                        """
+                        INSERT INTO price_catalog (
+                            org_id, sku, name, unit, cost_price, sale_price, supplier_name
+                        )
+                        VALUES
+                            (%s, 'CAB-1', 'Cable eléctrico', 'unidad', 1000, 900, 'Ferretería Norte'),
+                            (%s, 'CAB-2', 'Cable grueso', 'unidad', 1000, 1050, 'Ferretería Sur')
+                        """,
+                        (user["org_id"], user["org_id"]),
+                    )
+        finally:
+            await close_pool()
+
+    asyncio.run(_seed_data())
+
+    from fastapi.testclient import TestClient
+
+    from src.main import app
+
+    with TestClient(app) as client:
+        client.cookies.set("nexora_token", token)
+
+        audit = client.get("/api/leaks/audit?days=90")
+        assert audit.status_code == 200, audit.text
+        payload = audit.json()
+        assert payload["summary"]["potential_savings"] > 0, payload
+        categories = {finding["category"] for finding in payload["findings"]}
+        assert "price_overpay" in categories, categories
+        assert "margin_bleed" in categories, categories
+        assert payload["coverage"]["documents"] == 1, payload["coverage"]
+
+        comparator = client.get("/api/leaks/comparator")
+        assert comparator.status_code == 200, comparator.text
+        comparison = comparator.json()["items"][0]
+        assert comparison["best_price"] == 1000, comparison
+        assert comparison["worst_price"] == 1500, comparison
+
+        negotiation = client.get("/api/leaks/negotiation")
+        assert negotiation.status_code == 200, negotiation.text
+        supplier = negotiation.json()["suppliers"][0]
+        assert supplier["supplier"] == "Ferretería Sur", supplier
+        assert supplier["estimated_savings"] > 0, supplier
+
+        weekly = client.get("/api/leaks/weekly-report")
+        assert weekly.status_code == 200, weekly.text
+        assert weekly.json()["summary"]["documents_processed"] == 1, weekly.text
+
+        pdf = client.get("/api/leaks/audit.pdf?days=90")
+        assert pdf.status_code == 200, pdf.text
+        assert pdf.headers["content-type"].startswith("application/pdf"), pdf.headers
+
+        rcv = client.post(
+            "/api/leaks/rcv",
+            files={
+                "file": (
+                    "rcv.csv",
+                    b"descripcion,unidad,cantidad,precio,total\nCable nuevo,unidad,1,1200,1200\n",
+                    "text/csv",
+                )
+            },
+            data={"apply": "false"},
+        )
+        assert rcv.status_code == 200, rcv.text
+        assert rcv.json()["counts"]["nuevos"] == 1, rcv.text

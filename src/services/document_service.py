@@ -218,6 +218,21 @@ async def _process_claimed_document(doc: dict) -> None:
                     },
                 )
 
+            if result.warnings:
+                await repositories.create_exception(
+                    conn,
+                    org_id=org_id,
+                    document_id=document_id,
+                    item_id=None,
+                    type="partial_import",
+                    severity="medium",
+                    reason="El documento se importó parcialmente por límites de tamaño.",
+                    evidence={
+                        "filename": doc["original_filename"],
+                        "warnings": result.warnings,
+                    },
+                )
+
             metadata = {
                 "document_number": extraction.document_number,
                 "document_date": extraction.document_date,
@@ -229,6 +244,9 @@ async def _process_claimed_document(doc: dict) -> None:
                 "notes": extraction.notes,
                 "supplier_tax_id": extraction.supplier_tax_id,
                 "item_count": len(result.items),
+                "prices_include_tax": bool(extraction.prices_include_tax),
+                "tax_rate": extraction.tax_rate,
+                "warnings": result.warnings,
             }
             await repositories.mark_processed(
                 conn,

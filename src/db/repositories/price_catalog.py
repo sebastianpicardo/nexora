@@ -65,6 +65,26 @@ DEMO_CATALOG = [
         "category": "Ferretería general",
         "supplier_name": "Herramientas SA",
     },
+    {
+        "sku": "DEMO-TALADRO-650",
+        "name": "Taladro percutor 650W",
+        "description": "Producto de demostración con margen bajo para la auditoría express.",
+        "unit": "unidad",
+        "cost_price": 12000,
+        "sale_price": 10900,
+        "category": "Herramientas eléctricas",
+        "supplier_name": "Herramientas SA",
+    },
+    {
+        "sku": "DEMO-SIERRA-7",
+        "name": "Sierra circular 7 1/4",
+        "description": "Producto de demostración con margen delgado para la auditoría express.",
+        "unit": "unidad",
+        "cost_price": 10000,
+        "sale_price": 10400,
+        "category": "Herramientas eléctricas",
+        "supplier_name": "Ferretería del Norte",
+    },
 ]
 
 

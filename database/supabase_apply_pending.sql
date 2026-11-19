@@ -293,7 +293,7 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_data_retention_days INTEGE
 -- 013_plan_alignment.sql
 -- ===========================================================================
 UPDATE plans
-SET price_monthly = 150000,
+SET price_monthly = 149990,
     currency = 'CLP',
     description = 'Para operaciones multi-sucursal y alto volumen.'
 WHERE id = 'enterprise';
@@ -314,6 +314,24 @@ CREATE INDEX IF NOT EXISTS documents_log_temporary_retry_idx
 
 COMMENT ON COLUMN documents_log.status IS
     'queued | processing | temporary_error (IA saturada, reintento pendiente) | processed | failed';
+
+-- ===========================================================================
+-- 016_exception_types.sql
+-- ===========================================================================
+ALTER TABLE exceptions_log DROP CONSTRAINT IF EXISTS exceptions_log_type_check;
+
+ALTER TABLE exceptions_log
+    ADD CONSTRAINT exceptions_log_type_check
+    CHECK (type IN (
+        'low_confidence',
+        'price_spike',
+        'unit_mismatch',
+        'price_mismatch',
+        'missing_price',
+        'extraction_failed',
+        'partial_import',
+        'invoice_discrepancy'
+    ));
 
 COMMIT;
 
@@ -337,5 +355,10 @@ SELECT
           AND pg_get_constraintdef(oid) LIKE '%temporary_error%'
     ) AS documents_temporary_error_ok,
     EXISTS (
-        SELECT 1 FROM plans WHERE id = 'enterprise' AND price_monthly = 150000
-    ) AS enterprise_price_ok;
+        SELECT 1 FROM plans WHERE id = 'enterprise' AND price_monthly = 149990
+    ) AS enterprise_price_ok,
+    EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'exceptions_log_type_check'
+          AND pg_get_constraintdef(oid) LIKE '%partial_import%'
+    ) AS exception_types_ok;

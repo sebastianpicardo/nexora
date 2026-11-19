@@ -16,6 +16,7 @@ from src.api.routes import (
     exports,
     insights,
     items,
+    leaks,
     native_integrations,
     organizations,
     price_catalog,
@@ -46,6 +47,7 @@ api_router.include_router(user_search_history.router)
 api_router.include_router(price_catalog.router)
 api_router.include_router(alerts.router)
 api_router.include_router(insights.router)
+api_router.include_router(leaks.router)
 api_router.include_router(assistant.router)
 api_router.include_router(backup.router)
 api_router.include_router(public_api.router)

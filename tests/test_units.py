@@ -82,3 +82,36 @@ def test_missing_unit_requires_review():
 
     assert result.base_unit == "unidad"
     assert result.requires_review is True
+
+
+def test_hardware_count_units_are_recognized():
+    for raw in ("plancha", "barra", "tubo", "perfil", "lamina", "pza", "pzas", "und", "unds"):
+        result = normalize_unit(raw)
+
+        assert result.base_unit == "unidad", raw
+        assert result.dimension == "count", raw
+        assert result.requires_review is False, raw
+
+
+def test_pair_is_two_units():
+    result = normalize_unit("par")
+
+    assert result.base_unit == "unidad"
+    assert result.factor == Decimal("2")
+    assert result.requires_review is False
+
+
+def test_ambiguous_tonne_requires_review_without_description():
+    result = normalize_unit("t")
+
+    assert result.base_unit == "kg"
+    assert result.factor == Decimal("1000")
+    assert result.requires_review is True
+
+
+def test_tonne_is_confirmed_by_description():
+    result = normalize_unit("t", description="Precio por tonelada de acero")
+
+    assert result.base_unit == "kg"
+    assert result.factor == Decimal("1000")
+    assert result.requires_review is False

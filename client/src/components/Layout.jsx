@@ -26,6 +26,7 @@ const NAV_SECTIONS = [
     label: "Operación",
     items: [
       { id: "dashboard", label: "Inicio", icon: DashboardIcon },
+      { id: "audit-express", label: "Auditoría Express", icon: SparkIcon },
       { id: "purchases", label: "Bandeja de Compras", icon: DocumentsIcon },
       { id: "approvals-hub", label: "Aprobaciones", icon: CheckIcon },
       { id: "intelligence", label: "Inteligencia y Ahorro", icon: SparkIcon },

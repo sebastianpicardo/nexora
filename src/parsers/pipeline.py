@@ -10,7 +10,7 @@ from src.core.errors import ExtractionError
 from src.parsers.extractors.base import ExtractedContent
 from src.parsers.extractors.images import extract_image
 from src.parsers.extractors.pdf import extract_pdf
-from src.parsers.extractors.tabular import extract_tabular
+from src.parsers.extractors.tabular import extract_tabular, extract_tabular_document
 from src.parsers.llm.factory import extract_with_fallback
 from src.parsers.normalization.currency import normalize_currency, parse_decimal, quantize_money
 from src.parsers.normalization.dates import parse_flexible_date
@@ -110,35 +110,50 @@ async def run_pipeline(
     provider: Any = None,
 ) -> NormalizationResult:
     extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
-    if not bool(org_settings.get("ai_data_consent", True)):
-        raise ExtractionError("La organización no autorizó el envío de documentos a proveedores de IA.")
-    if not bool(org_settings.get("ai_images_enabled", True)):
-        extracted.images = []
-    raw_max_chars = org_settings.get("ai_text_max_chars")
-    if raw_max_chars is not None:
-        max_chars = max(1000, min(int(raw_max_chars), 200_000))
-        combined = extracted.combined_text
-        if len(combined) > max_chars:
-            extracted.text = combined[:max_chars]
-            extracted.tables_text = ""
 
+    suffix = Path(filename).suffix.lower()
     usage: dict[str, int] | None = None
-    if provider is not None:
-        extraction: ExtractedDocument = await provider.extract_document(
-            extracted,
-            filename=filename,
-            doc_type_hint=doc_type_hint,
-        )
-        provider_name = provider.name
-        model_name = provider.model
-        usage = getattr(provider, "last_usage", None)
-    else:
-        extraction, provider_name, usage = await extract_with_fallback(
-            extracted,
-            filename=filename,
-            doc_type_hint=doc_type_hint,
-        )
-        model_name = provider_name
+    table_meta: dict | None = None
+    extraction: ExtractedDocument | None = None
+    provider_name = ""
+    model_name = ""
+
+    if suffix in TABULAR_EXTENSIONS:
+        deterministic = await asyncio.to_thread(extract_tabular_document, content, filename)
+        if deterministic is not None:
+            extraction, table_meta = deterministic
+            provider_name = "tabular"
+            model_name = "deterministic"
+
+    if extraction is None:
+        if not bool(org_settings.get("ai_data_consent", True)):
+            raise ExtractionError("La organización no autorizó el envío de documentos a proveedores de IA.")
+        if not bool(org_settings.get("ai_images_enabled", True)):
+            extracted.images = []
+        raw_max_chars = org_settings.get("ai_text_max_chars")
+        if raw_max_chars is not None:
+            max_chars = max(1000, min(int(raw_max_chars), 200_000))
+            combined = extracted.combined_text
+            if len(combined) > max_chars:
+                extracted.text = combined[:max_chars]
+                extracted.tables_text = ""
+
+        if provider is not None:
+            extraction = await provider.extract_document(
+                extracted,
+                filename=filename,
+                doc_type_hint=doc_type_hint,
+            )
+            provider_name = provider.name
+            model_name = provider.model
+            usage = getattr(provider, "last_usage", None)
+        else:
+            extraction, provider_name, usage = await extract_with_fallback(
+                extracted,
+                filename=filename,
+                doc_type_hint=doc_type_hint,
+            )
+            model_name = provider_name
 
     default_currency = str(org_settings.get("default_currency") or "CLP")
     raw_min_confidence = org_settings.get("min_confidence")
@@ -162,12 +177,21 @@ async def run_pipeline(
         if unit_price is None and line_total is not None and quantity is not None and quantity > 0:
             unit_price = quantize_money(line_total / quantity)
 
-        normalized_price = None
-        if unit_price is not None and unit.factor > 0:
-            normalized_price = quantize_money(unit_price / unit.factor, places=6)
-
         confidence = max(0.0, min(1.0, min(item.confidence, document_confidence)))
         currency = normalize_currency(item.currency or extraction.currency, default_currency)
+
+        tax_rate = extraction.tax_rate
+        if tax_rate is None:
+            tax_rate = 0.19 if currency.upper() == "CLP" else 0.0
+        prices_include_tax = bool(extraction.prices_include_tax)
+        net_unit_price = unit_price
+        if prices_include_tax and unit_price is not None and tax_rate > 0:
+            net_unit_price = quantize_money(unit_price / (1 + Decimal(str(tax_rate))), places=6)
+
+        normalized_price = None
+        if net_unit_price is not None and unit.factor > 0:
+            normalized_price = quantize_money(net_unit_price / unit.factor, places=6)
+
         price_date = parse_flexible_date(item.price_date) or document_date
 
         flags = _flags_for_item(
@@ -211,10 +235,25 @@ async def run_pipeline(
                     "unit_dimension": unit.dimension,
                     "unit_reason": unit.reason,
                     "extraction_confidence": extraction.confidence,
+                    "price_condition": "gross" if prices_include_tax else "net",
+                    "tax_rate": float(tax_rate) if tax_rate else 0.0,
+                    "gross_unit_price": (
+                        str(quantize_money(unit_price, places=4)) if unit_price is not None else None
+                    ),
+                    "net_unit_price": (
+                        str(quantize_money(net_unit_price, places=4)) if net_unit_price is not None else None
+                    ),
                 },
             )
         )
 
+    assert extraction is not None
+    warnings = list((table_meta or {}).get("warnings") or [])
+    if table_meta and table_meta.get("truncated"):
+        warnings.append(
+            "El archivo se importó parcialmente por límite de filas. "
+            "Revisa la nota del documento antes de confiar en los totales."
+        )
     return NormalizationResult(
         extraction=extraction,
         items=normalized_items,
@@ -222,4 +261,5 @@ async def run_pipeline(
         provider=provider_name,
         model=model_name,
         usage=usage,
+        warnings=warnings,
     )

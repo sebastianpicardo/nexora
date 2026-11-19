@@ -184,7 +184,7 @@ _SENSITIVE_CONFIG_KEYS = ("token", "secret", "key", "password", "api_key")
 async def _require_org(conn, org_id) -> dict:
     org = await repositories.get_organization(conn, org_id)
     if org is None:
-        raise HTTPException(status_code=404, detail="OrganizaciÃ³n no encontrada")
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
     return org
 
 
@@ -625,7 +625,7 @@ async def sync_integration(
                 status="Configurada, sin endpoint de prueba",
             )
             return {"success": True, "integration": result, "detail": "Integración guardada."}
-        safe_url = await _safe_outbound_url(str(url), field="La URL de la integraciÃ³n")
+        safe_url = await _safe_outbound_url(str(url), field="La URL de la integración")
         headers = {}
         if config.get("token"):
             headers["Authorization"] = f"Bearer {config['token']}"
@@ -940,7 +940,7 @@ async def seed_demo_data(
                 metadata={"demo": True, "month": month_date.isoformat()},
             )
             for index, (sku, description, unit, base_price) in enumerate(products):
-                supplier = suppliers[index % len(suppliers)]
+                supplier = suppliers[(index + month_offset) % len(suppliers)]
                 # Precios comparables entre proveedores y un sobreprecio claro en el mes actual.
                 supplier_factor = (
                     Decimal("0.92") if index % 3 == 0
@@ -1038,6 +1038,8 @@ async def seed_demo_data(
                 metadata={"demo": True, "month": month_date.isoformat(), "item_count": len(products)},
             )
 
+        catalog_items = await repositories.seed_demo_catalog(conn, user["org_id"])
+
         approvals_created = 0
         for approval_title, amount, priority in [
             ("Reposición de insumos de ferretería", current_month_spend, "high"),
@@ -1083,6 +1085,7 @@ async def seed_demo_data(
                 "months": 12,
                 "products": len(products),
                 "suppliers": len(suppliers),
+                "catalog": catalog_items,
                 "approvals": approvals_created,
             },
         )
@@ -1093,6 +1096,7 @@ async def seed_demo_data(
         "products": len(products),
         "documents": 12,
         "approvals": approvals_created,
+        "catalog": catalog_items,
     }
 
 

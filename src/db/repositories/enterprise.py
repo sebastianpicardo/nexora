@@ -1148,4 +1148,9 @@ async def purge_demo_data(conn: AsyncConnection, org_id: UUID | str) -> dict:
             (org,),
         )
         suppliers = cur.rowcount or 0
-    return {"approvals": approvals, "documents": documents, "suppliers": suppliers}
+        await cur.execute(
+            "DELETE FROM price_catalog WHERE org_id = %s AND sku LIKE 'DEMO-%%'",
+            (org,),
+        )
+        catalog = cur.rowcount or 0
+    return {"approvals": approvals, "documents": documents, "suppliers": suppliers, "catalog": catalog}

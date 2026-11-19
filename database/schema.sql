@@ -143,7 +143,9 @@ CREATE TABLE IF NOT EXISTS exceptions_log (
             'unit_mismatch',
             'price_mismatch',
             'missing_price',
-            'extraction_failed'
+            'extraction_failed',
+            'partial_import',
+            'invoice_discrepancy'
         )),
     severity TEXT NOT NULL DEFAULT 'medium'
         CHECK (severity IN ('low', 'medium', 'high', 'critical')),
@@ -882,7 +884,7 @@ CREATE INDEX IF NOT EXISTS ai_usage_org_kind_created_idx
     ON ai_usage (org_id, kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_usage_document_idx
     ON ai_usage (document_id);
--- NEXORA: catÃ¡logo canÃ³nico de productos y aliases por proveedor.
+-- NEXORA: catálogo canónico de productos y aliases por proveedor.
 -- Permite comparar precios entre proveedores sin depender solo de SKU o texto.
 CREATE TABLE IF NOT EXISTS canonical_products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
