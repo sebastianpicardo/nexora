@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from typing import Any
 
 from psycopg import AsyncConnection
@@ -109,12 +110,12 @@ def _default_actions(provider: str) -> list[dict]:
 
 
 def _validar_rut_chileno(rut: str) -> bool:
-    rut = rut.replace(".", "").replace("-", "").upper()
-    if len(rut) < 2:
+    """Valida un RUT chileno con su dígito verificador real (módulo 11)."""
+    clean = re.sub(r"[^0-9kK]", "", str(rut or "")).upper()
+    if len(clean) < 2 or len(clean) > 9:
         return False
-    cuerpo = rut[:-1]
-    dv = rut[-1:]
-    if not cuerpo.isdigit():
+    cuerpo, dv = clean[:-1], clean[-1]
+    if not cuerpo.isdigit() or len(cuerpo) > 8:
         return False
     suma = 0
     multiplo = 2

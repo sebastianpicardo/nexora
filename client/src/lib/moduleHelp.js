@@ -3,17 +3,18 @@ export const MODULE_HELP = {
     eyebrow: "Automatización",
     title: "Pipeline automático de 1 clic",
     purpose:
-      "Ejecuta en una sola corrida la extracción, la auditoría de fugas, los márgenes, la validación SII/RCV, la negociación y Compra Ágil sobre un documento nuevo o ya cargado.",
+      "Ejecuta en una sola corrida la extracción, el impacto del documento, la auditoría de fugas, los márgenes, la validación SII/RCV, la negociación y Compra Ágil sobre un documento nuevo o ya cargado.",
     steps: [
-      "Sube un archivo o elige un documento de la lista: el pipeline parte solo o con un único botón.",
-      "Observa el avance por etapa y su origen: interno (0 tokens de IA) o fallback IA cuando fue necesario.",
-      "Revisa los KPIs en CLP y las pestañas de resultados sin salir de esta pantalla.",
-      "Descarga el reporte o abre el módulo de detalle; la corrida queda guardada para retomarla.",
+      "Sube un archivo o elige un documento de la lista: el proceso parte solo o con un único botón.",
+      "Revisa primero «Este documento»: gasto, sobrecosto frente a tu historial y RUT del proveedor.",
+      "Mira por separado el contexto del negocio: compras de los últimos 90 días y catálogo.",
+      "Registra la oportunidad de ahorro, envía a revisión o descarga los ítems y reportes desde la misma página.",
     ],
     tips: [
-      "La IA solo se usa si el documento no puede resolverse con parsers deterministas y la organización lo autoriza.",
+      "El sobrecosto de este documento solo compara los mismos productos contra compras anteriores; no se mezcla con el historial general.",
+      "El RUT se valida con su dígito verificador real (módulo 11); si está inválido verás una alerta clara.",
+      "La IA solo se usa si el documento no puede resolverse con procesos internos y la organización lo autoriza.",
       "Reutilizar un documento ya procesado no vuelve a consumir tokens ni genera duplicados.",
-      "Si una etapa no aplica o falla de forma controlada, queda marcada y el resto continúa.",
     ],
     related: [
       { id: "audit-express", label: "Auditoría Express" },

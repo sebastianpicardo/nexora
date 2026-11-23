@@ -75,7 +75,7 @@ PERIOD_LABEL = (
 # ── Datos de proveedores ─────────────────────────────────────────────────
 
 SUPPLIERS = [
-    {"rut": 76000000, "name": "Ferretería Norte Ltda.", "city": "Santiago"},
+    {"rut": 77777777, "name": "Ferretería Norte Ltda.", "city": "Santiago"},
     {"rut": 80000000, "name": "Construcción Sur Cía. Ltda.", "city": "Concepción"},
     {"rut": 77111111, "name": "Metalúrgica O'Higgins S.A.", "city": "Rancagua"},
     {"rut": 78222222, "name": "Distribuidora El Muelle Ltda.", "city": "Valparaíso"},

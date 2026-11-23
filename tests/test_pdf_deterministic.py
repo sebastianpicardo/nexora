@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 from pathlib import Path
@@ -51,7 +51,7 @@ def test_pdf_cotizacion_20_items_is_deterministic():
     document, metadata = result
     assert len(document.items) == 20
     assert document.supplier_name and "Ferretería Norte" in document.supplier_name
-    assert document.supplier_tax_id == "76.000.000-0"
+    assert document.supplier_tax_id == "77.777.777-7"
     assert _validar_rut_chileno(document.supplier_tax_id)
     assert document.document_date and len(document.document_date) == 10
     assert document.currency == "CLP"
@@ -108,3 +108,13 @@ def test_rcv_sample_ruts_have_valid_check_digit():
         checked += 1
 
     assert checked >= 14
+
+
+def test_rut_validator_is_strict_with_check_digit():
+    assert _validar_rut_chileno("12.345.678-5")
+    assert _validar_rut_chileno("77.777.777-7")
+    assert _validar_rut_chileno("77777777-7")
+    assert not _validar_rut_chileno("77.777.777-0")
+    assert not _validar_rut_chileno("76.000.000-7")
+    assert not _validar_rut_chileno("")
+    assert not _validar_rut_chileno("sin-rut")

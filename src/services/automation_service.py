@@ -48,6 +48,7 @@ SOURCE_AI = "ai_fallback"
 
 STAGE_DEFINITIONS: tuple[tuple[str, str], ...] = (
     ("extraction", "Extracción y normalización"),
+    ("document_impact", "Impacto en este documento"),
     ("audit", "Fugas y sobrecostos"),
     ("margin", "Guardián de margen"),
     ("sii_rcv", "Validación SII / RCV"),
@@ -57,10 +58,11 @@ STAGE_DEFINITIONS: tuple[tuple[str, str], ...] = (
 
 STAGE_SCOPES: dict[str, str] = {
     "extraction": "Documento actual",
-    "audit": "Histórico 90 días del tenant",
+    "document_impact": "Documento actual",
+    "audit": "Historial de compras · 90 días",
     "margin": "Catálogo de precios",
-    "sii_rcv": "Documento + período RCV",
-    "negotiation": "Histórico 90 días del tenant",
+    "sii_rcv": "Documento + período SII / RCV",
+    "negotiation": "Historial de compras · 90 días",
     "compra_agil": "Documento + catálogo",
 }
 
@@ -347,6 +349,151 @@ async def _validate_supplier_rut(user: dict, doc: dict | None) -> dict:
     }
 
 
+def _norm_key(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+async def _build_document_impact(
+    user: dict,
+    document: dict | None,
+    items: list[dict],
+) -> dict:
+    """Impacto exclusivo del documento actual contra compras previas del mismo producto.
+
+    Compara cada ítem del documento contra el mejor precio de los últimos 90 días
+    (excluyendo este mismo documento) usando solo datos internos, sin IA.
+    """
+    metadata = (document or {}).get("metadata") or {}
+    doc_currency = (
+        metadata.get("currency")
+        or (items[0].get("currency") if items else None)
+        or user.get("default_currency")
+        or "CLP"
+    )
+    doc_currency = str(doc_currency).strip().upper()
+
+    if document is None or not items:
+        return {
+            "document_id": str(document["id"]) if document else None,
+            "currency": doc_currency,
+            "window_days": 90,
+            "items": len(items),
+            "items_with_history": 0,
+            "items_without_history": len(items),
+            "items_other_currency": 0,
+            "spend": 0.0,
+            "potential_savings": 0.0,
+            "overcost": 0.0,
+            "overcost_items": 0,
+            "top_items": [],
+            "note": "Sin ítems del documento para comparar.",
+        }
+
+    async with get_pool().connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT i.sku, i.normalized_description, i.base_unit,
+                       upper(i.currency) AS currency,
+                       i.normalized_unit_price AS price,
+                       coalesce(s.name, 'Proveedor sin nombre') AS supplier_name
+                FROM items_history i
+                LEFT JOIN suppliers s ON s.id = i.supplier_id
+                WHERE i.org_id = %s
+                  AND i.document_id <> %s
+                  AND i.price_date >= current_date - make_interval(days => 90)
+                  AND i.normalized_unit_price > 0
+                  AND i.review_status <> 'rejected'
+                """,
+                (str(user["org_id"]), str(document["id"])),
+            )
+            history = await cur.fetchall()
+
+    best: dict[tuple[str, str, str], dict] = {}
+    for row in history:
+        row_currency = str(row["currency"] or "").upper()
+        unit = _norm_key(row["base_unit"])
+        for key_value in {_norm_key(row["sku"]), _norm_key(row["normalized_description"])}:
+            if not key_value:
+                continue
+            key = (row_currency, key_value, unit)
+            current = best.get(key)
+            if current is None or float(row["price"]) < float(current["price"]):
+                best[key] = row
+
+    spend = 0.0
+    potential = 0.0
+    with_history = 0
+    without_history = 0
+    other_currency = 0
+    comparisons: list[dict] = []
+
+    for item in items:
+        price = float(item.get("normalized_unit_price") or 0)
+        quantity = float(item.get("quantity") or 0)
+        item_currency = str(item.get("currency") or doc_currency).upper()
+        if item_currency != doc_currency:
+            other_currency += 1
+            continue
+        spend += price * quantity
+        unit = _norm_key(item.get("base_unit"))
+        reference = None
+        sku_key = _norm_key(item.get("sku"))
+        if sku_key:
+            reference = best.get((item_currency, sku_key, unit))
+        if reference is None:
+            reference = best.get(
+                (item_currency, _norm_key(item.get("normalized_description")), unit)
+            )
+        if reference is None:
+            without_history += 1
+            continue
+        with_history += 1
+        best_price = float(reference["price"])
+        if best_price <= 0 or price <= best_price:
+            continue
+        gap_pct = (price - best_price) / best_price * 100
+        if gap_pct < 2.0:
+            continue
+        savings = (price - best_price) * quantity
+        potential += savings
+        comparisons.append(
+            {
+                "sku": item.get("sku"),
+                "product": item.get("original_description"),
+                "unit": item.get("base_unit"),
+                "supplier": item.get("supplier_name"),
+                "current_price": round(price, 2),
+                "best_price": round(best_price, 2),
+                "best_supplier": reference["supplier_name"],
+                "gap_pct": round(gap_pct, 1),
+                "quantity": round(quantity, 2),
+                "savings": round(savings, 2),
+                "currency": item_currency,
+            }
+        )
+
+    comparisons.sort(key=lambda row: row["savings"], reverse=True)
+    return {
+        "document_id": str(document["id"]),
+        "currency": doc_currency,
+        "window_days": 90,
+        "items": len(items),
+        "items_with_history": with_history,
+        "items_without_history": without_history,
+        "items_other_currency": other_currency,
+        "spend": round(spend, 2),
+        "potential_savings": round(potential, 2),
+        "overcost": round(potential, 2),
+        "overcost_items": len(comparisons),
+        "top_items": comparisons[:6],
+        "note": (
+            "Comparación contra el mejor precio de los últimos 90 días, "
+            "excluyendo este mismo documento."
+        ),
+    }
+
+
 async def execute_run(
     user: dict,
     run_id: UUID | str,
@@ -477,7 +624,75 @@ async def execute_run(
             for item in items[:100]
         ]
 
-    # ── Etapa 2: fugas y sobrecostos ───────────────────────────────────────
+    # ── Etapa 2: impacto exclusivo del documento actual ────────────────────
+    stage_started = time.perf_counter()
+    _set_stage(
+        stages,
+        "document_impact",
+        status=STATUS_RUNNING,
+        detail="Comparando este documento con tus compras anteriores…",
+    )
+    await _save_run(org_id, run_id, stages=stages)
+    try:
+        impact = await _build_document_impact(user, document, items)
+        if impact["items"] == 0:
+            impact_status = STATUS_NO_DATA
+            impact_detail = "El documento no tiene ítems para comparar."
+        elif impact["items_with_history"] == 0:
+            impact_status = STATUS_NO_DATA
+            impact_detail = (
+                "No hay compras anteriores de estos productos para comparar. "
+                "Sube otra cotización o factura del mismo proveedor/producto."
+            )
+        elif impact["overcost_items"] == 0:
+            impact_status = STATUS_COMPLETED
+            impact_detail = (
+                f"Se compararon {impact['items_with_history']} productos y no hay sobrecostos "
+                "frente al mejor precio de los últimos 90 días."
+            )
+        else:
+            impact_status = STATUS_COMPLETED
+            impact_detail = (
+                f"{impact['overcost_items']} productos de este documento están sobre el mejor "
+                f"precio de los últimos 90 días. Sobrecosto estimado: "
+                f"${impact['potential_savings']:,.0f} {impact['currency']}."
+            )
+        _set_stage(
+            stages,
+            "document_impact",
+            status=impact_status,
+            source=SOURCE_INTERNAL,
+            detail=impact_detail,
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
+            metrics={
+                "items": impact["items"],
+                "items_with_history": impact["items_with_history"],
+                "items_without_history": impact["items_without_history"],
+                "spend": impact["spend"],
+                "potential_savings": impact["potential_savings"],
+                "overcost_items": impact["overcost_items"],
+            },
+        )
+        results["document_impact"] = impact
+        summary["document_spend"] = impact["spend"]
+        summary["document_potential_savings"] = impact["potential_savings"]
+        summary["document_overcost"] = impact["overcost"]
+        summary["document_items_with_history"] = impact["items_with_history"]
+        summary["document_items_without_history"] = impact["items_without_history"]
+        summary["document_overcost_items"] = impact["overcost_items"]
+    except Exception as exc:
+        logger.warning("Automatización: falló el impacto del documento: %s", str(exc)[:300])
+        _set_stage(
+            stages,
+            "document_impact",
+            status=STATUS_SKIPPED,
+            source=SOURCE_INTERNAL,
+            detail=f"No se pudo comparar este documento: {str(exc)[:280]}",
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
+        )
+    await _save_run(org_id, run_id, stages=stages)
+
+    # ── Etapa 3: fugas y sobrecostos (historial) ───────────────────────────
     stage_started = time.perf_counter()
     _set_stage(stages, "audit", status=STATUS_RUNNING, detail="Cruzando precios y detectando fugas…")
     await _save_run(org_id, run_id, stages=stages)

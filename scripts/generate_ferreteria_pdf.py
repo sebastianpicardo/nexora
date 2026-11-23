@@ -53,7 +53,7 @@ def format_rut(rut_number: int, dv: str | None = None) -> str:
     return f"{body}-{dv}"
 
 
-SUPPLIER_RUT_NUMBER = 76000000
+SUPPLIER_RUT_NUMBER = 77777777
 SUPPLIER_RUT = format_rut(SUPPLIER_RUT_NUMBER)
 assert _dv_rut(SUPPLIER_RUT_NUMBER) == SUPPLIER_RUT.rsplit("-", 1)[-1]
 

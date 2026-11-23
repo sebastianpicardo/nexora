@@ -167,11 +167,67 @@ def test_automation_pdf_extracts_header_and_20_items_without_ai(live_database):
 
     document = run["results"]["document"]
     assert "Ferretería Norte" in (document["supplier_name"] or "")
-    assert document["supplier_tax_id"] == "76.000.000-0"
+    assert document["supplier_tax_id"] == "77.777.777-7"
     assert _validar_rut_chileno(document["supplier_tax_id"])
     assert document["item_count"] == 20
     assert run["summary"]["document_items"] == 20
     assert run["summary"]["document_supplier"] == document["supplier_name"]
+    impact = run["results"]["document_impact"]
+    assert impact["items"] == 20
+    assert impact["spend"] > 0
+    assert impact["items_without_history"] == 20
+    assert impact["potential_savings"] == 0
+
+
+def test_automation_document_impact_compares_against_previous_documents(live_database):
+    user = asyncio.run(_seed_user())
+    first_spy = SpyProvider()
+    first = asyncio.run(
+        _run_now(
+            user,
+            content=CSV_WITH_PRICES,
+            filename="compras-1.csv",
+            mime_type="text/csv",
+            doc_type="quote",
+            provider=first_spy,
+        )
+    )
+    assert first is not None
+
+    second_content = (
+        b"descripcion,unidad,cantidad,precio,total\n"
+        b"Tornillo acero inoxidable,unidad,2,80,160\n"
+        b"Plancha acero,kg,10,4,40\n"
+    )
+    second_spy = SpyProvider()
+    second = asyncio.run(
+        _run_now(
+            user,
+            content=second_content,
+            filename="compras-2.csv",
+            mime_type="text/csv",
+            doc_type="quote",
+            provider=second_spy,
+        )
+    )
+
+    assert second is not None
+    assert second_spy.calls == []
+    impact = second["results"]["document_impact"]
+    assert impact["items"] == 2
+    assert impact["items_with_history"] == 2
+    assert impact["items_without_history"] == 0
+    assert impact["potential_savings"] > 0
+    assert impact["top_items"][0]["product"] == "Tornillo acero inoxidable"
+    assert impact["top_items"][0]["best_price"] == 50
+    assert impact["top_items"][0]["current_price"] == 80
+    assert second["summary"]["document_potential_savings"] == impact["potential_savings"]
+    assert second["summary"]["document_spend"] == 200
+    # El historial del tenant se reporta aparte del impacto de este documento.
+    assert "historical_items" in second["summary"]
+    stage = next(item for item in second["stages"] if item["id"] == "document_impact")
+    assert stage["status"] == automation_service.STATUS_COMPLETED
+    assert stage["scope"] == "Documento actual"
 
 
 def test_automation_fallback_uses_ai_when_internal_is_incomplete(live_database):

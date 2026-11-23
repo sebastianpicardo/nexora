@@ -6,6 +6,7 @@ import PageTabs from "../components/PageTabs";
 import QuickGuide from "../components/QuickGuide";
 import {
   AlertTriangleIcon,
+  CheckIcon,
   ClockIcon,
   DocumentsIcon,
   DownloadIcon,
@@ -39,14 +40,14 @@ const STAGE_STATUS = {
   pendiente: { label: "En espera", tone: "neutral" },
   en_proceso: { label: "Ejecutando", tone: "running" },
   completado: { label: "Completado", tone: "ok" },
-  fallback_ia: { label: "Fallback IA", tone: "warn" },
+  fallback_ia: { label: "Con apoyo de IA", tone: "warn" },
   sin_datos: { label: "Sin datos", tone: "neutral" },
   omitido_con_motivo: { label: "Omitido", tone: "warn" },
 };
 
 const SOURCE_LABEL = {
-  internal_process: "Interno · 0 tokens",
-  ai_fallback: "IA · fallback",
+  internal_process: "Procesado automáticamente",
+  ai_fallback: "Con apoyo de IA",
 };
 
 const FILE_ACCEPT = ".pdf,.xml,.dte,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp,.tif,.tiff";
@@ -80,8 +81,9 @@ function metricLabel(key) {
     recovery: "Recuperación",
     rut: "RUT",
     rut_valid: "RUT válido",
-    rcv_total: "Documentos RCV",
+    rcv_total: "Documentos SII / RCV",
     rcv_missing: "Faltantes",
+    rcv_period: "Período SII / RCV",
     comparisons: "Comparaciones",
     negotiation_savings: "Ahorro negociación",
     verified_savings: "Ahorro verificado",
@@ -89,6 +91,16 @@ function metricLabel(key) {
     catalog_matches: "Coincidencias",
     mode: "Modo",
     search: "Búsqueda",
+    margin_bleed: "Pérdida de margen",
+    fallback_reason: "Motivo del respaldo",
+    resolution_source: "Procesamiento",
+    ai_used: "Con apoyo de IA",
+    reused: "Documento ya cargado",
+    items_with_history: "Con historial",
+    items_without_history: "Sin historial",
+    overcost_items: "Productos con sobrecosto",
+    spend: "Gasto",
+    potential_savings: "Ahorro",
   };
   return labels[key] || labelize(key);
 }
@@ -165,11 +177,14 @@ export default function AutomationPage({ onNavigate }) {
   const [starting, setStarting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [actionBusy, setActionBusy] = useState("");
   const [tab, setTab] = useState("resumen");
   const [flashing, setFlashing] = useState({});
   const previousKpis = useRef({});
 
   const canRun = canOperate || ["owner", "admin", "analyst", "user"].includes(user?.role || "");
+  const canTrack = ["owner", "admin", "analyst", "super_admin"].includes(user?.role || "");
 
   const loadHistory = useCallback(async () => {
     try {
@@ -356,6 +371,94 @@ export default function AutomationPage({ onNavigate }) {
   const savings = results.savings || {};
   const agile = results.compra_agil || {};
   const itemsPreview = results.items_preview || [];
+  const documentImpact = results.document_impact || {};
+  const documentTop = documentImpact.top_items || [];
+  const rutInfo = siiRcv.rut || {};
+  const rutValid = rutInfo.valid;
+
+  async function registerOpportunity() {
+    if (!run || actionBusy) return;
+    const top = documentTop[0];
+    if (!top) {
+      setNotice("Este documento no tiene una oportunidad de ahorro para registrar todavía.");
+      return;
+    }
+    setActionBusy("savings");
+    setError("");
+    try {
+      await api("/api/insights/savings/track", {
+        method: "POST",
+        body: JSON.stringify({
+          opportunity_key: `automation-${run.id}-${top.sku || top.product}`.slice(0, 240),
+          status: "identified",
+          currency: top.currency || currency,
+          title: `Ahorro detectado en ${run.filename || "documento"}`,
+          sku: top.sku,
+          product: top.product,
+          supplier_before: top.supplier,
+          supplier_after: top.best_supplier,
+          unit_price_before: top.current_price,
+          unit_price_after: top.best_price,
+          quantity: top.quantity,
+          notes: "Detectado por el proceso automático; queda pendiente de negociación.",
+          evidence: {
+            source: "automation",
+            run_id: run.id,
+            document_id: run.document_id,
+            window_days: documentImpact.window_days || 90,
+            gap_pct: top.gap_pct,
+          },
+        }),
+      });
+      setNotice("Oportunidad registrada en tu historial de ahorro.");
+    } catch (err) {
+      setError(err.message || "No se pudo registrar la oportunidad de ahorro.");
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function sendToReview() {
+    if (!run || actionBusy) return;
+    setActionBusy("review");
+    setError("");
+    try {
+      const amount =
+        Number(documentImpact.potential_savings || 0) || Number(documentImpact.spend || 0);
+      await api("/api/enterprise/approvals", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Revisar ${run.filename || "cotización"} por posible sobrecosto`.slice(0, 200),
+          amount,
+          currency,
+          priority: "normal",
+          document_id: run.document_id || undefined,
+          notes: `Revisión solicitada desde Automatización. ${
+            documentImpact.overcost_items || 0
+          } productos con sobrecosto; ahorro estimado ${formatMoney(
+            documentImpact.potential_savings,
+            currency,
+          )}.`,
+          metadata: {
+            source: "automation",
+            run_id: run.id,
+            document_id: run.document_id,
+            window_days: documentImpact.window_days || 90,
+            document_impact: {
+              spend: documentImpact.spend,
+              potential_savings: documentImpact.potential_savings,
+              overcost_items: documentImpact.overcost_items,
+            },
+          },
+        }),
+      });
+      setNotice("Enviado a revisión en Aprobaciones.");
+    } catch (err) {
+      setError(err.message || "No se pudo enviar a revisión.");
+    } finally {
+      setActionBusy("");
+    }
+  }
 
   return (
     <div className="page-stack automation-page">
@@ -364,24 +467,26 @@ export default function AutomationPage({ onNavigate }) {
           <div className="eyebrow">Automatización · Pipeline de 1 clic</div>
           <h2>Un documento entra. Todos los análisis salen.</h2>
           <p>
-            Extracción, fugas, márgenes, SII/RCV, negociación y Compra Ágil en una sola corrida.
-            Primero procesos internos (0 tokens de IA); la IA solo aparece como respaldo cuando
-            realmente hace falta.
+            Extracción, impacto del documento, fugas, márgenes, SII/RCV, negociación y Compra Ágil
+            en una sola corrida. Primero se resuelve todo con procesos internos; la IA solo entra
+            como apoyo cuando de verdad hace falta.
           </p>
           <div className="automation-pills">
-            <span><SparkIcon /> Deterministic-first</span>
-            <span><ShieldIcon /> Fallback controlado</span>
-            <span><HistoryIcon /> Resultado persistente</span>
+            <span><SparkIcon /> Procesos internos primero</span>
+            <span><ShieldIcon /> IA solo si hace falta</span>
+            <span><HistoryIcon /> Resultado guardado</span>
           </div>
         </div>
         <div className="automation-hero-stats">
           <div>
-            <span>Etapas internas</span>
-            <strong>{completedInternal}/6</strong>
+            <span>Etapas completadas</span>
+            <strong>{completedInternal}/{stages.length || 7}</strong>
           </div>
           <div>
-            <span>Uso de IA</span>
-            <strong className={aiUsed ? "warn" : "ok"}>{aiUsed ? "Fallback" : "0 tokens"}</strong>
+            <span>Procesamiento</span>
+            <strong className={aiUsed ? "warn" : "ok"}>
+              {aiUsed ? "Con apoyo de IA" : "Automático"}
+            </strong>
           </div>
           <div>
             <span>Última corrida</span>
@@ -393,6 +498,7 @@ export default function AutomationPage({ onNavigate }) {
       <QuickGuide steps={AUTOMATION_STEPS} activeStep={activeStep} />
 
       {error ? <div className="alert error">{error}</div> : null}
+      {notice ? <div className="alert success">{notice}</div> : null}
 
       <div className="automation-layout">
         <div className="automation-main">
@@ -405,7 +511,7 @@ export default function AutomationPage({ onNavigate }) {
                 <h3>Listo para analizar en un clic</h3>
                 <p>
                   Sube una cotización, factura o lista de precios, o elige un documento ya cargado.
-                  El pipeline ejecutará las seis etapas automáticamente.
+                  El proceso comparará este documento con tu historial y con tu catálogo.
                 </p>
               </section>
             )
@@ -423,9 +529,11 @@ export default function AutomationPage({ onNavigate }) {
                       ? "El pipeline está trabajando. Cada etapa se actualiza en tiempo real."
                       : run.status === "failed"
                         ? run.error_message || "La ejecución no pudo completarse."
-                        : `${summary.internal_stages ?? completedInternal} etapas internas · ${
-                            summary.fallback_stages ?? fallbackStages.length
-                          } fallback IA · ${summary.items ?? 0} ítems analizados.`}
+                        : `${summary.internal_stages ?? completedInternal} etapas procesadas automáticamente · ${
+                            (summary.fallback_stages ?? fallbackStages.length) > 0
+                              ? "con apoyo de IA en la extracción"
+                              : "sin usar IA"
+                          } · ${summary.items ?? 0} ítems analizados.`}
                   </p>
                 </div>
                 <div className="automation-run-actions">
@@ -456,45 +564,211 @@ export default function AutomationPage({ onNavigate }) {
                 </div>
               </section>
 
-              <section className="automation-kpis">
-                <article className={`automation-kpi ${flashing.savings ? "flash" : ""}`}>
-                  <span>Ahorro potencial · 90 días</span>
-                  <strong>{formatMoney(summary.potential_savings, currency)}</strong>
-                  <small>
-                    {summary.findings || 0} hallazgos en {summary.historical_documents || 0} documentos
-                  </small>
-                </article>
-                <article className={`automation-kpi ${flashing.overcost ? "flash" : ""}`}>
-                  <span>Sobrecostos · 90 días</span>
-                  <strong>{formatMoney(summary.overcost, currency)}</strong>
-                  <small>Histórico del tenant vs. mejor precio</small>
-                </article>
-                <article className={`automation-kpi ${flashing.margin ? "flash" : ""}`}>
-                  <span>Margen en riesgo · catálogo</span>
-                  <strong>{formatMoney(summary.margin_recovery, currency)}</strong>
-                  <small>{summary.margin_at_risk || 0} productos del catálogo por revisar</small>
-                </article>
-                <article className={`automation-kpi ${flashing.negotiation ? "flash" : ""}`}>
-                  <span>Objetivo negociación · 90 días</span>
-                  <strong>{formatMoney(summary.negotiation_savings, currency)}</strong>
-                  <small>{summary.comparisons || 0} comparaciones históricas</small>
-                </article>
-                <article className="automation-kpi">
-                  <span>SII / RCV · documento</span>
-                  <strong>
-                    {summary.sii_rcv?.total_documents
-                      ? `${summary.sii_rcv.completeness_pct ?? 0}%`
-                      : "Sin RCV"}
-                  </strong>
-                  <small>
-                    {summary.sii_rcv?.missing
-                      ? `${summary.sii_rcv.missing} folios sin detalle`
-                      : rut.rut
-                        ? `RUT ${rut.valid ? "válido" : "inválido"}`
-                        : "Sin validaciones pendientes"}
-                  </small>
-                </article>
+              <section className="card automation-document-focus">
+                <div className="automation-focus-head">
+                  <div>
+                    <div className="eyebrow">Este documento</div>
+                    <h2>{documentInfo.filename || run.filename || "Documento"}</h2>
+                    <p>
+                      {documentInfo.supplier_name || "Sin proveedor identificado"} ·{" "}
+                      {labelize(documentInfo.doc_type)} ·{" "}
+                      {documentInfo.item_count ?? itemsPreview.length} ítems
+                    </p>
+                  </div>
+                  <div className="automation-rut-block">
+                    {rutInfo.rut ? (
+                      <span className={`automation-rut ${rutValid ? "ok" : "bad"}`}>
+                        <ShieldIcon /> RUT {rutInfo.rut} · {rutValid ? "Válido" : "Inválido"}
+                      </span>
+                    ) : (
+                      <span className="automation-rut neutral">
+                        <ShieldIcon /> Sin RUT en el documento
+                      </span>
+                    )}
+                    {documentInfo.document_date ? (
+                      <small>Fecha del documento: {formatDate(documentInfo.document_date)}</small>
+                    ) : null}
+                  </div>
+                </div>
+
+                {rutInfo.rut && !rutValid ? (
+                  <div className="alert warning">
+                    El RUT del proveedor no pasa la validación del dígito verificador. Revisa el
+                    documento o corrige los datos del proveedor antes de negociar.
+                  </div>
+                ) : null}
+
+                <div className="automation-focus-stats">
+                  <div>
+                    <span>Gasto de este documento</span>
+                    <strong>
+                      {formatMoney(
+                        documentImpact.spend ?? documentInfo.total,
+                        documentImpact.currency || currency,
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Sobrecosto detectado</span>
+                    <strong>
+                      {formatMoney(
+                        documentImpact.potential_savings,
+                        documentImpact.currency || currency,
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Productos con referencia</span>
+                    <strong>
+                      {documentImpact.items_with_history ?? 0}/{documentImpact.items ?? 0}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Productos con sobrecosto</span>
+                    <strong>{documentImpact.overcost_items ?? 0}</strong>
+                  </div>
+                </div>
+
+                {documentTop.length ? (
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Proveedor actual</th>
+                          <th className="right">Precio actual</th>
+                          <th className="right">Mejor precio 90 días</th>
+                          <th>Mejor proveedor</th>
+                          <th className="right">Ahorro estimado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {documentTop.map((row, index) => (
+                          <tr key={`${row.sku || row.product}-${index}`}>
+                            <td>
+                              <strong>{row.product}</strong>
+                              <div className="muted small">
+                                {row.sku || "Sin SKU"} · {row.unit || "unidad"}
+                              </div>
+                            </td>
+                            <td>{row.supplier || "—"}</td>
+                            <td className="right mono">
+                              {formatMoney(row.current_price, row.currency || currency)}
+                            </td>
+                            <td className="right mono">
+                              {formatMoney(row.best_price, row.currency || currency)}
+                            </td>
+                            <td>{row.best_supplier || "—"}</td>
+                            <td className="right mono">
+                              {formatMoney(row.savings, row.currency || currency)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted small">
+                    {documentImpact.note ||
+                      "Aún no hay compras anteriores de estos productos para comparar este documento."}
+                  </p>
+                )}
+
+                <div className="automation-focus-actions">
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() => setTab("documento")}
+                  >
+                    <DocumentsIcon /> Ver ítems detectados
+                  </button>
+                  {documentInfo.id ? (
+                    <button
+                      type="button"
+                      className="button ghost"
+                      onClick={() =>
+                        downloadFile(
+                          `/api/documents/${documentInfo.id}/export?format=xlsx`,
+                          "items-documento.xlsx",
+                        )
+                      }
+                    >
+                      <DownloadIcon /> Descargar ítems
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() => setTab("negociacion")}
+                  >
+                    <TrendUpIcon /> Ver a quién negociar
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={registerOpportunity}
+                    disabled={!canTrack || actionBusy || documentTop.length === 0}
+                  >
+                    <PricesIcon />{" "}
+                    {actionBusy === "savings" ? "Registrando…" : "Registrar oportunidad de ahorro"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={sendToReview}
+                    disabled={!canRun || Boolean(actionBusy)}
+                  >
+                    <CheckIcon /> {actionBusy === "review" ? "Enviando…" : "Enviar a revisión"}
+                  </button>
+                </div>
               </section>
+
+              <div className="automation-kpi-group">
+                <div className="automation-group-head">
+                  <h3>Contexto del negocio</h3>
+                  <span>Historial de compras de los últimos 90 días y catálogo</span>
+                </div>
+                <section className="automation-kpis">
+                  <article className={`automation-kpi ${flashing.savings ? "flash" : ""}`}>
+                    <span>Ahorro potencial · 90 días</span>
+                    <strong>{formatMoney(summary.potential_savings, currency)}</strong>
+                    <small>
+                      {summary.findings || 0} hallazgos en {summary.historical_documents || 0}{" "}
+                      documentos históricos
+                    </small>
+                  </article>
+                  <article className={`automation-kpi ${flashing.overcost ? "flash" : ""}`}>
+                    <span>Sobrecostos · 90 días</span>
+                    <strong>{formatMoney(summary.overcost, currency)}</strong>
+                    <small>Tu historial de compras vs. mejor precio</small>
+                  </article>
+                  <article className={`automation-kpi ${flashing.margin ? "flash" : ""}`}>
+                    <span>Margen en riesgo · catálogo</span>
+                    <strong>{formatMoney(summary.margin_recovery, currency)}</strong>
+                    <small>{summary.margin_at_risk || 0} productos del catálogo por revisar</small>
+                  </article>
+                  <article className={`automation-kpi ${flashing.negotiation ? "flash" : ""}`}>
+                    <span>Objetivo negociación · 90 días</span>
+                    <strong>{formatMoney(summary.negotiation_savings, currency)}</strong>
+                    <small>{summary.comparisons || 0} comparaciones históricas</small>
+                  </article>
+                  <article className="automation-kpi">
+                    <span>Período SII / RCV</span>
+                    <strong>
+                      {summary.sii_rcv?.total_documents
+                        ? `${summary.sii_rcv.completeness_pct ?? 0}%`
+                        : "Sin RCV"}
+                    </strong>
+                    <small>
+                      {summary.sii_rcv?.missing
+                        ? `${summary.sii_rcv.missing} folios sin detalle`
+                        : rut.rut
+                          ? `RUT ${rut.valid ? "válido" : "inválido"}`
+                          : "Sin validaciones pendientes"}
+                    </small>
+                  </article>
+                </section>
+              </div>
 
               {run.status === "running" && stages.every((stage) => stage.status === "pendiente") ? (
                 <section className="card"><SkeletonBlock /></section>
@@ -532,22 +806,31 @@ export default function AutomationPage({ onNavigate }) {
                   </div>
                   <div className="automation-summary-grid">
                     <div>
-                      <span className="muted small">Documento actual</span>
-                      <strong>{documentInfo.supplier_name || "Sin proveedor identificado"}</strong>
+                      <span className="muted small">Este documento</span>
+                      <strong>
+                        {formatMoney(
+                          documentImpact.spend ?? documentInfo.total,
+                          documentImpact.currency || currency,
+                        )}
+                      </strong>
                       <p>
-                        {labelize(documentInfo.doc_type)} ·{" "}
-                        {documentInfo.item_count ?? itemsPreview.length} ítems
-                        {documentInfo.supplier_tax_id ? ` · RUT ${documentInfo.supplier_tax_id}` : ""}
-                        {documentInfo.total ? ` · ${formatMoney(documentInfo.total, currency)}` : ""}
+                        {documentInfo.item_count ?? itemsPreview.length} ítems · sobrecosto{" "}
+                        {formatMoney(
+                          documentImpact.potential_savings,
+                          documentImpact.currency || currency,
+                        )}
                       </p>
                     </div>
                     <div>
-                      <span className="muted small">Fugas y sobrecostos</span>
-                      <strong>{formatMoney(summary.overcost, currency)}</strong>
-                      <p>{summary.findings || 0} hallazgos priorizados</p>
+                      <span className="muted small">Historial · 90 días</span>
+                      <strong>{formatMoney(summary.potential_savings, currency)}</strong>
+                      <p>
+                        {summary.findings || 0} hallazgos en {summary.historical_documents || 0}{" "}
+                        documentos anteriores
+                      </p>
                     </div>
                     <div>
-                      <span className="muted small">Margen</span>
+                      <span className="muted small">Catálogo de precios</span>
                       <strong>{marginSummary.at_risk ?? 0} en riesgo</strong>
                       <p>{marginSummary.below_cost ?? 0} bajo costo</p>
                     </div>
@@ -557,6 +840,11 @@ export default function AutomationPage({ onNavigate }) {
                       <p>{savings.count ?? 0} evidencias registradas</p>
                     </div>
                   </div>
+                  <p className="muted small">
+                    El sobrecosto de este documento se calcula solo contra compras anteriores de los
+                    mismos productos. Los valores de historial y catálogo son contexto del negocio y
+                    no se suman a este documento.
+                  </p>
                   <div className="automation-action-plan">
                     <strong>Plan de acción</strong>
                     {(audit.action_plan || []).length ? (
