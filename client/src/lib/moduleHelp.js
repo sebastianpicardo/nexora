@@ -36,6 +36,7 @@ export const MODULE_HELP = {
     tips: [
       "Si no ves datos, carga tu primera cotización o factura para activar el análisis.",
       "El ahorro se calcula comparando precios contra la mediana histórica.",
+      "Revisa la bandeja de excepciones para actuar antes de que afecten el margen.",
     ],
     related: [
       { id: "documents", label: "Subir documento" },

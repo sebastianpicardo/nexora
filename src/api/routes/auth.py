@@ -186,13 +186,13 @@ async def register(
     response: Response,
 ) -> MeResponse:
     await auth_attempt_limiter(request, payload.email)
-    # Verificar reCAPTCHA solo si está configurado; si no, degradar gracefully
-    # para permitir registro con email/password sin bloqueos de CSP o tokens.
-    if settings.recaptcha_enabled:
+# Verificar reCAPTCHA solo si está configurado y viene token; si no,
+    # degradar gracefully para permitir login con email/password sin bloqueos.
+    if settings.recaptcha_enabled and payload.recaptcha_token:
         await verify_recaptcha(
             payload.recaptcha_token,
             remote_ip=_client_ip(request),
-            expected_action="register",
+            expected_action="login",
         )
     user = await register_with_password(
         email=payload.email,
@@ -287,9 +287,9 @@ async def logout(request: Request):
 @router.post("/forgot-password")
 async def forgotten_password(payload: ForgotPasswordRequest, request: Request) -> dict:
     await auth_attempt_limiter(request, payload.email)
-    # Verificar reCAPTCHA solo si está configurado; si no, degradar gracefully
-    # para permitir solicitud de recuperación sin bloqueos de CSP o tokens.
-    if settings.recaptcha_enabled:
+# Verificar reCAPTCHA solo si está configurado y viene token; si no,
+    # degradar gracefully para permitir solicitud de recuperación sin bloqueos.
+    if settings.recaptcha_enabled and payload.recaptcha_token:
         await verify_recaptcha(
             payload.recaptcha_token,
             remote_ip=_client_ip(request),

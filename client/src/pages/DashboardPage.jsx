@@ -340,11 +340,13 @@ export default function DashboardPage({ onNavigate, onUpload }) {
                   Abrir bandeja
                 </button>
               </div>
-              <ExceptionsTable
-                exceptions={summary?.pending_exceptions || []}
-                onResolve={canOperate ? () => onNavigate("exceptions") : undefined}
-                compact
-              />
+<ExceptionsTable
+                  exceptions={summary?.pending_exceptions || []}
+                  onResolve={canOperate && selected?.id
+                    ? () => onNavigate("exceptions")
+                    : undefined}
+                  compact
+                />
             </section>
           </div>
         </>

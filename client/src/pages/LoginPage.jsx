@@ -73,12 +73,16 @@ export default function LoginPage({ error }) {
 
   const params = new URLSearchParams(window.location.search);
   const authError = params.get("auth") === "error";
+  const authOk = params.get("auth") === "ok";
   const authMessage = authError
     ? "No pudimos completar el inicio de sesión con Google. Intenta nuevamente."
     : "";
+  const authOkMessage = authOk
+    ? "Inicio de sesión exitoso. Bienvenido/a."
+    : "";
   const verifyToken = params.get("verify_token");
   const resetToken = params.get("reset_token");
-  const feedback = message || authMessage || error;
+  const feedback = message || authMessage || authOkMessage || error;
 
   // Auto-switch mode based on URL tokens
   const checks = useMemo(() => passwordChecks(form.password), [form.password]);
@@ -93,6 +97,17 @@ export default function LoginPage({ error }) {
       setForm((prev) => ({ ...prev, token: resetToken }));
     }
   }, [verifyToken, resetToken, mode]);
+
+  useEffect(() => {
+    if (authOk && mode === MODES.LOGIN) {
+      setSuccess(authOkMessage);
+      const timer = setTimeout(() => {
+        setSuccess("");
+        setMode(MODES.LOGIN);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [authOk, mode]);
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
