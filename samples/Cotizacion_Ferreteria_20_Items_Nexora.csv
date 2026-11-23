@@ -1,4 +1,4 @@
-ítem,SKU,descripción,cantidad,unidad,precio_unitivo_neto,total
+ítem,SKU,descripción,cantidad,unidad,precio_unitario_clp,total
 1,TOR-001,Tornillo hexagonal M8x30,2,und,1200,2400
 2,TAL-002,Taladro inalámbrico 18V,1,und,85000,85000
 3,CEM-003,Cemento Portland 42.5,5,saco,3500,17500
@@ -13,7 +13,7 @@
 12,SEL-012,Seleccionador de circuito,2,und,6500,13000
 13,ISL-013,Isolante para cable,3,und,250,750
 14,CON-014,Conector RJ45,1,und,1200,1200
-15,TUB-015,"Tubería PVC 1/2""",5,m,4.5,22.5
+15,TUB-015,"Tubería PVC 1/2""",5,m,1200,6000
 16,ELE-016,Lámpara led 20W,1,und,35000,35000
 17,PIS-017,Piso de goma antideslizante,2,m2,8500,17000
 18,PINT-018,Sellador acrílico 300ml,1,und,380,380

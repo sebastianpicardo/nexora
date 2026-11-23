@@ -245,6 +245,7 @@ async def _process_claimed_document(doc: dict, provider: object | None = None) -
                 "total": extraction.total,
                 "confidence": extraction.confidence,
                 "notes": extraction.notes,
+                "supplier_name": extraction.supplier_name,
                 "supplier_tax_id": extraction.supplier_tax_id,
                 "item_count": len(result.items),
                 "prices_include_tax": bool(extraction.prices_include_tax),
@@ -252,6 +253,7 @@ async def _process_claimed_document(doc: dict, provider: object | None = None) -
                 "warnings": result.warnings,
                 # Metadatos de trazabilidad deterministic-first
                 "extraction_source": result.extraction_source,
+                "resolution_source": result.extraction_source,
                 "fallback_reason": result.fallback_reason,
                 "ai_used": result.ai_used,
             }

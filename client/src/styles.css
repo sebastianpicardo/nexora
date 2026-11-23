@@ -9484,6 +9484,14 @@ body.modal-open {
   color: var(--muted);
 }
 
+.automation-scope {
+  font-size: 0.64rem;
+  color: var(--muted);
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px dashed var(--line-strong);
+}
+
 .automation-source {
   font-size: 0.66rem;
   color: var(--ink-soft);

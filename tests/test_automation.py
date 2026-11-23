@@ -19,6 +19,7 @@ from src.db.pool import close_pool, get_pool, open_pool  # noqa: E402
 from src.db.repositories import users  # noqa: E402
 from src.parsers.schemas import ExtractedDocument, ExtractedItem  # noqa: E402
 from src.services import automation_service  # noqa: E402
+from src.services.native_integrations_service import _validar_rut_chileno  # noqa: E402
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -28,6 +29,12 @@ CSV_WITH_PRICES = (
     b"descripcion,unidad,cantidad,precio,total\n"
     b"Tornillo acero inoxidable,unidad,2,50,100\n"
     b"Plancha acero,kg,10,3,31\n"
+)
+
+SAMPLE_PDF = (
+    Path(__file__).resolve().parent.parent
+    / "samples"
+    / "Cotizacion_Ferreteria_20_Items_Nexora.pdf"
 )
 
 
@@ -133,6 +140,38 @@ def test_automation_deterministic_path_never_calls_ai(live_database):
     assert run["summary"]["ai_used"] is False
     # Todas las etapas deben estar presentes para que el usuario vea el pipeline completo.
     assert set(stages) == {stage_id for stage_id, _ in automation_service.STAGE_DEFINITIONS}
+
+
+def test_automation_pdf_extracts_header_and_20_items_without_ai(live_database):
+    user = asyncio.run(_seed_user())
+    spy = SpyProvider()
+
+    run = asyncio.run(
+        _run_now(
+            user,
+            content=SAMPLE_PDF.read_bytes(),
+            filename=SAMPLE_PDF.name,
+            mime_type="application/pdf",
+            doc_type="quote",
+            provider=spy,
+        )
+    )
+
+    assert run is not None
+    assert run["status"] == "completed"
+    assert spy.calls == []
+    stages = {stage["id"]: stage for stage in run["stages"]}
+    assert stages["extraction"]["status"] == automation_service.STATUS_COMPLETED
+    assert stages["extraction"]["source"] == automation_service.SOURCE_INTERNAL
+    assert stages["extraction"]["metrics"]["items"] == 20
+
+    document = run["results"]["document"]
+    assert "Ferretería Norte" in (document["supplier_name"] or "")
+    assert document["supplier_tax_id"] == "76.000.000-0"
+    assert _validar_rut_chileno(document["supplier_tax_id"])
+    assert document["item_count"] == 20
+    assert run["summary"]["document_items"] == 20
+    assert run["summary"]["document_supplier"] == document["supplier_name"]
 
 
 def test_automation_fallback_uses_ai_when_internal_is_incomplete(live_database):

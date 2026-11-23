@@ -25,7 +25,20 @@ PRICE_RE = re.compile(r"[\$]?\s*(\d{1,3}(?:[.\d{3}]*|\d+)(?:[.,]\d{1,2})?)")
 DATE_RE = re.compile(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})")
 SKU_RE = re.compile(r"\b([A-Z]{2,}[-]?\d{3,})\b")
 QUANTITY_RE = re.compile(r"(?:cantidad|qty|qty\.|unidades?|uds?)\s*[:=]?\s*(\d+(?:[.,]\d+)?)", re.IGNORECASE)
-UNIT_RE = re.compile(r"(unidad|und|kg|kg\.|kg|l|lt|litro|m|metro|pcs|pza|pzas)", re.IGNORECASE)
+UNIT_RE = re.compile(
+    r"(unidad|und|unid|saco|docena|gal[oó]n|galon|kg|m2|m3|metro|m|litro|lt|l|par|pza|rollo|bolsa|caja|c/u)",
+    re.IGNORECASE,
+)
+UNIT_TOKENS = (
+    r"(?:und|unidad|unid|un|saco|sacos|docena|docenas|gal[oó]n|galon|galones|gal|kg|kgs|"
+    r"m2|m3|mt|m|lt|l|litro|litros|par|pares|pza|pzas|pieza|piezas|rollo|rollos|"
+    r"bolsa|bolsas|caja|cajas|c/u)"
+)
+ITEM_LINE_RE = re.compile(
+    rf"^(?P<prefix>.*?)\s+(?P<qty>\d+(?:[.,]\d+)?)\s+(?P<unit>{UNIT_TOKENS})\s+"
+    rf"\$?\s*(?P<price>\d[\d.,]*)\s+\$?\s*(?P<total>\d[\d.,]*)\s*$",
+    re.IGNORECASE,
+)
 
 
 def _clean_money(text: str) -> float | None:
@@ -88,16 +101,41 @@ TABLE_COLUMN_SYNONYMS: dict[str, set[str]] = {
 }
 
 
+def _match_table_field(normalized: str) -> str | None:
+    for field, synonyms in TABLE_COLUMN_SYNONYMS.items():
+        if normalized in synonyms:
+            return field
+    # Tolerancia a encabezados variables y errores tipográficos frecuentes
+    # ("Precio Unitivo (CLP)", "P. Unitario", "Valor Unit. CLP", etc.).
+    if "precio" in normalized and ("unit" in normalized or "uni" in normalized):
+        return "unit_price"
+    if "total" in normalized or "importe" in normalized or "monto" in normalized:
+        return "total"
+    if "cantidad" in normalized or normalized in {"qty", "cant", "unidades"}:
+        return "quantity"
+    if (
+        "descrip" in normalized
+        or "producto" in normalized
+        or "detalle" in normalized
+        or "glosa" in normalized
+    ):
+        return "description"
+    if normalized.startswith("sku") or "codigo" in normalized or normalized.startswith("cod"):
+        return "sku"
+    if "unidad" in normalized or normalized in {"um", "und", "un", "unid"}:
+        return "unit"
+    return None
+
+
 def _map_table_header(row: list[str | None]) -> dict[str, int]:
     mapping: dict[str, int] = {}
     for index, cell in enumerate(row):
         normalized = _normalize_cell(cell)
         if not normalized:
             continue
-        for field, synonyms in TABLE_COLUMN_SYNONYMS.items():
-            if field not in mapping and normalized in synonyms:
-                mapping[field] = index
-                break
+        field = _match_table_field(normalized)
+        if field is not None and field not in mapping:
+            mapping[field] = index
     return mapping
 
 
@@ -192,7 +230,7 @@ def _format_table(table: list[list[str | None]]) -> str:
     return "\n".join(rows)
 
 
-def _extract_supplier(text: str) -> str | None:
+def _extract_supplier(text: str) -> tuple[str, str | None] | None:
     """Extrae RUT y razón social aproximada si aparecen."""
     rut_m = RUT_RE.search(text)
     if rut_m:
@@ -210,49 +248,58 @@ def _extract_supplier(text: str) -> str | None:
 def _extract_items(text: str, currency: str) -> list[ExtractedItem]:
     """Extrae ítems usando reglas heurísticas sobre texto de PDF.
 
-    No es un extractor universal: busca líneas con cantidad + precio + total
-    y las mapea a ítems. Si no encuentra nada reconocible, devuelve [].
+    Acepta filas tabulares con columnas variables y separadores ``|`` o espacios:
+    ``[n] [SKU] descripción cantidad unidad precio_unitario total``.
+    No es un extractor universal; si no reconoce filas devuelve ``[]`` para que
+    ``extraction_policy`` active el fallback de IA.
     """
     items: list[ExtractedItem] = []
     lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     for line in lines:
-        # Saltar líneas que claramente no son ítems
-        if _is_non_item_line(line):
+        clean = " ".join(line.replace("|", " ").replace("\t", " ").split())
+        if not clean:
+            continue
+        # Saltar encabezados, totales y filas de documentos RCV (folio + RUT + fecha).
+        if _is_non_item_line(clean):
+            continue
+        if RUT_RE.search(clean) and DATE_RE.search(clean):
             continue
 
-        qty_m = QUANTITY_RE.search(line)
-        price_matches = list(PRICE_RE.finditer(line))
-        if not qty_m or len(price_matches) < 2:
+        match = ITEM_LINE_RE.match(clean)
+        if match is None:
             continue
 
-        quantity = float(qty_m.group(1).replace(",", "."))
-        # Precio unitario y total son los dos primeros precios encontrados
-        prices = [float(p.group(1).replace(".", "").replace(",", ".")) for p in price_matches[:2]]
-        if len(prices) < 2:
+        quantity = _parse_number(match.group("qty"))
+        unit_price = _parse_number(match.group("price"))
+        line_total = _parse_number(match.group("total"))
+        if quantity is None or unit_price is None or line_total is None:
+            continue
+        if line_total <= 0 and unit_price <= 0:
             continue
 
-        unit_price = prices[0]
-        line_total = prices[1]
-
-        desc = line[:qty_m.start()].strip()
-        if not desc or len(desc) < 3:
-            desc = line[qty_m.end():].strip()
-
-        sku_m = SKU_RE.search(desc)
+        prefix = match.group("prefix").strip()
+        sku_m = SKU_RE.search(prefix)
         sku = sku_m.group(1) if sku_m else None
+        description = prefix
+        if sku_m:
+            description = description[: sku_m.start()] + " " + description[sku_m.end() :]
+        description = re.sub(r"^\s*\d+[.)]?\s+", "", description).strip(" |-")
+        description = " ".join(description.split())
+        if not description or len(description) < 2:
+            continue
 
         items.append(
             ExtractedItem(
-                description=desc or "Ítem sin descripción",
+                description=description,
                 sku=sku,
                 quantity=quantity,
-                unit="unidad",
+                unit=match.group("unit").lower(),
                 unit_price=unit_price,
                 line_total=line_total,
                 currency=currency,
-                confidence=0.85,
-                evidence_text=line[:500],
+                confidence=0.88,
+                evidence_text=clean[:500],
                 page=1,
             )
         )
@@ -317,17 +364,23 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
             if not items:
                 return None  # No se pudieron extraer ítems, caer al LLM
 
-            # Extraer totales
-            price_matches = list(PRICE_RE.finditer(combined))
+            # Extraer totales: primero una línea explícita "Total", luego la suma de líneas.
             total = None
-            subtotal = None
             tax = None
-            if len(price_matches) >= 2:
-                prices = [float(p.group(1).replace(".", "").replace(",", ".")) for p in price_matches]
-                # Asumir que el último precio es el total
-                total = prices[-1]
-                if len(prices) >= 2:
-                    subtotal = prices[-2]
+            for line in combined.splitlines():
+                normalized_line = line.strip()
+                if not normalized_line or "precio unitario" in normalized_line.lower():
+                    continue
+                if re.search(r"\btotal\b", normalized_line, re.IGNORECASE):
+                    matches = list(PRICE_RE.finditer(normalized_line))
+                    if matches:
+                        candidate = _parse_number(matches[-1].group(1))
+                        if candidate is not None and candidate > 0:
+                            total = candidate
+                            break
+            if total is None:
+                total = round(sum(float(item.line_total or 0) for item in items), 2)
+            subtotal = total
 
             # Extraer fecha
             date_matches = DATE_RE.findall(combined)
@@ -341,7 +394,7 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
                 r"proveedor\s*:\s*([^\n]+?)(?:\s+rut|\n|$)", combined, re.IGNORECASE
             )
             if supplier_match:
-                supplier_name = supplier_match.group(1).strip(" .-") or None
+                supplier_name = supplier_match.group(1).strip() or None
 
             extraction = ExtractedDocument(
                 doc_type="invoice",

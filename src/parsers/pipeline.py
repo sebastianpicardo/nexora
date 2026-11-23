@@ -42,7 +42,7 @@ def extract_local(content: bytes, filename: str, mime_type: str | None = None) -
     if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
         return extract_xml_text(content)
     if suffix == ".pdf" or mime_type == "application/pdf":
-        return extract_pdf_text_document(content)
+        return extract_pdf_text_document(content, filename)
     if suffix in TABULAR_EXTENSIONS:
         return extract_tabular(content, filename)
     if suffix in IMAGE_EXTENSIONS:
@@ -165,7 +165,7 @@ async def _run_deterministic(
             )
 
     if suffix == ".pdf" or mime_type == "application/pdf":
-        result = await asyncio.to_thread(extract_pdf_text_document, content)
+        result = await asyncio.to_thread(extract_pdf_text_document, content, filename)
         if result is not None:
             extraction, metadata = result
             if extraction.items:
@@ -273,6 +273,18 @@ async def _run_ai(
         )
 
 
+def _has_priced_items(doc: object) -> bool:
+    """Valida que el resultado interno sea usable: ítems con algún precio."""
+    items = getattr(doc, "items", None) or []
+    for item in items:
+        if (
+            getattr(item, "unit_price", None) is not None
+            or getattr(item, "line_total", None) is not None
+        ):
+            return True
+    return False
+
+
 async def run_pipeline(
     *,
     content: bytes,
@@ -309,7 +321,7 @@ async def run_pipeline(
         ),
         min_confidence=0.0,
         required_fields=["items"],
-        validate=lambda doc: len(doc.items) > 0 if doc else False,
+        validate=_has_priced_items,
     )
 
     if result.result is None:

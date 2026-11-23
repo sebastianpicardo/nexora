@@ -1,4 +1,4 @@
-"""Generador de PDF de ferretería con 20 ítems para testing de extracción determinista.
+r"""Generador de PDF de ferretería con 20 ítems para testing de extracción determinista.
 
 Este PDF está diseñado con una estructura que el motor determinista de NEXORA
 (pdfplumber + regex) puede reconocer y extraer automáticamente sin necesidad
@@ -12,23 +12,20 @@ Patrones que el parser busca (src/parsers/extractors/pdf_text.py):
 - RUTs chilenos
 """
 
-import csv
-import os
 from datetime import date, timedelta
 from pathlib import Path
 
+from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor, white, black
 from reportlab.platypus import (
+    Paragraph,
     SimpleDocTemplate,
+    Spacer,
     Table,
     TableStyle,
-    Paragraph,
-    Spacer,
 )
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT
 
 # ── RUT helpers ────────────────────────────────────────────────────────────
 
@@ -41,7 +38,7 @@ def _dv_rut(rut_number: int) -> str:
     while n > 0:
         s += (n % 10) * factor
         n //= 10
-        factor = factor % 7 + 2
+        factor = 2 if factor == 7 else factor + 1
     dv = 11 - (s % 11)
     if dv == 11:
         return "0"
@@ -52,7 +49,20 @@ def _dv_rut(rut_number: int) -> str:
 
 def format_rut(rut_number: int, dv: str | None = None) -> str:
     dv = dv or _dv_rut(rut_number)
-    return f"{rut_number:0}.{dv}"
+    body = f"{rut_number:,}".replace(",", ".")
+    return f"{body}-{dv}"
+
+
+SUPPLIER_RUT_NUMBER = 76000000
+SUPPLIER_RUT = format_rut(SUPPLIER_RUT_NUMBER)
+assert _dv_rut(SUPPLIER_RUT_NUMBER) == SUPPLIER_RUT.rsplit("-", 1)[-1]
+
+
+def fmt_clp(value: float) -> str:
+    """Formatea un monto CLP con separador de miles chileno."""
+    if float(value).is_integer():
+        return f"{value:,.0f}".replace(",", ".")
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 # ── Fechas ─────────────────────────────────────────────────────────────────
@@ -101,7 +111,7 @@ ITEM_PRICES = [
     (2, 6500),    # Seleccionador
     (3, 250),     # Isolante
     (1, 1200),    # Conector
-    (5, 4.50),    # Tubería (por metro)
+    (5, 1200),    # Tubería (por metro)
     (1, 35000),   # Lámpara
     (2, 8500),    # Piso goma
     (1, 380),     # Sellador
@@ -134,18 +144,21 @@ def generate_ferreteria_pdf_20items(path: Path) -> None:
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Fecha: {END_DATE.strftime('%d/%m/%Y')}", normal_style))
     elements.append(Spacer(1, 12))
-    elements.append(Paragraph("Proveedor: Ferretería Norte Ltda. RUT 76.000.000-0", normal_style))
+    elements.append(
+        Paragraph(f"Proveedor: Ferretería Norte Ltda. RUT {SUPPLIER_RUT}", normal_style)
+    )
     elements.append(Spacer(1, 12))
 
     # ── Encabezado de tabla ────────────────────────────────────────────────
-    # Columnas: ítem, SKU, descripción, cantidad, unidad, precio_unitivo, total
-    header = ["Ítem", "SKU", "Descripción", "Cantidad", "Unidad", "Precio Unitivo (CLP)", "Total (CLP)"]
+    # Columnas: ítem, SKU, descripción, cantidad, unidad, precio unitario, total
+    header = ["Ítem", "SKU", "Descripción", "Cantidad", "Unidad", "Precio Unitario (CLP)", "Total (CLP)"]
 
     data = [header]
 
     for i, article in enumerate(ARTICLES_20):
         qty, unit_price = ITEM_PRICES[i]
         total = round(qty * unit_price, 2)
+        assert total == qty * unit_price, f"Total inconsistente en {article['sku']}"
 
         row = [
             str(i + 1),  # Ítem número
@@ -153,8 +166,8 @@ def generate_ferreteria_pdf_20items(path: Path) -> None:
             article["desc"],
             str(qty),
             article["unit"],
-            f"{unit_price:,.0f}",
-            f"{total:,.0f}",
+            fmt_clp(unit_price),
+            fmt_clp(total),
         ]
         data.append(row)
 
@@ -189,7 +202,7 @@ def generate_ferreteria_pdf_20items(path: Path) -> None:
     # ── Pie de página ──────────────────────────────────────────────────────
     elements.append(Paragraph(
         "Generado por NEXORA • Estructura compatible con extracción determinista pdfplumber • "
-        f"IVA 19% sobre precios en CLP",
+        "IVA 19% sobre precios en CLP",
         ParagraphStyle("footer", parent=normal_style, fontSize=7, textColor=HexColor("#6c757d"))))
 
     doc.build(elements)
@@ -199,7 +212,7 @@ def generate_ferreteria_pdf_20items(path: Path) -> None:
 
 def generate_ferreteria_csv_20items(path: Path) -> None:
     """Genera un CSV compatible con el PDF de 20 ítems de ferretería."""
-    header = ["ítem", "SKU", "descripción", "cantidad", "unidad", "precio_unitivo_neto", "total"]
+    header = ["ítem", "SKU", "descripción", "cantidad", "unidad", "precio_unitario_clp", "total"]
 
     data = [header]
 

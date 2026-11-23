@@ -5,9 +5,9 @@ from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 ROOT = Path("D:/Nexora")
 QA = ROOT / "QA"
@@ -69,11 +69,27 @@ def table(rows, widths=None, header=True, font_size=8):
 # ---------- PDF 1: analisis final ----------
 story = []
 story.append(Paragraph("NEXORA - Analisis final de QA", style("title", 18, True, colors.HexColor("#0b3b36"))))
-story.append(Paragraph("Validacion funcional, tecnica y visual del sistema", style("subtitle", 11, False, colors.HexColor("#475569"))))
+story.append(
+    Paragraph(
+        "Validacion funcional, tecnica y visual del sistema",
+        style("subtitle", 11, False, colors.HexColor("#475569")),
+    )
+)
 story.append(Spacer(1, 8 * mm))
 story.append(Paragraph("Fecha de ejecucion: 19 de noviembre de 2026", style("p", 10)))
-story.append(Paragraph("Entorno validado: desarrollo local con PostgreSQL efimero, FastAPI, React/Vite.", style("p", 10)))
-story.append(Paragraph("Resultado global: 36/36 flujos manuales/API aprobados, 154 pruebas automatizadas aprobadas, Ruff limpio y build frontend exitoso.", style("p", 10, True)))
+story.append(
+    Paragraph(
+        "Entorno validado: desarrollo local con PostgreSQL efimero, FastAPI, React/Vite.",
+        style("p", 10),
+    )
+)
+story.append(
+    Paragraph(
+        "Resultado global: 36/36 flujos manuales/API aprobados, 154 pruebas automatizadas "
+        "aprobadas, Ruff limpio y build frontend exitoso.",
+        style("p", 10, True),
+    )
+)
 story.append(Spacer(1, 6 * mm))
 
 story.append(Paragraph("1. Resumen ejecutivo", style("h", 13, True)))
@@ -126,11 +142,26 @@ story.append(Spacer(1, 6 * mm))
 story.append(Paragraph("4. Hallazgos y riesgos", style("h", 13, True)))
 findings = [
     "No se encontraron defectos bloqueantes en los flujos principales.",
-    "La completitud RCV mostro 0 documentos con detalle porque los folios del RCV de prueba no coincidieron con el DTE cargado; esto es correcto y valida la regla de conciliacion.",
-    "El envio semanal respondio 200 aunque SMTP no esta configurado; las entregas quedaron en estado skipped, comportamiento esperado.",
-    "El radar Compra Agil opera en modo manual porque no hay COMPRA_AGIL_API_URL/KEY configurados; la carga CSV funciona.",
-    "El pronostico devuelve 0 productos porque el demo de 3 meses deja solo 2 meses historicos al excluir el mes actual; se explica en UI como falta de historial.",
-    "Ruff y las pruebas pasan; el build frontend mantiene el aviso previo de bundle mayor a 500 kB, sin error de compilacion.",
+    (
+        "La completitud RCV mostro 0 documentos con detalle porque los folios del RCV de prueba "
+        "no coincidieron con el DTE cargado; esto es correcto y valida la regla de conciliacion."
+    ),
+    (
+        "El envio semanal respondio 200 aunque SMTP no esta configurado; las entregas quedaron "
+        "en estado skipped, comportamiento esperado."
+    ),
+    (
+        "El radar Compra Agil opera en modo manual porque no hay COMPRA_AGIL_API_URL/KEY "
+        "configurados; la carga CSV funciona."
+    ),
+    (
+        "El pronostico devuelve 0 productos porque el demo de 3 meses deja solo 2 meses historicos "
+        "al excluir el mes actual; se explica en UI como falta de historial."
+    ),
+    (
+        "Ruff y las pruebas pasan; el build frontend mantiene el aviso previo de bundle mayor a "
+        "500 kB, sin error de compilacion."
+    ),
 ]
 for item in findings:
     story.append(Paragraph(f"- {item}", style("p", 10)))
@@ -151,10 +182,25 @@ doc(QA / "analisis_final.pdf").build(story)
 
 # ---------- PDF 2: pruebas del sistema ----------
 story2 = []
-story2.append(Paragraph("NEXORA - Reporte de pruebas del sistema", style("title", 18, True, colors.HexColor("#0b3b36"))))
-story2.append(Paragraph("Matriz de validacion funcional, automatizada y de build", style("subtitle", 11, False, colors.HexColor("#475569"))))
+story2.append(
+    Paragraph(
+        "NEXORA - Reporte de pruebas del sistema",
+        style("title", 18, True, colors.HexColor("#0b3b36")),
+    )
+)
+story2.append(
+    Paragraph(
+        "Matriz de validacion funcional, automatizada y de build",
+        style("subtitle", 11, False, colors.HexColor("#475569")),
+    )
+)
 story2.append(Spacer(1, 8 * mm))
-story2.append(Paragraph("Resultado: 36/36 pruebas manuales/API aprobadas, 154 pruebas automatizadas aprobadas.", style("p", 10, True)))
+story2.append(
+    Paragraph(
+        "Resultado: 36/36 pruebas manuales/API aprobadas, 154 pruebas automatizadas aprobadas.",
+        style("p", 10, True),
+    )
+)
 story2.append(Spacer(1, 6 * mm))
 
 story2.append(Paragraph("1. Comandos ejecutados", style("h", 13, True)))

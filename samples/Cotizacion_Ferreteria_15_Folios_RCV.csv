@@ -1,17 +1,17 @@
 folio,tipo_dte,rut_emisor,razon_social,fecha_documento,neto,iva,total,dias_desde_emision
-1,33,76000000.K,Ferretería Norte Ltda.,25/08/2026,11000,2090.0,13090.0,90
-2,33,76000001.8,Construcción Sur Cía. Ltda.,27/08/2026,17000,3230.0,20230.0,88
-3,33,76000002.6,Metalúrgica O'Higgins S.A.,29/08/2026,23000,4370.0,27370.0,86
-4,33,76000003.4,Distribuidora El Muelle Ltda.,31/08/2026,29000,5510.0,34510.0,84
-5,33,76000004.2,Acero y Más Limitada,02/09/2026,35000,6650.0,41650.0,82
-6,33,76000005.0,Ferretería Norte Ltda.,04/09/2026,41000,7790.0,48790.0,80
-7,33,76000006.9,Construcción Sur Cía. Ltda.,06/09/2026,47000,8930.0,55930.0,78
+1,33,76.000.000-0,Ferretería Norte Ltda.,25/08/2026,11000,2090.0,13090.0,90
+2,33,80.000.000-9,Construcción Sur Cía. Ltda.,27/08/2026,17000,3230.0,20230.0,88
+3,33,77.111.111-4,Metalúrgica O'Higgins S.A.,29/08/2026,23000,4370.0,27370.0,86
+4,33,78.222.222-8,Distribuidora El Muelle Ltda.,31/08/2026,29000,5510.0,34510.0,84
+5,33,79.333.333-1,Acero y Más Limitada,02/09/2026,35000,6650.0,41650.0,82
+6,33,76.000.000-0,Ferretería Norte Ltda.,04/09/2026,41000,7790.0,48790.0,80
+7,33,80.000.000-9,Construcción Sur Cía. Ltda.,06/09/2026,47000,8930.0,55930.0,78
 NOTA,,,Un folio intencional está ausente (folio 8) para validar la detección de brechas en la completitud del RCV por parte del parser determinista.,,,,,
 FOLIO 8 (MANCA),,,Folio intencional omitido para prueba de completitud,,,,,
-9,33,76000008.5,Distribuidora El Muelle Ltda.,10/09/2026,59000,11210.0,70210.0,74
-10,33,76000009.3,Acero y Más Limitada,12/09/2026,65000,12350.0,77350.0,72
-11,33,76000010.6,Ferretería Norte Ltda.,14/09/2026,71000,13490.0,84490.0,70
-12,33,76000011.4,Construcción Sur Cía. Ltda.,16/09/2026,77000,14630.0,91630.0,68
-13,33,76000012.2,Metalúrgica O'Higgins S.A.,18/09/2026,83000,15770.0,98770.0,66
-14,33,76000013.0,Distribuidora El Muelle Ltda.,20/09/2026,89000,16910.0,105910.0,64
-15,33,76000014.9,Acero y Más Limitada,22/09/2026,95000,18050.0,113050.0,62
+9,33,78.222.222-8,Distribuidora El Muelle Ltda.,10/09/2026,59000,11210.0,70210.0,74
+10,33,79.333.333-1,Acero y Más Limitada,12/09/2026,65000,12350.0,77350.0,72
+11,33,76.000.000-0,Ferretería Norte Ltda.,14/09/2026,71000,13490.0,84490.0,70
+12,33,80.000.000-9,Construcción Sur Cía. Ltda.,16/09/2026,77000,14630.0,91630.0,68
+13,33,77.111.111-4,Metalúrgica O'Higgins S.A.,18/09/2026,83000,15770.0,98770.0,66
+14,33,78.222.222-8,Distribuidora El Muelle Ltda.,20/09/2026,89000,16910.0,105910.0,64
+15,33,79.333.333-1,Acero y Más Limitada,22/09/2026,95000,18050.0,113050.0,62

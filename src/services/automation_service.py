@@ -55,6 +55,15 @@ STAGE_DEFINITIONS: tuple[tuple[str, str], ...] = (
     ("compra_agil", "Compra Ágil y oportunidades"),
 )
 
+STAGE_SCOPES: dict[str, str] = {
+    "extraction": "Documento actual",
+    "audit": "Histórico 90 días del tenant",
+    "margin": "Catálogo de precios",
+    "sii_rcv": "Documento + período RCV",
+    "negotiation": "Histórico 90 días del tenant",
+    "compra_agil": "Documento + catálogo",
+}
+
 ALLOWED_DOC_TYPES = {"quote", "invoice", "price_list"}
 
 
@@ -81,6 +90,7 @@ def _initial_stages() -> list[dict]:
         {
             "id": stage_id,
             "label": label,
+            "scope": STAGE_SCOPES.get(stage_id, ""),
             "status": STATUS_PENDING,
             "source": None,
             "detail": "",
@@ -275,14 +285,19 @@ def _extraction_status(doc: dict | None, items: list[dict]) -> tuple[str, str, b
     status = doc.get("status")
     metadata = doc.get("metadata") or {}
     ai_used = bool(metadata.get("ai_used"))
+    fallback = metadata.get("fallback_reason")
     if status != "processed":
         reason = doc.get("error_message") or f"Documento en estado {status}."
+        if fallback:
+            reason = f"{reason} Motivo del fallback: {fallback}."
         return STATUS_SKIPPED, reason, ai_used
     if not items:
-        return STATUS_NO_DATA, "El documento se procesó pero no generó ítems.", ai_used
+        detail = "El documento se procesó pero no generó ítems."
+        if fallback:
+            detail = f"{detail} Fallback: {fallback}."
+        return STATUS_NO_DATA, detail, ai_used
     if ai_used:
-        fallback = metadata.get("fallback_reason") or "campos incompletos"
-        return STATUS_FALLBACK, f"Extracción resuelta con IA ({fallback}).", True
+        return STATUS_FALLBACK, f"Extracción resuelta con IA ({fallback or 'campos incompletos'}).", True
     return STATUS_COMPLETED, "Extracción determinista sin consumir tokens de IA.", False
 
 
@@ -295,7 +310,8 @@ def _compact_document(doc: dict | None) -> dict:
         "filename": doc.get("original_filename"),
         "status": doc.get("status"),
         "doc_type": doc.get("doc_type"),
-        "supplier_name": doc.get("supplier_name"),
+        "supplier_name": doc.get("supplier_name") or metadata.get("supplier_name"),
+        "supplier_tax_id": metadata.get("supplier_tax_id"),
         "document_number": metadata.get("document_number"),
         "document_date": metadata.get("document_date"),
         "currency": metadata.get("currency"),
@@ -303,6 +319,8 @@ def _compact_document(doc: dict | None) -> dict:
         "item_count": metadata.get("item_count"),
         "extraction_provider": doc.get("extraction_provider"),
         "extraction_model": doc.get("extraction_model"),
+        "resolution_source": metadata.get("resolution_source")
+        or metadata.get("extraction_source"),
         "ai_used": bool(metadata.get("ai_used")),
         "fallback_reason": metadata.get("fallback_reason"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
@@ -401,10 +419,16 @@ async def execute_run(
             metrics={
                 "items": len(items),
                 "document_status": (document or {}).get("status"),
-                "supplier": (document or {}).get("supplier_name"),
-                "currency": (document or {}).get("metadata", {}).get("currency")
+                "supplier": (document or {}).get("supplier_name")
+                or ((document or {}).get("metadata") or {}).get("supplier_name"),
+                "currency": ((document or {}).get("metadata") or {}).get("currency")
                 or user.get("default_currency"),
-                "total": (document or {}).get("metadata", {}).get("total"),
+                "total": ((document or {}).get("metadata") or {}).get("total"),
+                "resolution_source": ((document or {}).get("metadata") or {}).get(
+                    "resolution_source"
+                )
+                or ((document or {}).get("metadata") or {}).get("extraction_source"),
+                "fallback_reason": ((document or {}).get("metadata") or {}).get("fallback_reason"),
                 "reused": reused,
                 "ai_used": ai_used,
             },
@@ -423,8 +447,17 @@ async def execute_run(
     await _save_run(org_id, run_id, stages=stages, ai_used=ai_used)
 
     currency = (user.get("default_currency") or "CLP").strip().upper()
-    results: dict[str, Any] = {"document": _compact_document(document), "items_preview": []}
-    summary: dict[str, Any] = {"currency": currency, "ai_used": ai_used}
+    document_info = _compact_document(document)
+    document_info["item_count"] = len(items)
+    results: dict[str, Any] = {"document": document_info, "items_preview": []}
+    summary: dict[str, Any] = {
+        "currency": currency,
+        "ai_used": ai_used,
+        "document_items": len(items),
+        "document_supplier": document_info.get("supplier_name"),
+        "document_tax_id": document_info.get("supplier_tax_id"),
+        "document_number": document_info.get("document_number"),
+    }
 
     if items:
         results["items_preview"] = [
@@ -476,7 +509,9 @@ async def execute_run(
         summary["overcost"] = audit_summary.get("price_overpay", 0)
         summary["margin_bleed"] = audit_summary.get("margin_bleed", 0)
         summary["findings"] = audit_summary.get("findings_total", 0)
-        summary["documents"] = (audit.get("coverage") or {}).get("documents", 0)
+        summary["historical_documents"] = (audit.get("coverage") or {}).get("documents", 0)
+        summary["historical_items"] = (audit.get("coverage") or {}).get("items", 0)
+        summary["documents"] = summary["historical_documents"]
     except Exception as exc:
         logger.warning("Automatización: falló la auditoría: %s", str(exc)[:300])
         _set_stage(

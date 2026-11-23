@@ -108,6 +108,7 @@ function StageCard({ stage, index }) {
         <span key={`${stage.id}-${stage.status}`} className={`automation-status ${meta.tone}`}>
           {meta.label}
         </span>
+        {stage.scope ? <span className="automation-scope">{stage.scope}</span> : null}
         {stage.source ? (
           <span className={`automation-source ${stage.source === "ai_fallback" ? "ai" : "internal"}`}>
             {SOURCE_LABEL[stage.source] || stage.source}
@@ -457,27 +458,29 @@ export default function AutomationPage({ onNavigate }) {
 
               <section className="automation-kpis">
                 <article className={`automation-kpi ${flashing.savings ? "flash" : ""}`}>
-                  <span>Ahorro potencial</span>
+                  <span>Ahorro potencial · 90 días</span>
                   <strong>{formatMoney(summary.potential_savings, currency)}</strong>
-                  <small>{summary.findings || 0} hallazgos detectados</small>
+                  <small>
+                    {summary.findings || 0} hallazgos en {summary.historical_documents || 0} documentos
+                  </small>
                 </article>
                 <article className={`automation-kpi ${flashing.overcost ? "flash" : ""}`}>
-                  <span>Sobrecostos</span>
+                  <span>Sobrecostos · 90 días</span>
                   <strong>{formatMoney(summary.overcost, currency)}</strong>
-                  <small>Frente al mejor precio registrado</small>
+                  <small>Histórico del tenant vs. mejor precio</small>
                 </article>
                 <article className={`automation-kpi ${flashing.margin ? "flash" : ""}`}>
-                  <span>Margen en riesgo</span>
+                  <span>Margen en riesgo · catálogo</span>
                   <strong>{formatMoney(summary.margin_recovery, currency)}</strong>
-                  <small>{summary.margin_at_risk || 0} productos por revisar</small>
+                  <small>{summary.margin_at_risk || 0} productos del catálogo por revisar</small>
                 </article>
                 <article className={`automation-kpi ${flashing.negotiation ? "flash" : ""}`}>
-                  <span>Objetivo negociación</span>
+                  <span>Objetivo negociación · 90 días</span>
                   <strong>{formatMoney(summary.negotiation_savings, currency)}</strong>
-                  <small>{summary.comparisons || 0} comparaciones de precio</small>
+                  <small>{summary.comparisons || 0} comparaciones históricas</small>
                 </article>
                 <article className="automation-kpi">
-                  <span>SII / RCV</span>
+                  <span>SII / RCV · documento</span>
                   <strong>
                     {summary.sii_rcv?.total_documents
                       ? `${summary.sii_rcv.completeness_pct ?? 0}%`
@@ -529,11 +532,12 @@ export default function AutomationPage({ onNavigate }) {
                   </div>
                   <div className="automation-summary-grid">
                     <div>
-                      <span className="muted small">Documento</span>
-                      <strong>{documentInfo.supplier_name || "Proveedor sin nombre"}</strong>
+                      <span className="muted small">Documento actual</span>
+                      <strong>{documentInfo.supplier_name || "Sin proveedor identificado"}</strong>
                       <p>
                         {labelize(documentInfo.doc_type)} ·{" "}
                         {documentInfo.item_count ?? itemsPreview.length} ítems
+                        {documentInfo.supplier_tax_id ? ` · RUT ${documentInfo.supplier_tax_id}` : ""}
                         {documentInfo.total ? ` · ${formatMoney(documentInfo.total, currency)}` : ""}
                       </p>
                     </div>

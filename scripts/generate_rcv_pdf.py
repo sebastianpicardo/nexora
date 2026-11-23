@@ -13,22 +13,20 @@ Los PDFs incluyen:
 - Estructura tabular compatible con extracción determinista
 """
 
-import csv
 from datetime import date, timedelta
 from pathlib import Path
 
+from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor, white, black
 from reportlab.platypus import (
+    Paragraph,
     SimpleDocTemplate,
+    Spacer,
     Table,
     TableStyle,
-    Paragraph,
-    Spacer,
 )
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # ── RUT helpers ────────────────────────────────────────────────────────────
 
@@ -42,7 +40,7 @@ def _dv_rut(rut_number: int) -> str:
     while n > 0:
         s += (n % 10) * factor
         n //= 10
-        factor = factor % 7 + 2
+        factor = 2 if factor == 7 else factor + 1
     dv = 11 - (s % 11)
     if dv == 11:
         return "0"
@@ -54,14 +52,24 @@ def _dv_rut(rut_number: int) -> str:
 def format_rut(rut_number: int, dv: str | None = None) -> str:
     """Formatea un RUT como '12.345.678-K'."""
     dv = dv or _dv_rut(rut_number)
-    return f"{rut_number:0}.{dv}"
+    body = f"{rut_number:,}".replace(",", ".")
+    return f"{body}-{dv}"
+
+
+def fmt_clp(value: float) -> str:
+    if float(value).is_integer():
+        return f"{value:,.0f}".replace(",", ".")
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 # ── Fecha últmoos 90 días ─────────────────────────────────────────────────
 
 END_DATE = date.today()
 START_DATE = END_DATE - timedelta(days=90)
-PERIOD_LABEL = f"{START_DATE.day}/{START_DATE.month}/{START_DATE.year} - {END_DATE.day}/{END_DATE.month}/{END_DATE.year}"
+PERIOD_LABEL = (
+    f"{START_DATE.day}/{START_DATE.month}/{START_DATE.year} - "
+    f"{END_DATE.day}/{END_DATE.month}/{END_DATE.year}"
+)
 
 
 # ── Datos de proveedores ─────────────────────────────────────────────────
@@ -116,10 +124,10 @@ def generate_rcv_pdf(path: Path) -> None:
     i = 0
     while i < len(all_folios):
         folio = all_folios[i]
-        rut_num = 76000000 + i
+        supplier = SUPPLIERS[(folio - 1) % len(SUPPLIERS)]
+        rut_num = supplier["rut"]
         dv = _dv_rut(rut_num)
         rut_str = format_rut(rut_num, dv)
-        supplier = SUPPLIERS[i % len(SUPPLIERS)]
 
         # Fecha del documento (últimos 90 días)
         doc_date = START_DATE + timedelta(days=i * 2)
@@ -137,7 +145,7 @@ def generate_rcv_pdf(path: Path) -> None:
         else:
             row = [str(folio), "33", rut_str, supplier["name"],
                    doc_date.strftime("%d/%m/%Y"),
-                   f"{neto:,.0f}", f"{ivale:,.2f}", f"{total:,.0f}", str(days_ago)]
+                   fmt_clp(neto), fmt_clp(ivale), fmt_clp(total), str(days_ago)]
 
         data.append(row)
 
@@ -199,10 +207,10 @@ def generate_rcv_csv(path: Path) -> None:
     i = 0
     while i < len(all_folios):
         folio = all_folios[i]
-        rut_num = 76000000 + i
+        supplier = SUPPLIERS[(folio - 1) % len(SUPPLIERS)]
+        rut_num = supplier["rut"]
         dv = _dv_rut(rut_num)
         rut_str = format_rut(rut_num, dv)
-        supplier = SUPPLIERS[i % len(SUPPLIERS)]
 
         doc_date = START_DATE + timedelta(days=i * 2)
         days_ago = (END_DATE - doc_date).days
@@ -253,4 +261,4 @@ if __name__ == "__main__":
     print(f"PDF generado: {pdf_path.resolve()}")
     print(f"CSV generado:  {csv_path.resolve()}")
     print(f"Período de prueba: {PERIOD_LABEL}")
-    print(f"Folio faltante intencional: 8 (de 15 folios totales)")
+    print("Folio faltante intencional: 8 (de 15 folios totales)")

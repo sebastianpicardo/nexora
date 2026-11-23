@@ -58,9 +58,9 @@ PHYSICAL_UNITS: dict[str, tuple[str, str, str, str]] = {
     "cm": ("cm", "centimeter", "length", "m"),
     "mm": ("mm", "millimeter", "length", "m"),
     "km": ("km", "kilometer", "length", "m"),
-    "m2": ("m2", "meter**2", "area", "m2"),
-    "metro cuadrado": ("m2", "meter**2", "area", "m2"),
-    "metros cuadrados": ("m2", "meter**2", "area", "m2"),
+    "m2": ("m2", "meter**2", "area", "meter**2"),
+    "metro cuadrado": ("m2", "meter**2", "area", "meter**2"),
+    "metros cuadrados": ("m2", "meter**2", "area", "meter**2"),
 }
 
 COUNT_UNITS = {
