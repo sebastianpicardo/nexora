@@ -17,6 +17,12 @@ const TABS = [
   { id: "forecast", label: "Pronóstico", icon: ClockIcon },
 ];
 
+const INTELLIGENCE_STEPS = [
+  { id: 1, label: "Carga tus documentos" },
+  { id: 2, label: "Revisa alertas y ahorro" },
+  { id: 3, label: "Toma decisiones ejecutivas" },
+];
+
 export default function IntelligencePage({ tab, onTabChange, onNavigate, onUpload }) {
   const active = TABS.some((item) => item.id === tab) ? tab : "overview";
 
@@ -34,12 +40,12 @@ export default function IntelligencePage({ tab, onTabChange, onNavigate, onUploa
       </section>
 
       <PageTabs tabs={TABS} active={active} onChange={onTabChange} label="Inteligencia y ahorro" />
-      <QuickGuide activeStep={2} />
+      <QuickGuide steps={INTELLIGENCE_STEPS} activeStep={2} />
 
       {active === "overview" ? (
         <AnalyticsPage embedded onNavigate={onNavigate} onUpload={onUpload} />
       ) : active === "opportunities" ? (
-        <OpportunitiesPage embedded onUpload={onUpload} />
+        <OpportunitiesPage embedded onNavigate={onNavigate} onUpload={onUpload} />
       ) : active === "margin" ? (
         <MarginGuardianPanel />
       ) : active === "compare" ? (

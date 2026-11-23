@@ -247,6 +247,10 @@ async def _process_claimed_document(doc: dict) -> None:
                 "prices_include_tax": bool(extraction.prices_include_tax),
                 "tax_rate": extraction.tax_rate,
                 "warnings": result.warnings,
+                # Metadatos de trazabilidad deterministic-first
+                "extraction_source": result.extraction_source,
+                "fallback_reason": result.fallback_reason,
+                "ai_used": result.ai_used,
             }
             await repositories.mark_processed(
                 conn,
@@ -286,3 +290,25 @@ async def process_pending_once() -> bool:
     logger.info("Procesando documento en cola %s", doc["id"])
     await _process_claimed_document(doc)
     return True
+
+
+async def reprocess_failed_document(document_id: UUID | str) -> dict:
+    """Reprocesa un documento que falló usando el motor determinista actual.
+
+    Esta función es útil cuando un documento falló por error de IA (ej. 503 Gemini)
+    y se quiere intentar con el extractor determinista pdfplumber + reglas,
+    que no consume tokens de IA.
+    """
+    async with get_pool().connection() as conn:
+        doc = await repositories.claim_document_by_id(conn, document_id)
+    if not doc:
+        return {"success": False, "error": "Documento no encontrado o ya procesado"}
+
+    # Forzar reprocesamiento: resetear status a 'queued' y limpiar error previo
+    await repositories.reset_document_for_reprocess(conn, org_id=doc["org_id"], document_id=document_id)
+
+    # Ejecutar el pipeline - el patrón deterministic-first asegura que si el PDF
+    # tiene texto seleccionable, se extraiga sin consumir tokens de IA
+    await _process_claimed_document(doc)
+
+    return {"success": True, "message": "Documento reprocesado con motor determinista"}

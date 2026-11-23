@@ -7,6 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.parsers.normalization.currency import normalize_currency, parse_decimal
+from src.services.extraction_policy import RESOLUTION_INTERNAL
 
 
 def _confidence(value: object) -> float:
@@ -177,3 +178,12 @@ class NormalizationResult:
     @property
     def ai_usage(self) -> dict[str, int] | None:
         return self.usage
+
+
+@dataclass
+class ExtractionResult:
+    result: ExtractedDocument | None = None
+    source: str = RESOLUTION_INTERNAL
+    fallback_reason: str | None = None
+    ai_used: bool = False
+    attempts: list[dict] = field(default_factory=list)

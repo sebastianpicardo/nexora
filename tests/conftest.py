@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 os.environ["APP_ENV"] = "test"
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-with-enough-length-123456")

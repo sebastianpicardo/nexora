@@ -186,11 +186,14 @@ async def register(
     response: Response,
 ) -> MeResponse:
     await auth_attempt_limiter(request, payload.email)
-    await verify_recaptcha(
-        payload.recaptcha_token,
-        remote_ip=_client_ip(request),
-        expected_action="register",
-    )
+    # Verificar reCAPTCHA solo si está configurado; si no, degradar gracefully
+    # para permitir registro con email/password sin bloqueos de CSP o tokens.
+    if settings.recaptcha_enabled:
+        await verify_recaptcha(
+            payload.recaptcha_token,
+            remote_ip=_client_ip(request),
+            expected_action="register",
+        )
     user = await register_with_password(
         email=payload.email,
         password=payload.password,
@@ -210,11 +213,14 @@ async def login(
     response: Response,
 ) -> MeResponse:
     await auth_attempt_limiter(request, payload.email)
-    await verify_recaptcha(
-        payload.recaptcha_token,
-        remote_ip=_client_ip(request),
-        expected_action="login",
-    )
+    # Verificar reCAPTCA solo si está configurado; si no, degradar gracefully
+    # para permitir login con email/password sin bloqueos de CSP o tokens.
+    if settings.recaptcha_enabled:
+        await verify_recaptcha(
+            payload.recaptcha_token,
+            remote_ip=_client_ip(request),
+            expected_action="login",
+        )
     user = await authenticate_with_password(email=payload.email, password=payload.password)
     session_id = await _record_session(user, request)
     _set_session_cookie(response, user, session_id)
@@ -279,13 +285,16 @@ async def logout(request: Request):
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, request: Request) -> dict:
+async def forgotten_password(payload: ForgotPasswordRequest, request: Request) -> dict:
     await auth_attempt_limiter(request, payload.email)
-    await verify_recaptcha(
-        payload.recaptcha_token,
-        remote_ip=_client_ip(request),
-        expected_action="forgot_password",
-    )
+    # Verificar reCAPTCHA solo si está configurado; si no, degradar gracefully
+    # para permitir solicitud de recuperación sin bloqueos de CSP o tokens.
+    if settings.recaptcha_enabled:
+        await verify_recaptcha(
+            payload.recaptcha_token,
+            remote_ip=_client_ip(request),
+            expected_action="forgot_password",
+        )
     await request_password_reset(email=payload.email)
     return {"success": True, "message": "Si el email existe, recibirás un enlace de recuperación."}
 

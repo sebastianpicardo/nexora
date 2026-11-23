@@ -10,7 +10,7 @@ from src.core.errors import ExtractionError
 from src.parsers.extractors.base import ExtractedContent
 from src.parsers.extractors.dte import extract_dte_document, extract_xml_text
 from src.parsers.extractors.images import extract_image
-from src.parsers.extractors.pdf import extract_pdf
+from src.parsers.extractors.pdf_text import extract_pdf_text_document
 from src.parsers.extractors.tabular import extract_tabular, extract_tabular_document
 from src.parsers.llm.factory import extract_with_fallback
 from src.parsers.normalization.currency import normalize_currency, parse_decimal, quantize_money
@@ -18,7 +18,8 @@ from src.parsers.normalization.dates import parse_flexible_date
 from src.parsers.normalization.descriptions import clean_sku, normalize_description
 from src.parsers.normalization.pricing import validate_line_total
 from src.parsers.normalization.units import normalize_unit
-from src.parsers.schemas import AuditFlag, ExtractedDocument, NormalizationResult, NormalizedItem
+from src.parsers.schemas import AuditFlag, ExtractionResult, NormalizationResult, NormalizedItem
+from src.services.extraction_policy import RESOLUTION_AI_FALLBACK, RESOLUTION_INTERNAL, extraction_policy
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 TABULAR_EXTENSIONS = {".xlsx", ".xls", ".csv", ".txt"}
@@ -26,11 +27,22 @@ XML_EXTENSIONS = {".xml", ".dte"}
 
 
 def extract_local(content: bytes, filename: str, mime_type: str | None = None) -> ExtractedContent:
+    """Extrae contenido de un archivo de forma determinista (sin IA).
+
+    Orden de preferencia:
+    1. PDF de texto (pdfplumber) - extrae texto y tablas directamente
+    2. XML/DTE - parseo XML nativo
+    3. Excel/CSV - importación tabular determinística
+    4. Imágenes - extrae texto vía OCR si está disponible
+
+    Nota: PDF escaneado (sin texto) retorna contenido vacío con imágenes
+    para que el pipeline decida si enviar a IA como fallback.
+    """
     suffix = Path(filename).suffix.lower()
-    if suffix == ".pdf" or mime_type == "application/pdf":
-        return extract_pdf(content)
     if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
         return extract_xml_text(content)
+    if suffix == ".pdf" or mime_type == "application/pdf":
+        return extract_pdf_text_document(content)
     if suffix in TABULAR_EXTENSIONS:
         return extract_tabular(content, filename)
     if suffix in IMAGE_EXTENSIONS:
@@ -89,7 +101,8 @@ def _flags_for_item(
                 type="price_mismatch",
                 severity="medium",
                 reason=(
-                    f"El total de la línea no coincide con cantidad × precio unitario (diferencia {total_delta:.2f}%)."
+                    f"El total de la línea no coincide con cantidad × precio unitario "
+                    f"(diferencia {total_delta:.2f}%)."
                 ),
                 evidence={
                     "unit_price": str(unit_price) if unit_price is not None else None,
@@ -103,6 +116,145 @@ def _flags_for_item(
     return flags
 
 
+async def _run_deterministic(
+    *,
+    content: bytes,
+    filename: str,
+    mime_type: str | None,
+) -> ExtractionResult:
+    """Ejecuta la extracción determinística según el tipo de archivo."""
+    suffix = Path(filename).suffix.lower()
+
+    if suffix in TABULAR_EXTENSIONS:
+        result = await asyncio.to_thread(extract_tabular_document, content, filename)
+        if result is not None:
+            extraction, table_meta = result
+            if extraction.items:
+                return ExtractionResult(
+                    result=extraction,
+                    source=RESOLUTION_INTERNAL,
+                    fallback_reason=None,
+                    ai_used=False,
+                    attempts=[
+                        {
+                            "stage": "deterministic_tabular",
+                            "success": True,
+                            "reason": None,
+                            "detail": f"{len(extraction.items)} ítems extraídos",
+                        }
+                    ],
+                )
+
+    if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
+        result = await asyncio.to_thread(extract_dte_document, content, filename)
+        if result is not None:
+            extraction, table_meta = result
+            return ExtractionResult(
+                result=extraction,
+                source=RESOLUTION_INTERNAL,
+                fallback_reason=None,
+                ai_used=False,
+                attempts=[
+                    {
+                        "stage": "deterministic_dte",
+                        "success": True,
+                        "reason": None,
+                        "detail": None,
+                    }
+                ],
+            )
+
+    if suffix == ".pdf" or mime_type == "application/pdf":
+        result = await asyncio.to_thread(extract_pdf_text_document, content)
+        if result is not None:
+            extraction, metadata = result
+            if extraction.items:
+                return ExtractionResult(
+                    result=extraction,
+                    source=RESOLUTION_INTERNAL,
+                    fallback_reason=None,
+                    ai_used=False,
+                    attempts=[
+                        {
+                            "stage": "deterministic_pdf",
+                            "success": True,
+                            "reason": None,
+                            "detail": f"{len(extraction.items)} ítems extraídos",
+                        }
+                    ],
+                )
+
+    # No se pudo extraer nada determinísticamente
+    return ExtractionResult(
+        result=None,
+        source=RESOLUTION_INTERNAL,
+        fallback_reason="no_items",
+        ai_used=False,
+        attempts=[
+            {
+                "stage": "deterministic",
+                "success": False,
+                "reason": "no_items",
+                "detail": f"No se reconoció formato tabular en {filename}",
+            }
+        ],
+    )
+
+
+async def _run_ai(
+    *,
+    content: bytes,
+    filename: str,
+    mime_type: str | None,
+    org_settings: dict,
+    doc_type_hint: str | None,
+    provider: Any | None,
+) -> ExtractionResult:
+    """Ejecuta la extracción vía LLM como fallback."""
+    extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
+
+    if not bool(org_settings.get("ai_data_consent", True)):
+        raise ExtractionError("La organización no autorizó el envío de documentos a proveedores de IA.")
+    if not bool(org_settings.get("ai_images_enabled", True)):
+        extracted.images = []
+    raw_max_chars = org_settings.get("ai_text_max_chars")
+    if raw_max_chars is not None:
+        max_chars = max(1000, min(int(raw_max_chars), 200_000))
+        combined = extracted.combined_text
+        if len(combined) > max_chars:
+            extracted.text = combined[:max_chars]
+            extracted.tables_text = ""
+
+    if provider is not None:
+        extraction = await provider.extract_document(
+            extracted,
+            filename=filename,
+            doc_type_hint=doc_type_hint,
+        )
+        provider_name = provider.name
+        usage = getattr(provider, "last_usage", None)
+        return ExtractionResult(
+            result=extraction,
+            source=RESOLUTION_AI_FALLBACK,
+            fallback_reason=None,
+            ai_used=True,
+            attempts=[{"stage": f"ai:{provider_name}", "success": True, "reason": None, "detail": None}],
+        )
+    else:
+        result_extraction, provider_name, usage = await extract_with_fallback(
+            extracted,
+            filename=filename,
+            doc_type_hint=doc_type_hint,
+        )
+        return ExtractionResult(
+            result=result_extraction,
+            source=RESOLUTION_AI_FALLBACK,
+            fallback_reason=None,
+            ai_used=True,
+            attempts=[{"stage": f"ai:{provider_name}", "success": True, "reason": None, "detail": None}],
+        )
+
+
 async def run_pipeline(
     *,
     content: bytes,
@@ -113,58 +265,54 @@ async def run_pipeline(
     upload_date: date | None = None,
     provider: Any = None,
 ) -> NormalizationResult:
-    extracted = await asyncio.to_thread(extract_local, content, filename, mime_type)
+    """Ejecuta el pipeline de extracción con patrón deterministic-first.
 
-    suffix = Path(filename).suffix.lower()
-    usage: dict[str, int] | None = None
-    table_meta: dict | None = None
-    extraction: ExtractedDocument | None = None
-    provider_name = ""
-    model_name = ""
+    Flujo:
+    1. Extrae contenido de forma determinista (PDF de texto, Excel/CSV, XML/DTE).
+    2. Si el resultado es usable (tiene ítems con precios), lo usa directamente.
+    3. Si el resultado está vacío o incompleto, recurre a IA como fallback.
+    4. Registra el origen (internal_process / ai_fallback) y la razón del fallback.
+    """
+    policy = extraction_policy()
 
-    if suffix in TABULAR_EXTENSIONS:
-        deterministic = await asyncio.to_thread(extract_tabular_document, content, filename)
-        if deterministic is not None:
-            extraction, table_meta = deterministic
-            provider_name = "tabular"
-            model_name = "deterministic"
+    result = await policy.run(
+        internal=lambda: _run_deterministic(
+            content=content,
+            filename=filename,
+            mime_type=mime_type,
+        ),
+        ai=lambda: _run_ai(
+            content=content,
+            filename=filename,
+            mime_type=mime_type,
+            org_settings=org_settings,
+            doc_type_hint=doc_type_hint,
+            provider=provider,
+        ),
+        min_confidence=0.0,
+        required_fields=["items"],
+        validate=lambda doc: len(doc.items) > 0 if doc else False,
+    )
 
-    if suffix in XML_EXTENSIONS or mime_type in {"application/xml", "text/xml"}:
-        deterministic = await asyncio.to_thread(extract_dte_document, content, filename)
-        if deterministic is not None:
-            extraction, table_meta = deterministic
-            provider_name = "dte"
-            model_name = "deterministic"
-
-    if extraction is None:
-        if not bool(org_settings.get("ai_data_consent", True)):
-            raise ExtractionError("La organización no autorizó el envío de documentos a proveedores de IA.")
-        if not bool(org_settings.get("ai_images_enabled", True)):
-            extracted.images = []
-        raw_max_chars = org_settings.get("ai_text_max_chars")
-        if raw_max_chars is not None:
-            max_chars = max(1000, min(int(raw_max_chars), 200_000))
-            combined = extracted.combined_text
-            if len(combined) > max_chars:
-                extracted.text = combined[:max_chars]
-                extracted.tables_text = ""
-
-        if provider is not None:
-            extraction = await provider.extract_document(
-                extracted,
-                filename=filename,
-                doc_type_hint=doc_type_hint,
-            )
-            provider_name = provider.name
-            model_name = provider.model
-            usage = getattr(provider, "last_usage", None)
-        else:
-            extraction, provider_name, usage = await extract_with_fallback(
-                extracted,
-                filename=filename,
-                doc_type_hint=doc_type_hint,
-            )
+    # Si el deterministic encontró algo, usarlo
+    if result.result is not None:
+        extraction = result.result
+        provider_name = "deterministic"
+        model_name = "deterministic"
+        usage = None
+    elif result.result is not None:
+        # fallback a IA tuvo éxito
+        extraction = result.result
+        if result.attempts:
+            provider_name = result.attempts[-1].get("detail", "llm")
             model_name = provider_name
+            usage = result.attempts[-1].get("usage")
+    else:
+        # No se pudo extraer nada ni por vía determinista ni por IA
+        raise ExtractionError(
+            "No se pudo extraer contenido del documento. "
+            f"Razón del fallback: {result.fallback_reason or 'desconocida'}"
+        )
 
     default_currency = str(org_settings.get("default_currency") or "CLP")
     raw_min_confidence = org_settings.get("min_confidence")
@@ -173,6 +321,7 @@ async def run_pipeline(
     document_date = parse_flexible_date(extraction.document_date) or price_date_fallback
     document_confidence = extraction.confidence if extraction.confidence is not None else 1.0
 
+    table_meta: dict | None = None
     normalized_items: list[NormalizedItem] = []
     for item in extraction.items:
         original_description = " ".join(item.description.split())
@@ -252,25 +401,38 @@ async def run_pipeline(
                         str(quantize_money(unit_price, places=4)) if unit_price is not None else None
                     ),
                     "net_unit_price": (
-                        str(quantize_money(net_unit_price, places=4)) if net_unit_price is not None else None
+                        str(quantize_money(net_unit_price, places=4))
+                        if net_unit_price is not None else None
                     ),
+                    # Campos de trazabilidad deterministic-first
+                    "extraction_source": result.source,
+                    "fallback_reason": result.fallback_reason,
+                    "ai_used": result.ai_used,
+                    "extraction_attempts": result.attempts,
                 },
             )
         )
 
-    assert extraction is not None
-    warnings = list((table_meta or {}).get("warnings") or [])
+    warnings = list((table_meta or {}).get("warnings") or []) if table_meta else []
     if table_meta and table_meta.get("truncated"):
         warnings.append(
             "El archivo se importó parcialmente por límite de filas. "
             "Revisa la nota del documento antes de confiar en los totales."
         )
+    # Agregar información de fallback a las warnings si corresponde
+    if result.fallback_reason:
+        warnings.append(f"Extracción vía {result.source}: {result.fallback_reason}")
+
     return NormalizationResult(
         extraction=extraction,
         items=normalized_items,
-        raw_text=extracted.combined_text[:200_000],
+        raw_text=extraction.combined_text[:200_000] if extraction else "",
         provider=provider_name,
         model=model_name,
         usage=usage,
         warnings=warnings,
+        # Nuevos campos de trazabilidad deterministic-first
+        extraction_source=result.source,
+        fallback_reason=result.fallback_reason,
+        ai_used=result.ai_used,
     )

@@ -18,6 +18,7 @@ from src.core.config import PROJECT_ROOT, settings
 from src.core.errors import NexoraError
 from src.core.logging import get_logger, setup_logging
 from src.db import repositories
+from src.db.init_db import apply_migrations
 from src.db.pool import close_pool, open_pool
 
 try:  # Sentry es opcional en desarrollo/test.
@@ -90,7 +91,7 @@ class SPAStaticFiles(StaticFiles):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    if settings.app_env.lower() != "test":
+    if settings.app_env.lower() != "Test":
         settings.validate_startup()
         try:
             pool = await open_pool()
@@ -119,6 +120,9 @@ async def lifespan(app: FastAPI):
                     )
             except Exception:
                 logger.exception("No se pudo verificar la disponibilidad de pg_dump.")
+        
+        # Aplicar migraciones pendientes
+        apply_migrations()
     else:
         logger.info("Modo test: pool de base de datos no inicializado")
     try:

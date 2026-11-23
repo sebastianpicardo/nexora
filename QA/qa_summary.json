@@ -1,0 +1,182 @@
+[
+  {
+    "name": "Health",
+    "ok": true,
+    "detail": "{\"service\":\"NEXORA\",\"version\":\"0.1.0\",\"environment\":\"development\",\"status\":\"ok\",\"database\":\"not_checked\",\"checks\":{\"api\":\"ok\"}}"
+  },
+  {
+    "name": "Auth me",
+    "ok": true,
+    "detail": "{\"success\":true,\"user\":{\"id\":\"2de42daf-2e59-463c-b2d1-48b4347d5c3b\",\"org_id\":\"ab4db71f-9e41-4baf-ac14-4413fa75d3e8\",\"email\":\"qa@nexora.test\",\"name\":\"QA NEXORA\",\"avatar_url\":\"\",\"role\":\"owner\",\"job_title\":\"\",\"phone\":\"\",\"timezone\":\"America/Santiago\",\"notify_quota\":true,\"notify_weekly\":true,\"email_verified\":true,\"active\":true,\"last_login_at\":\"2026-11-19T20:46:01.466280Z\",\"created_at\":\"2026-11-19T20:46:01.466280Z\"},\"organization\":{\"id\":\"ab4db71f-9e41-4baf-ac14-4413fa75d3e8\",\"name\":\"QA NEXORA\",\"slug\":"
+  },
+  {
+    "name": "Dashboard vacÃ­o",
+    "ok": true,
+    "detail": "{\"documents_total\":0,\"documents_processed\":0,\"documents_pending\":0,\"items_total\":0,\"exceptions_pending\":0,\"price_alerts_pending\":0,\"spend_by_currency\":[],\"monthly_purchases\":[{\"month\":\"2026-06\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-07\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-08\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-09\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"mon"
+  },
+  {
+    "name": "Billing",
+    "ok": true,
+    "detail": "{\"subscription\":{\"id\":\"e7422d6c-a3f7-4d2f-9fd4-8787cee92f8f\",\"plan_id\":\"free\",\"plan_name\":\"Free\",\"status\":\"active\",\"current_period_start\":\"2026-11-01\",\"current_period_end\":\"2026-12-01\",\"trial_ends_at\":null},\"usage\":{\"used\":0,\"limit\":25,\"remaining\":25,\"percentage\":0.0,\"unlimited\":false,\"period_start\":\"2026-11-01\",\"period_end\":\"2026-12-01\",\"warning\":false,\"exceeded\":false},\"plans\":[{\"id\":\"free\",\"name\":\"Free\",\"description\":\"Para probar la auditoría con un volumen acotado.\",\"price_monthly\":0.0,\"curr"
+  },
+  {
+    "name": "Demo 90 dÃ­as",
+    "ok": true,
+    "detail": "{\"success\":true,\"already_seeded\":false,\"months\":3,\"products\":10,\"documents\":3,\"approvals\":2,\"catalog\":8}"
+  },
+  {
+    "name": "Dashboard con demo",
+    "ok": true,
+    "detail": "{\"documents_total\":3,\"documents_processed\":3,\"documents_pending\":0,\"items_total\":30,\"exceptions_pending\":4,\"price_alerts_pending\":3,\"spend_by_currency\":[{\"currency\":\"CLP\",\"amount\":547991.12}],\"monthly_purchases\":[{\"month\":\"2026-06\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-07\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-08\",\"spend\":0.0,\"documents\":0,\"price_alerts\":0,\"alert_rate\":0.0},{\"month\":\"2026-09\",\"spend\":501349.74,\"documents"
+  },
+  {
+    "name": "AuditorÃ­a Express",
+    "ok": true,
+    "detail": "{\"generated_at\":\"2026-11-19T20:46:01.921808+00:00\",\"window_days\":90,\"currency\":\"CLP\",\"coverage\":{\"documents\":3,\"items\":30,\"suppliers\":3,\"catalog_items\":8,\"pending_review\":1,\"first_date\":\"2026-09-01\",\"last_date\":\"2026-11-01\"},\"summary\":{\"potential_savings\":49106.0,\"realized_savings\":3.0,\"spend_total\":1550691.0,\"leakage_pct\":3.2,\"findings_total\":5,\"critical\":4,\"high\":1,\"medium\":0,\"low\":0,\"price_overpay\":46641.0,\"margin_bleed\":2465.0,\"invoice_discrepancy\":0.0,\"pending_approvals\":2},\"findings\":[{\"ca"
+  },
+  {
+    "name": "Comparador",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"window_days\":90,\"total\":10,\"items\":[{\"product\":\"pintura esmalte blanco 1 galon\",\"sku\":\"DEMO-004\",\"unit\":\"galon\",\"category\":null,\"suppliers\":[{\"name\":\"Proveedor Demo Sur\",\"price\":7544.0,\"date\":\"2026-09-01\"},{\"name\":\"Proveedor Demo Central\",\"price\":7544.0,\"date\":\"2026-10-01\"},{\"name\":\"Proveedor Demo Norte\",\"price\":10184.4,\"date\":\"2026-11-01\"}],\"best_supplier\":\"Proveedor Demo Sur\",\"best_price\":7544.0,\"worst_supplier\":\"Proveedor Demo Norte\",\"worst_price\":10184.4,\"spread_pct\":35.0,"
+  },
+  {
+    "name": "NegociaciÃ³n",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"window_days\":90,\"generated_at\":\"2026-11-19T20:46:01.937732+00:00\",\"total_estimated_savings\":43976.0,\"suppliers\":[{\"supplier\":\"Proveedor Demo Norte\",\"items\":[{\"product\":\"pintura esmalte blanco 1 galon\",\"sku\":\"DEMO-004\",\"unit\":\"galon\",\"current_price\":10184.4,\"target_price\":7694.88,\"best_supplier\":\"Proveedor Demo Sur\",\"gap_pct\":32.4,\"quantity\":16.0,\"estimated_savings\":39832.0},{\"product\":\"cable electrico 2.5mm\",\"sku\":\"DEMO-007\",\"unit\":\"metro\",\"current_price\":770.04,\"target_price\""
+  },
+  {
+    "name": "Informe semanal",
+    "ok": true,
+    "detail": "{\"period_days\":7,\"generated_at\":\"2026-11-19T20:46:01.947844+00:00\",\"currency\":\"CLP\",\"summary\":{\"potential_savings\":2465.0,\"realized_savings\":3.0,\"spend_total\":0.0,\"leakage_pct\":0.0,\"findings_total\":2,\"critical\":1,\"high\":1,\"medium\":0,\"low\":0,\"price_overpay\":0.0,\"margin_bleed\":2465.0,\"invoice_discrepancy\":0.0,\"pending_approvals\":2,\"documents_processed\":3,\"documents_failed\":0,\"exceptions_resolved\":0,\"approvals_pending\":2},\"highlights\":[\"Taladro percutor 650W: vendes bajo el costo (-10.1% de margen)"
+  },
+  {
+    "name": "EnvÃ­o semanal",
+    "ok": true,
+    "detail": "{\"subject\":\"Resumen semanal NEXORA · QA NEXORA\",\"text\":\"Resumen semanal de QA NEXORA\\n\\nDocumentos procesados: 3\\nExcepciones resueltas: 0\\nAhorro potencial detectado: $2,465 CLP\\nAhorro verificado: $3 CLP\\nAprobaciones pendientes: 2\\n\\nLo importante de la semana:\\n- Taladro percutor 650W: vendes bajo el costo (-10.1% de margen) (ahorro estimado 1,100 CLP)\\n- Sierra circular 7 1/4: margen bajo (3.9%) (ahorro estimado 1,365 CLP)\\n- 3 documentos procesados en los últimos 7 días.\\n\\nRevisa el detal"
+  },
+  {
+    "name": "GuardiÃ¡n de margen",
+    "ok": true,
+    "detail": "{\"generated_at\":\"2026-11-19\",\"summary\":{\"items_total\":8,\"at_risk\":2,\"below_cost\":1,\"below_threshold\":1,\"cost_increases\":0,\"recovery_per_unit\":4582.36,\"currency\":\"CLP\",\"target_margin\":15.0,\"min_margin\":8.0},\"items\":[{\"id\":\"02b09720-3899-43a8-a5f3-48fb595996a4\",\"sku\":\"DEMO-TALADRO-650\",\"name\":\"Taladro percutor 650W\",\"unit\":\"unidad\",\"category\":\"Herramientas eléctricas\",\"supplier\":\"Herramientas SA\",\"cost_previous\":12000.0,\"cost_current\":12000.0,\"cost_change_pct\":0.0,\"sale_price\":10900.0,\"margin_pct\""
+  },
+  {
+    "name": "CSV POS/ERP",
+    "ok": true,
+    "detail": "﻿SKU;Nombre;Unidad;Precio costo;Precio venta;Precio venta sugerido;Margen %;Proveedor;Categoria;Actualizado\r\nDEMO-TALADRO-650;Taladro percutor 650W;unidad;12000.0;10900.0;14117.65;-10.1;Herramientas SA;Herramientas eléctricas;2026-11-19\r\nDEMO-SIERRA-7;Sierra circular 7 1/4;unidad;10000.0;10400.0;11764.71;3.8;Ferretería del Norte;Herramientas eléctricas;2026-11-19\r\n"
+  },
+  {
+    "name": "Compra Ã³ptima",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"requested_lines\":2,\"optimized_lines\":2,\"missing\":[],\"suppliers\":[{\"supplier\":\"Proveedor Demo Central\",\"subtotal\":30185.96,\"freight\":0.0,\"minimum_order\":0.0,\"meets_minimum\":true}],\"lines\":[{\"sku\":\"DEMO-001\",\"product\":\"tornillo acero inoxidable 6mm\",\"quantity\":12.0,\"unit\":\"unidad\",\"supplier\":\"Proveedor Demo Central\",\"unit_price\":0.83,\"subtotal\":9.96},{\"sku\":\"DEMO-004\",\"product\":\"pintura esmalte blanco 1 galon\",\"quantity\":4.0,\"unit\":\"galon\",\"supplier\":\"Proveedor Demo Central\",\"un"
+  },
+  {
+    "name": "Registro RCV",
+    "ok": true,
+    "detail": "{\"filename\":\"rcv.csv\",\"rows\":2,\"inserted\":2,\"updated\":0,\"skipped\":0,\"periods\":[\"2026-11\"]}"
+  },
+  {
+    "name": "Completitud RCV",
+    "ok": true,
+    "detail": "{\"period\":\"2026-11\",\"available_periods\":[\"2026-11\"],\"currency\":\"CLP\",\"total_documents\":2,\"with_detail\":0,\"missing\":2,\"completeness_pct\":0.0,\"missing_amount\":3570.0,\"message\":\"El SII registra 2 documentos de compra en 2026-11 y tienes detalle de 0 — faltan 2 por cargar.\",\"missing_documents\":[{\"folio\":\"9001\",\"tipo_doc\":\"33\",\"rut\":\"76.100.000-1\",\"supplier\":\"Proveedor Demo Norte\",\"total\":1190.0,\"date\":\"2026-11-01\"},{\"folio\":\"9002\",\"tipo_doc\":\"33\",\"rut\":\"76.200.000-2\",\"supplier\":\"Proveedor Demo Centr"
+  },
+  {
+    "name": "Importar Compra Ãgil",
+    "ok": true,
+    "detail": "{\"filename\":\"ca.csv\",\"opportunities\":1,\"items\":1,\"external_ids\":[\"CA-QA\"]}"
+  },
+  {
+    "name": "Radar Compra Ãgil",
+    "ok": true,
+    "detail": "{\"configured\":false,\"mode\":\"manual\",\"message\":\"Modo manual: carga un CSV de oportunidades o configura COMPRA_AGIL_API_URL y COMPRA_AGIL_API_KEY.\",\"opportunities\":[{\"external_id\":\"DEMO-CA-1\",\"title\":\"Reposición de tornillos y fijaciones\",\"buyer\":\"Municipalidad Demo\",\"region\":\"Metropolitana\",\"closes_at\":\"2026-12-07\",\"budget_clp\":850000.0,\"status\":\"open\",\"source\":\"demo\",\"item_count\":1,\"items\":[{\"sku\":\"DEMO-001\",\"unit\":\"unidad\",\"quantity\":20.0,\"description\":\"Tornillo acero inoxidable 6mm\"}]},{\"exter"
+  },
+  {
+    "name": "CotizaciÃ³n Compra Ãgil",
+    "ok": true,
+    "detail": "{\"opportunity\":{\"external_id\":\"CA-QA\",\"title\":\"Reposicion demo\",\"buyer\":\"Municipalidad QA\",\"region\":null,\"closes_at\":\"2026-12-31\",\"budget_clp\":null,\"status\":\"open\"},\"currency\":\"CLP\",\"target_margin\":25.0,\"lines\":[{\"sku\":\"DEMO-007\",\"product\":\"Cable electrico\",\"unit\":\"unidad\",\"quantity\":10.0,\"cost_price\":570.4,\"offer_price\":760.53,\"total\":7605.3,\"status\":\"ok\",\"reference_supplier\":\"Proveedor Demo Sur\"}],\"missing\":0,\"total_cost\":5704.0,\"total_offer\":7605.3,\"gross_margin\":1901.3}"
+  },
+  {
+    "name": "Insights overview",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"months\":6,\"partial\":false,\"warnings\":[],\"analytics\":{\"currency\":\"CLP\",\"months\":6,\"summary\":{\"products\":10,\"suppliers\":3,\"items\":30,\"avg_confidence\":0.9197,\"price_index\":111.49,\"price_index_products\":10,\"price_index_basis\":\"canasta comparable ponderada por gasto\",\"price_change_pct\":11.49},\"monthly\":[{\"month\":\"2026-09\",\"spend\":501349.74,\"items\":10,\"avg_price\":2256.419},{\"month\":\"2026-10\",\"spend\":501349.74,\"items\":10,\"avg_price\":2256.419},{\"month\":\"2026-11\",\"spend\":547991.12,\"ite"
+  },
+  {
+    "name": "Insights analytics",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"months\":6,\"summary\":{\"products\":10,\"suppliers\":3,\"items\":30,\"avg_confidence\":0.9197,\"price_index\":111.49,\"price_index_products\":10,\"price_index_basis\":\"canasta comparable ponderada por gasto\",\"price_change_pct\":11.49},\"monthly\":[{\"month\":\"2026-09\",\"spend\":501349.74,\"items\":10,\"avg_price\":2256.419},{\"month\":\"2026-10\",\"spend\":501349.74,\"items\":10,\"avg_price\":2256.419},{\"month\":\"2026-11\",\"spend\":547991.12,\"items\":10,\"avg_price\":2540.452}],\"top_increases\":[{\"product_key\":\"pintura "
+  },
+  {
+    "name": "Insights opportunities",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"days\":90,\"min_overprice_pct\":10.0,\"min_samples\":2,\"summary\":{\"opportunities\":3,\"total_items\":30,\"data_available\":true,\"total_potential_savings\":46641.38,\"total_conservative_savings\":46641.38,\"total_excess_cost\":46641.38,\"suppliers_affected\":1},\"top_suppliers\":[{\"supplier_name\":\"Proveedor Demo Norte\",\"potential_savings\":46641.38}],\"items\":[{\"id\":\"96017f5e-6047-4c48-8cc3-8d632d7761c3\",\"document_id\":\"a07f6b0e-9a3a-4f12-8939-6f356799ce60\",\"supplier_id\":\"94d32da9-a871-46be-be8c-d4a"
+  },
+  {
+    "name": "Insights forecast",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"history_months\":6,\"horizon\":1,\"summary\":{\"products\":0,\"projected_spend\":0,\"products_rising\":0,\"products_falling\":0,\"skipped_low_history\":10},\"items\":[],\"partial\":false,\"warnings\":[]}"
+  },
+  {
+    "name": "Insights approvals",
+    "ok": true,
+    "detail": "{\"currency\":\"CLP\",\"threshold\":0.9,\"days\":120,\"max_amount\":500000.0,\"summary\":{\"pending\":1,\"auto_eligible\":0,\"needs_review\":1,\"auto_amount\":0.0,\"review_amount\":30.24},\"items\":[{\"id\":\"f927d62f-878f-4959-a9a6-5893f98a7f9b\",\"document_id\":\"a07f6b0e-9a3a-4f12-8939-6f356799ce60\",\"document_filename\":\"demo-historico-2026-11-01.csv\",\"supplier_name\":\"Proveedor Demo Sur\",\"sku\":\"DEMO-003\",\"description\":\"Guantes de seguridad\",\"base_unit\":\"par\",\"quantity\":14.0,\"unit_price\":2.16,\"currency\":\"CLP\",\"amount\":30.24,"
+  },
+  {
+    "name": "Ahorro verificado",
+    "ok": true,
+    "detail": "{\"month\":\"2026-11\",\"available_months\":[\"2026-11\"],\"currency\":\"CLP\",\"count\":1,\"total_amount\":2.9,\"items\":[{\"id\":\"13553774-28af-43d7-aefb-cabcd45ecbef\",\"opportunity_key\":\"demo-ab4db71f-9e41-4baf-ac14-4413fa75d3e8-verified\",\"status\":\"realized\",\"title\":\"Renegociación demo de ferretería\",\"sku\":\"DEMO-001\",\"product\":\"Tornillo acero inoxidable 6mm\",\"supplier_before\":\"Proveedor Demo Norte\",\"supplier_after\":\"Proveedor Demo Central\",\"document_before_id\":null,\"document_after_id\":null,\"unit_price_before\":1.1"
+  },
+  {
+    "name": "Integraciones nativas",
+    "ok": true,
+    "detail": "{\"providers\":[{\"provider\":\"chilecompra\",\"available\":true,\"status\":\"Radar Compra Ágil (API o carga manual)\",\"simulated\":false,\"actions\":[{\"id\":\"search_items\",\"label\":\"Ver oportunidades Compra Ágil\",\"icon\":\"SearchIcon\",\"primary\":true,\"enabled\":true},{\"id\":\"search_suppliers\",\"label\":\"Buscar proveedores\",\"icon\":\"SuppliersIcon\",\"enabled\":false},{\"id\":\"import_order\",\"label\":\"Importar orden de compra\",\"icon\":\"ArrowRightIcon\",\"enabled\":false}]},{\"provider\":\"compra_agil\",\"available\":true,\"status\":\"API co"
+  },
+  {
+    "name": "ValidaciÃ³n RUT SII",
+    "ok": true,
+    "detail": "{\"provider\":\"sii\",\"action\":\"validate_rut\",\"rut\":\"12.345.678-5\",\"valido\":true,\"estado\":\"Formato válido\",\"giro\":null,\"direccion\":null,\"simulated\":false,\"source\":\"Validación local del dígito verificador\",\"note\":\"Solo valida el formato del RUT. No consulta datos tributarios reales del SII.\"}"
+  },
+  {
+    "name": "ExportaciÃ³n ERP",
+    "ok": true,
+    "detail": "{\"provider\":\"erp\",\"action\":\"sync_suppliers\",\"rows\":3,\"filename\":\"proveedores_nexora.csv\",\"download_url\":\"/api/integrations/native/erp/export/suppliers.csv\",\"note\":\"CSV real generado con tus proveedores. Descárgalo e impórtalo a tu ERP.\"}"
+  },
+  {
+    "name": "Ingesta DTE XML",
+    "ok": true,
+    "detail": "{\"success\":true,\"document\":{\"id\":\"d3637650-8882-42d5-81c7-eb31b6455620\",\"org_id\":\"ab4db71f-9e41-4baf-ac14-4413fa75d3e8\",\"supplier_id\":null,\"supplier_name\":null,\"uploaded_by\":\"2de42daf-2e59-463c-b2d1-48b4347d5c3b\",\"uploaded_by_name\":\"QA NEXORA\",\"original_filename\":\"factura.xml\",\"mime_type\":\"application/xml\",\"file_size_bytes\":738,\"doc_type\":\"invoice\",\"status\":\"queued\",\"extraction_provider\":null,\"extraction_model\":null,\"error_message\":null,\"metadata\":{},\"created_at\":\"2026-11-19T20:46:02.164027Z\",\"u"
+  },
+  {
+    "name": "Procesamiento DTE XML",
+    "ok": true,
+    "detail": "{'id': 'd3637650-8882-42d5-81c7-eb31b6455620', 'org_id': 'ab4db71f-9e41-4baf-ac14-4413fa75d3e8', 'supplier_id': 'a9cfb6dd-5207-49a4-98a3-cd431bc470e5', 'supplier_name': 'Ferreteria QA', 'uploaded_by': '2de42daf-2e59-463c-b2d1-48b4347d5c3b', 'uploaded_by_name': 'QA NEXORA', 'original_filename': 'factura.xml', 'mime_type': 'application/xml', 'file_size_bytes': 738, 'doc_type': 'invoice', 'status': 'processed', 'extraction_provider': 'dte', 'extraction_model': 'deterministic', 'error_message': None"
+  },
+  {
+    "name": "Ingesta CSV",
+    "ok": true,
+    "detail": "{\"success\":true,\"document\":{\"id\":\"f5290076-6b1f-4e04-ad7f-cb08486f3f6f\",\"org_id\":\"ab4db71f-9e41-4baf-ac14-4413fa75d3e8\",\"supplier_id\":null,\"supplier_name\":null,\"uploaded_by\":\"2de42daf-2e59-463c-b2d1-48b4347d5c3b\",\"uploaded_by_name\":\"QA NEXORA\",\"original_filename\":\"lista.csv\",\"mime_type\":\"text/csv\",\"file_size_bytes\":67,\"doc_type\":\"price_list\",\"status\":\"queued\",\"extraction_provider\":null,\"extraction_model\":null,\"error_message\":null,\"metadata\":{},\"created_at\":\"2026-11-19T20:46:02.202480Z\",\"updated_"
+  },
+  {
+    "name": "Excepciones",
+    "ok": true,
+    "detail": "{\"items\":[{\"id\":\"563a0b9f-b3a8-4143-987d-9d09d236759b\",\"org_id\":\"ab4db71f-9e41-4baf-ac14-4413fa75d3e8\",\"document_id\":\"a07f6b0e-9a3a-4f12-8939-6f356799ce60\",\"item_id\":\"1efc12aa-3afd-4520-be9d-d638984e7148\",\"document_filename\":\"demo-historico-2026-11-01.csv\",\"doc_type\":\"invoice\",\"supplier_name\":null,\"item_description\":\"Tornillo acero inoxidable 6mm\",\"item_sku\":\"DEMO-001\",\"item_original_unit\":\"unidad\",\"item_base_unit\":\"unidad\",\"item_original_unit_price\":1.12,\"item_normalized_unit_price\":1.12,\"item_"
+  },
+  {
+    "name": "ExportaciÃ³n Excel",
+    "ok": true,
+    "detail": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "name": "Demo idempotente",
+    "ok": true,
+    "detail": "{\"success\":true,\"already_seeded\":true,\"document_id\":\"a07f6b0e-9a3a-4f12-8939-6f356799ce60\"}"
+  },
+  {
+    "name": "Limpiar demo",
+    "ok": true,
+    "detail": "{\"success\":true,\"approvals\":2,\"documents\":3,\"suppliers\":3,\"catalog\":8,\"opportunities\":2,\"savings\":1}"
+  },
+  {
+    "name": "AuditorÃ­a tras limpieza",
+    "ok": true,
+    "detail": "{\"generated_at\":\"2026-11-19T20:46:02.288538+00:00\",\"window_days\":90,\"currency\":\"CLP\",\"coverage\":{\"documents\":2,\"items\":2,\"suppliers\":1,\"catalog_items\":0,\"pending_review\":0,\"first_date\":\"2026-11-05\",\"last_date\":\"2026-11-19\"},\"summary\":{\"potential_savings\":0.0,\"realized_savings\":0.0,\"spend_total\":10000.0,\"leakage_pct\":0.0,\"findings_total\":0,\"critical\":0,\"high\":0,\"medium\":0,\"low\":0,\"price_overpay\":0.0,\"margin_bleed\":0.0,\"invoice_discrepancy\":0.0,\"pending_approvals\":0},\"findings\":[],\"action_plan\":[{"
+  }
+]

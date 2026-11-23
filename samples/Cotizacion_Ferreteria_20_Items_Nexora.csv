@@ -1,0 +1,21 @@
+ítem,SKU,descripción,cantidad,unidad,precio_unitivo_neto,total
+1,TOR-001,Tornillo hexagonal M8x30,2,und,1200,2400
+2,TAL-002,Taladro inalámbrico 18V,1,und,85000,85000
+3,CEM-003,Cemento Portland 42.5,5,saco,3500,17500
+4,LIM-004,Lija P120 x 230mm,3,docena,1500,4500
+5,PINT-005,Pintura esmalte blanco 3.6L,1,galón,25000,25000
+6,CLV-006,Clavo galvanizado 4,10,kg,850,8500
+7,BRU-007,Broca para madera 6mm,2,und,3200,6400
+8,PAS-008,Pasador rollo 5x30,5,und,450,2250
+9,ARR-009,Arandela DIN 125 8.4,20,und,120,2400
+10,SUP-010,Soporte para tubería 1',1,und,5500,5500
+11,CORT-011,Cortafuegos portátil,1,und,18000,18000
+12,SEL-012,Seleccionador de circuito,2,und,6500,13000
+13,ISL-013,Isolante para cable,3,und,250,750
+14,CON-014,Conector RJ45,1,und,1200,1200
+15,TUB-015,"Tubería PVC 1/2""",5,m,4.5,22.5
+16,ELE-016,Lámpara led 20W,1,und,35000,35000
+17,PIS-017,Piso de goma antideslizante,2,m2,8500,17000
+18,PINT-018,Sellador acrílico 300ml,1,und,380,380
+19,FER-019,Fierro angular 50x50,2,kg,4500,9000
+20,PAS-020,Pasador cilíndrico 10x30,3,und,180,540

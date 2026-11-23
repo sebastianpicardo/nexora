@@ -17,6 +17,12 @@ import LeakAuditCard from "../components/LeakAuditCard";
 import SavingsSpotlight from "../components/SavingsSpotlight";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 
+const DASHBOARD_STEPS = [
+  { id: 1, label: "Sube tus cotizaciones" },
+  { id: 2, label: "Revisa alertas de sobreprecio" },
+  { id: 3, label: "Aprueba la compra" },
+];
+
 export default function DashboardPage({ onNavigate, onUpload }) {
   const { organization, billing, canOperate } = useAuth();
   const [summary, setSummary] = useState(null);
@@ -117,7 +123,7 @@ export default function DashboardPage({ onNavigate, onUpload }) {
   return (
     <div className="page-stack">
       <AppBanner onNavigate={onNavigate} onUpload={canOperate ? onUpload : undefined} />
-      <QuickGuide activeStep={1} />
+      <QuickGuide steps={DASHBOARD_STEPS} activeStep={1} />
       <SavingsSpotlight
         summary={summary}
         currency={activeCurrency}

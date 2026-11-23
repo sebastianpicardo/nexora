@@ -86,16 +86,17 @@ export default function UploadCard({ onUploaded }) {
         return;
       }
 
-      if (data.duplicate) {
-        const message = "Este documento ya estaba cargado. Te mostramos el registro existente.";
-        setSuccess(message);
-        setToast({ message, tone: "info" });
-        setFiles([]);
-        setDocumentDate("");
-        if (inputRef.current) inputRef.current.value = "";
-        onUploaded?.(data.document);
-        return;
-      }
+if (data.duplicate) {
+      const message = "Este documento ya estaba cargado. Te mostramos el registro existente.";
+      setSubmitting(false);
+      setSuccess(message);
+      setToast({ message, tone: "info" });
+      setFiles([]);
+      setDocumentDate("");
+      if (inputRef.current) inputRef.current.value = "";
+      onUploaded?.(data.document);
+      return;
+    }
 
       // Iniciar animación de procesamiento IA
       setSubmitting(false);

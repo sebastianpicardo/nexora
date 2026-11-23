@@ -114,7 +114,7 @@ export default function CompraAgilPanel() {
             <h3>Sin oportunidades cargadas</h3>
             <p>
               Importa un CSV o configura COMPRA_AGIL_API_URL y COMPRA_AGIL_API_KEY para consultar
-              la API.
+              la API. También se pueden realizar búsquedas públicas de ChileCompra.
             </p>
           </div>
         ) : (

@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: nexora
+Version: 0.1.0
+Summary: Analizador y auditor automatizado de compras y precios para distribuidores industriales
+Requires-Python: >=3.12

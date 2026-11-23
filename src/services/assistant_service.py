@@ -157,6 +157,51 @@ async def _ask_anthropic(question: str, history: list[dict] | None) -> tuple[str
     return (text or None, usage)
 
 
+def _deterministic_answer(question: str) -> str | None:
+    """Responde con reglas determinísticas para preguntas frecuentes sin usar IA.
+
+    Esto evita gastar tokens en consultas simples que pueden resolverse con reglas
+    de texto. No es una funcionalidad nueva de negocio, solo una optimización de costo.
+    """
+    q = question.strip().lower()
+
+    # Saludos
+    saludos = {"hola", "buenos días", "buenas tardes", "buenas noches", "hey", "hi", "hello"}
+    if q in saludos or q in {"hola nexora", "buenas"}:
+        return (
+            "¡Hola! Soy el asistente de NEXORA. Puedo ayudarte con consultas sobre compras, "
+            "precios, facturas y auditoría. ¿En qué te puedo ayudar hoy?"
+        )
+
+    # Despedidas
+    despedidas = {"adiós", "chao", "hasta luego", "hasta pronto", "nos vemos", "bye", "goodbye"}
+    if q in despedidas:
+        return "¡Hasta luego! Si necesitas algo más, aquí estaré."
+
+    # Agradecimientos
+    agradecimientos = {"gracias", "thanks", "thank you", "muchas gracias", "gracias por todo"}
+    if q in agradecimientos:
+        return "¡De nada! Estoy aquí para ayudarte con lo que necesites."
+
+    # Pregunta sobre qué es NEXORA
+    if "qué es nexora" in q or "what is nexora" in q or "quién es nexora" in q:
+        return (
+            "NEXORA es una plataforma de auditoría de compras y precios para ferreterías "
+            "y distribuidores. Ayuda a detectar sobrecostos, comparar proveedores, "
+            "conciliar facturas y generar ahorros verificados."
+        )
+
+    # Pregunta sobre cómo usar el sistema
+    if "cómo uso" in q or "cómo se usa" in q or "cómo empezar" in q or "how to use" in q:
+        return (
+            "Primero sube tus facturas, cotizaciones o listas de precios en la sección de "
+            "Documentos. NEXORA las procesará automáticamente y podrás ver los precios "
+            "auditados, excepciones y oportunidades de ahorro en el dashboard."
+        )
+
+    return None
+
+
 async def answer_question(
     question: str,
     *,
@@ -164,6 +209,12 @@ async def answer_question(
     org_id: str | None = None,
     user_id: str | None = None,
 ) -> tuple[str | None, str | None]:
+    # ── 1. Intento determinístico (sin IA) ──────────────────────────
+    deterministic_answer = _deterministic_answer(question)
+    if deterministic_answer is not None:
+        return deterministic_answer, "deterministic"
+
+    # ── 2. Fallback a IA ───────────────────────────────────────────
     order = [
         name.strip().lower()
         for name in (settings.llm_provider_order or "openai,anthropic,gemini").split(",")

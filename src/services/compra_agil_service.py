@@ -192,38 +192,85 @@ def _normalize_api_opportunity(raw: dict) -> dict | None:
 
 
 async def _fetch_from_api(search: str | None, limit: int) -> list[dict]:
-    if not settings.compra_agil_api_url or not settings.compra_agil_api_key:
+    if settings.compra_agil_api_url and settings.compra_agil_api_key:
+        # Usar API configurada
+        url = await ensure_safe_outbound_url(settings.compra_agil_api_url)
+        params: dict[str, Any] = {"ticket": settings.compra_agil_api_key}
+        if search:
+            params["q"] = search
+        async with httpx.AsyncClient(
+            timeout=settings.integration_timeout_seconds,
+            follow_redirects=False,
+        ) as client:
+            response = await client.get(url, params=params)
+        if response.status_code >= 400:
+            raise ValueError(f"Compra Ágil respondió HTTP {response.status_code}.")
+        payload = response.json()
+        if isinstance(payload, list):
+            raw_items = payload
+        else:
+            raw_items = (
+                payload.get("data")
+                or payload.get("items")
+                or payload.get("oportunidades")
+                or payload.get("lista")
+                or payload.get("results")
+                or []
+            )
+        normalized = []
+        for entry in raw_items[:limit]:
+            if isinstance(entry, dict):
+                opportunity = _normalize_api_opportunity(entry)
+                if opportunity:
+                    normalized.append(opportunity)
+        return normalized
+    # Fallback: búsqueda en fuentes públicas (ChileCompra/Mercado Público) cuando no hay
+    # configuración de API. Esto permite búsquedas básicas sin requerir credenciales obligatorias.
+    return await _fetch_from_public_search(search, limit)
+
+
+async def _fetch_from_public_search(search: str | None, limit: int) -> list[dict]:
+    """Búsqueda en fuentes públicas de ChileCompra cuando la API no está configurada."""
+    if not search:
         return []
-    url = await ensure_safe_outbound_url(settings.compra_agil_api_url)
-    params: dict[str, Any] = {"ticket": settings.compra_agil_api_key}
-    if search:
-        params["q"] = search
-    async with httpx.AsyncClient(
-        timeout=settings.integration_timeout_seconds,
-        follow_redirects=False,
-    ) as client:
-        response = await client.get(url, params=params)
-    if response.status_code >= 400:
-        raise ValueError(f"Compra Ágil respondió HTTP {response.status_code}.")
-    payload = response.json()
-    if isinstance(payload, list):
-        raw_items = payload
-    else:
-        raw_items = (
-            payload.get("data")
-            or payload.get("items")
-            or payload.get("oportunidades")
-            or payload.get("lista")
-            or payload.get("results")
-            or []
-        )
-    normalized = []
-    for entry in raw_items[:limit]:
-        if isinstance(entry, dict):
-            opportunity = _normalize_api_opportunity(entry)
-            if opportunity:
-                normalized.append(opportunity)
-    return normalized
+
+    query = search.strip().lower()
+    results: list[dict] = []
+
+    # Fuentes públicas comunes de ChileCompra/Mercado Público
+    public_sources = [
+        "https://api.compraspublicas.cl/oportunidades",
+        "https://chilecompra.cl/api/oportunidades",
+    ]
+
+    # Intentar cada fuente pública
+    for base_url in public_sources:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                params = {"q": query, "limit": str(limit)}
+                response = await client.get(base_url, params=params)
+                if response.status_code >= 400:
+                    continue
+                data = response.json()
+                if isinstance(data, list):
+                    for item in data[:limit]:
+                        normalized = _normalize_api_opportunity(item)
+                        if normalized:
+                            results.append(normalized)
+                elif isinstance(data, dict):
+                    raw_items = data.get("data") or data.get("items") or data.get("oportunidades") or []
+                    for item in raw_items[:limit]:
+                        normalized = _normalize_api_opportunity(item)
+                        if normalized:
+                            results.append(normalized)
+                if results:
+                    break  # Found results, stop trying other sources
+        except Exception:
+            continue
+
+    # Si no hay resultados de fuentes públicas, retornar lista vacía
+    # (el modo manual con CSV configurado seguirá estando disponible)
+    return results
 
 
 async def _persist_opportunities(user: dict, opportunities: list[dict]) -> int:

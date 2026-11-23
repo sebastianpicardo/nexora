@@ -12,10 +12,15 @@ const TABS = [
   { id: "exceptions", label: "Alertas y Excepciones", icon: ExceptionsIcon },
 ];
 
+const PURCHASES_INBOX_STEPS = [
+  { id: 1, label: "Revisa documentos cargados" },
+  { id: 2, label: "Audita precios y alertas" },
+  { id: 3, label: "Resuelve excepciones" },
+];
+
 export default function PurchasesInboxPage({ tab, onTabChange, onUpload }) {
   const { canOperate } = useAuth();
   const active = TABS.some((item) => item.id === tab) ? tab : "documents";
-  const step = active === "documents" ? 1 : 2;
 
   return (
     <div className="page-stack group-page">
@@ -36,7 +41,7 @@ export default function PurchasesInboxPage({ tab, onTabChange, onUpload }) {
       </section>
 
       <PageTabs tabs={TABS} active={active} onChange={onTabChange} label="Bandeja de compras" />
-      <QuickGuide activeStep={step} />
+      <QuickGuide steps={PURCHASES_INBOX_STEPS} activeStep={step} />
 
       {active === "documents" ? (
         <DocumentsPage embedded onUpload={onUpload} />

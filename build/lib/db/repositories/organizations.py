@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from uuid import UUID
+
+from psycopg import AsyncConnection
+
+
+async def get_organization(conn: AsyncConnection, org_id: UUID | str) -> dict | None:
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT * FROM organizations WHERE id = %s", (str(org_id),))
+        return await cur.fetchone()
+
+
+async def delete_organization(conn: AsyncConnection, org_id: UUID | str) -> bool:
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM organizations WHERE id = %s", (str(org_id),))
+        return cur.rowcount > 0
+
+
+async def update_organization(conn: AsyncConnection, org_id: UUID | str, fields: dict) -> dict | None:
+    allowed = {
+        "name",
+        "price_spike_threshold_pct",
+        "min_confidence",
+        "default_currency",
+        "brand_name",
+        "brand_primary_color",
+        "brand_accent_color",
+        "logo_url",
+        "support_email",
+        "custom_domain",
+        "hide_powered_by",
+        "sso_enabled",
+        "sso_domain",
+        "sso_required",
+        "audit_retention_days",
+        "ai_data_consent",
+        "ai_images_enabled",
+        "ai_text_max_chars",
+        "ai_data_retention_days",
+    }
+    updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
+    if not updates:
+        return await get_organization(conn, org_id)
+
+    assignments = ", ".join(f"{key} = %s" for key in updates)
+    values = [*updates.values(), str(org_id)]
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"UPDATE organizations SET {assignments} WHERE id = %s RETURNING *",
+            values,
+        )
+        return await cur.fetchone()
