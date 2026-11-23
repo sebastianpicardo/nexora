@@ -238,7 +238,16 @@ async def _run_ai(
             source=RESOLUTION_AI_FALLBACK,
             fallback_reason=None,
             ai_used=True,
-            attempts=[{"stage": f"ai:{provider_name}", "success": True, "reason": None, "detail": None}],
+            attempts=[
+                {
+                    "stage": f"ai:{provider_name}",
+                    "success": True,
+                    "reason": None,
+                    "detail": provider_name,
+                    "model": getattr(provider, "model", provider_name),
+                    "usage": usage,
+                }
+            ],
         )
     else:
         result_extraction, provider_name, usage = await extract_with_fallback(
@@ -251,7 +260,16 @@ async def _run_ai(
             source=RESOLUTION_AI_FALLBACK,
             fallback_reason=None,
             ai_used=True,
-            attempts=[{"stage": f"ai:{provider_name}", "success": True, "reason": None, "detail": None}],
+            attempts=[
+                {
+                    "stage": f"ai:{provider_name}",
+                    "success": True,
+                    "reason": None,
+                    "detail": provider_name,
+                    "model": provider_name,
+                    "usage": usage,
+                }
+            ],
         )
 
 
@@ -294,25 +312,34 @@ async def run_pipeline(
         validate=lambda doc: len(doc.items) > 0 if doc else False,
     )
 
-    # Si el deterministic encontró algo, usarlo
-    if result.result is not None:
-        extraction = result.result
-        provider_name = "deterministic"
-        model_name = "deterministic"
-        usage = None
-    elif result.result is not None:
-        # fallback a IA tuvo éxito
-        extraction = result.result
-        if result.attempts:
-            provider_name = result.attempts[-1].get("detail", "llm")
-            model_name = provider_name
-            usage = result.attempts[-1].get("usage")
-    else:
+    if result.result is None:
         # No se pudo extraer nada ni por vía determinista ni por IA
         raise ExtractionError(
             "No se pudo extraer contenido del documento. "
             f"Razón del fallback: {result.fallback_reason or 'desconocida'}"
         )
+
+    extraction = result.result
+    if result.ai_used:
+        ai_attempt = next(
+            (attempt for attempt in result.attempts if str(attempt.get("stage", "")).startswith("ai:")),
+            {},
+        )
+        provider_name = ai_attempt.get("detail") or "llm"
+        model_name = ai_attempt.get("model") or provider_name
+        usage = ai_attempt.get("usage")
+    else:
+        deterministic_stage = next(
+            (
+                str(attempt.get("stage", ""))
+                for attempt in result.attempts
+                if str(attempt.get("stage", "")).startswith("deterministic_")
+            ),
+            "",
+        )
+        provider_name = deterministic_stage.removeprefix("deterministic_") or "deterministic"
+        model_name = "deterministic"
+        usage = None
 
     default_currency = str(org_settings.get("default_currency") or "CLP")
     raw_min_confidence = org_settings.get("min_confidence")
@@ -419,14 +446,13 @@ async def run_pipeline(
             "El archivo se importó parcialmente por límite de filas. "
             "Revisa la nota del documento antes de confiar en los totales."
         )
-    # Agregar información de fallback a las warnings si corresponde
-    if result.fallback_reason:
-        warnings.append(f"Extracción vía {result.source}: {result.fallback_reason}")
+    evidence_lines = [item.evidence_text for item in extraction.items if item.evidence_text]
+    raw_text = "\n".join(evidence_lines)[:200_000] if evidence_lines else (extraction.notes or "")
 
     return NormalizationResult(
         extraction=extraction,
         items=normalized_items,
-        raw_text=extraction.combined_text[:200_000] if extraction else "",
+        raw_text=raw_text,
         provider=provider_name,
         model=model_name,
         usage=usage,

@@ -37,6 +37,7 @@ class _DummyClient:
 @pytest.fixture(autouse=True)
 def _configure(monkeypatch):
     monkeypatch.setattr(settings, "recaptcha_secret_key", "test-secret")
+    monkeypatch.setattr(settings, "recaptcha_site_key", "test-site")
     monkeypatch.setattr(settings, "recaptcha_min_score", 0.5)
 
 
@@ -48,6 +49,14 @@ def _patch_client(monkeypatch, payload: dict) -> _DummyClient:
 
 async def test_verify_recaptcha_skips_when_not_configured(monkeypatch):
     monkeypatch.setattr(settings, "recaptcha_secret_key", "")
+
+    result = await verify_recaptcha(None)
+
+    assert result == {"skipped": True, "score": None, "action": None}
+
+
+async def test_verify_recaptcha_skips_when_site_key_missing(monkeypatch):
+    monkeypatch.setattr(settings, "recaptcha_site_key", "")
 
     result = await verify_recaptcha(None)
 

@@ -4,6 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+from src.core.errors import ExtractionError
+
 T = TypeVar("T")
 
 RESOLUTION_INTERNAL = "internal_process"
@@ -90,37 +92,47 @@ class ExtractionPolicy:
         attempts: list[dict] = []
 
         # ── 1. Intento determinístico (sin IA) ──────────────────────────
+        internal_meta = None
         try:
-            result = await internal()
+            raw_internal = await internal()
         except Exception as exc:
             self._record_attempt(
                 attempts, "internal", False, "exception", str(exc)[:200]
             )
-            result = None
+            raw_internal = None
+        else:
+            raw_internal, internal_meta = self._unwrap(raw_internal)
+            if internal_meta is not None:
+                attempts.extend(internal_meta.attempts)
 
-        internal_ok = self._is_valid(result, min_confidence, required_fields, validate)
+        internal_ok = self._is_valid(raw_internal, min_confidence, required_fields, validate)
         if internal_ok:
             self.internal_calls += 1
             self._record_attempt(
                 attempts, "internal", True, None, "resuelto internamente"
             )
             return ExtractionResult(
-                result=result,
-                source=RESOLUTION_INTERNAL,
+                result=raw_internal,
+                source=internal_meta.source if internal_meta else RESOLUTION_INTERNAL,
                 fallback_reason=None,
-                ai_used=False,
+                ai_used=bool(internal_meta.ai_used) if internal_meta else False,
                 attempts=attempts,
             )
 
         # Razón del fallback
-        fallback_reason = self._diagnose_failure(result)
+        fallback_reason = self._diagnose_failure(raw_internal)
         self._record_attempt(
             attempts, "internal", False, fallback_reason, "fallback a IA"
         )
 
         # ── 2. Fallback a IA ───────────────────────────────────────────
+        ai_meta = None
         try:
-            result = await ai()
+            raw_ai = await ai()
+        except ExtractionError:
+            # Errores de dominio (p. ej. consentimiento de IA denegado) deben
+            # propagarse para que el llamador reciba el motivo real.
+            raise
         except Exception as exc:
             self.ai_calls += 1
             self._record_attempt(
@@ -133,12 +145,16 @@ class ExtractionPolicy:
                 ai_used=False,
                 attempts=attempts,
             )
+        else:
+            raw_ai, ai_meta = self._unwrap(raw_ai)
+            if ai_meta is not None:
+                attempts.extend(ai_meta.attempts)
 
         self.ai_calls += 1
         self._record_attempt(attempts, "ai", True, None, "resuelto por IA")
 
-        internal_ok = self._is_valid(result, min_confidence, required_fields, validate)
-        if not internal_ok:
+        ai_ok = self._is_valid(raw_ai, min_confidence, required_fields, validate)
+        if not ai_ok:
             self._record_attempt(
                 attempts,
                 "ai",
@@ -147,7 +163,7 @@ class ExtractionPolicy:
                 "IA no resolvió completamente",
             )
             return ExtractionResult(
-                result=result,
+                result=raw_ai,
                 source=RESOLUTION_UNRESOLVED,
                 fallback_reason="low_confidence_or_incomplete",
                 ai_used=True,
@@ -155,12 +171,29 @@ class ExtractionPolicy:
             )
 
         return ExtractionResult(
-            result=result,
-            source=RESOLUTION_AI_FALLBACK,
+            result=raw_ai,
+            source=ai_meta.source if ai_meta else RESOLUTION_AI_FALLBACK,
             fallback_reason=fallback_reason,
             ai_used=True,
             attempts=attempts,
         )
+
+    @staticmethod
+    def _unwrap(value: Any) -> tuple[Any, ExtractionResult | None]:
+        """Desenvuelve un ExtractionResult anidado devuelto por un extractor.
+
+        Los extractores determinísticos y de IA devuelven un ``ExtractionResult``
+        que envuelve el ``ExtractedDocument``. El orquestador debe validar el
+        documento interno, no el envoltorio.
+        """
+        if (
+            value is not None
+            and hasattr(value, "result")
+            and hasattr(value, "source")
+            and hasattr(value, "attempts")
+        ):
+            return value.result, value
+        return value, None
 
     def _is_valid(
         self,

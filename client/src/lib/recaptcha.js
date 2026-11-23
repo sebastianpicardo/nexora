@@ -1,10 +1,6 @@
 import { api } from "./api";
 
 const BUILD_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
-const CONFIG_ERROR =
-  "No se pudo cargar la configuración de reCAPTCHA. Recarga la página e intenta de nuevo.";
-const SITE_KEY_ERROR =
-  "reCAPTCHA está activo en el servidor, pero falta RECAPTCHA_SITE_KEY. Avisa al administrador.";
 const SCRIPT_ERROR =
   "No se pudo cargar reCAPTCHA. Revisa tu conexión y la política de seguridad (CSP) del sitio.";
 
@@ -18,22 +14,15 @@ async function resolveRecaptchaConfig() {
         enabled: Boolean(data?.recaptcha_enabled),
         siteKey: data?.recaptcha_site_key || "",
       }))
-      .catch((error) => {
+      .catch(() => {
         configPromise = null;
-        throw new Error(CONFIG_ERROR, { cause: error });
+        return { enabled: false, siteKey: "" };
       });
   }
 
-  try {
-    const config = await configPromise;
-    return {
-      enabled: config.enabled,
-      siteKey: BUILD_SITE_KEY || config.siteKey,
-    };
-  } catch (error) {
-    if (BUILD_SITE_KEY) return { enabled: true, siteKey: BUILD_SITE_KEY };
-    throw error;
-  }
+  const config = await configPromise;
+  const siteKey = config.siteKey || BUILD_SITE_KEY;
+  return { enabled: Boolean(config.enabled && siteKey), siteKey };
 }
 
 function loadScript(siteKey) {
@@ -74,19 +63,17 @@ function loadScript(siteKey) {
 }
 
 export async function getRecaptchaToken(action) {
-  var _a, _b;
-  const { enabled, siteKey } = await resolveRecaptchaConfig();
-  
-  // Si reCAPTCHA no está habilitado en el servidor, retornar null inmediatamente
-  // sin intentar cargar el script (degradación graceful).
-  if (!enabled) return null;
-  
-  // Si hay site key build-time, usarlo; si no, lanzar error configuracional
-  if (!siteKey) throw new Error(SITE_KEY_ERROR);
+  try {
+    const { enabled, siteKey } = await resolveRecaptchaConfig();
+    if (!enabled || !siteKey) return null;
 
-  await loadScript(siteKey);
-  if (!window.grecaptcha?.execute) throw new Error(SCRIPT_ERROR);
+    await loadScript(siteKey);
+    if (!window.grecaptcha?.execute) return null;
 
-  await new Promise((resolve) => window.grecaptcha.ready(resolve));
-  return window.grecaptcha.execute(siteKey, { action });
+    await new Promise((resolve) => window.grecaptcha.ready(resolve));
+    const token = await window.grecaptcha.execute(siteKey, { action });
+    return token || null;
+  } catch {
+    return null;
+  }
 }

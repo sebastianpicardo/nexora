@@ -32,6 +32,8 @@ export default function CompraAgilPanel() {
   }, [load]);
 
   const opportunities = data?.opportunities || [];
+  const catalogMatches = data?.catalog_matches || [];
+  const mode = data?.mode || "manual";
 
   async function importFile() {
     if (!file) return;
@@ -83,8 +85,10 @@ export default function CompraAgilPanel() {
         </div>
 
         {error ? <div className="alert error">{error}</div> : null}
-        <div className={`radar-mode ${data?.mode === "api" ? "api" : "manual"}`}>
-          <strong>{data?.mode === "api" ? "API conectada" : "Modo manual"}</strong>
+        <div className={`radar-mode ${mode === "api" ? "api" : "manual"}`}>
+          <strong>
+            {mode === "api" ? "API conectada" : mode === "catalog" ? "Coincidencias en catálogo" : "Modo manual"}
+          </strong>
           <span>{data?.message}</span>
         </div>
 
@@ -108,16 +112,48 @@ export default function CompraAgilPanel() {
 
         {loading && !data ? <p className="muted small">Cargando oportunidades…</p> : null}
 
-        {!loading && opportunities.length === 0 ? (
+        {!loading && opportunities.length === 0 && catalogMatches.length === 0 ? (
           <div className="audit-empty">
             <SearchIcon />
             <h3>Sin oportunidades cargadas</h3>
             <p>
               Importa un CSV o configura COMPRA_AGIL_API_URL y COMPRA_AGIL_API_KEY para consultar
-              la API. También se pueden realizar búsquedas públicas de ChileCompra.
+              la API. También puedes buscar por producto para ver coincidencias en tu catálogo.
             </p>
           </div>
-        ) : (
+        ) : null}
+
+        {catalogMatches.length > 0 ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Producto en tu catálogo</th>
+                  <th>Proveedor</th>
+                  <th className="right">Mejor precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalogMatches.map((row, index) => (
+                  <tr key={`${row.sku || row.product}-${index}`}>
+                    <td className="mono">{row.sku || "—"}</td>
+                    <td>
+                      <strong>{row.product}</strong>
+                      <div className="muted small">{row.unit}</div>
+                    </td>
+                    <td>{row.supplier || "—"}</td>
+                    <td className="right mono">
+                      {row.price != null ? formatMoney(row.price, "CLP") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {opportunities.length > 0 ? (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -159,7 +195,7 @@ export default function CompraAgilPanel() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </section>
 
       {selected ? (

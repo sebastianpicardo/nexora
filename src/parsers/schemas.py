@@ -166,6 +166,9 @@ class NormalizationResult:
     model: str = ""
     usage: dict[str, int] | None = None
     warnings: list[str] = field(default_factory=list)
+    extraction_source: str = RESOLUTION_INTERNAL
+    fallback_reason: str | None = None
+    ai_used: bool = False
 
     @property
     def token_usage(self) -> dict[str, int] | None:

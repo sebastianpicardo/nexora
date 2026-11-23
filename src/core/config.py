@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     database_url: str = ""
+    migration_database_url: str = ""
+    direct_database_url: str = ""
 
     supabase_url: str = ""
     supabase_service_role_key: str = ""
@@ -218,8 +220,20 @@ class Settings(BaseSettings):
         return {email.strip().lower() for email in self.super_admin_emails.split(",") if email.strip()}
 
     @property
+    def ddl_database_url(self) -> str:
+        """URL con privilegios de DDL para migraciones.
+
+        Preferimos MIGRATION_DATABASE_URL/DIRECT_DATABASE_URL (rol dueño de la base).
+        Si no existen, usamos DATABASE_URL como último recurso.
+        """
+        for candidate in (self.migration_database_url, self.direct_database_url, self.database_url):
+            if candidate and candidate.strip():
+                return candidate.strip()
+        return ""
+
+    @property
     def recaptcha_enabled(self) -> bool:
-        return bool(self.recaptcha_secret_key.strip())
+        return bool(self.recaptcha_secret_key.strip() and self.recaptcha_site_key.strip())
 
     @property
     def email_enabled(self) -> bool:

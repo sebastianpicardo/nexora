@@ -895,9 +895,30 @@ async def seed_demo_data(
     user: dict = Depends(require_roles("owner", "admin")),
 ):
     async with get_pool().connection() as conn:
-        existing = await repositories.get_document_by_hash(conn, user["org_id"], f"demo-{user['org_id']}-0")
-        if existing is not None:
-            return {"success": True, "already_seeded": True, "document_id": str(existing["id"])}
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT count(*) AS total FROM documents_log "
+                "WHERE org_id = %s AND file_hash LIKE %s",
+                (str(user["org_id"]), f"demo-{user['org_id']}-%"),
+            )
+            demo_document_count = int((await cur.fetchone() or {}).get("total") or 0)
+
+        if demo_document_count >= months:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT id FROM documents_log WHERE org_id = %s AND file_hash = %s",
+                    (str(user["org_id"]), f"demo-{user['org_id']}-0"),
+                )
+                existing = await cur.fetchone()
+            return {
+                "success": True,
+                "already_seeded": True,
+                "document_id": str(existing["id"]) if existing else None,
+            }
+
+        # Semilla parcial o incompleta: limpiar restos demo antes de recrear.
+        if demo_document_count > 0:
+            await repositories.purge_demo_data(conn, user["org_id"])
 
         suppliers = []
         for name, tax_id in [

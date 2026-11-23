@@ -33,6 +33,14 @@ const FEATURES = [
   "Bandeja de excepciones con evidencia y revisión humana.",
 ];
 
+async function readRecaptchaToken(action) {
+  try {
+    return await getRecaptchaToken(action);
+  } catch {
+    return null;
+  }
+}
+
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 const STRENGTH_LABELS = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"];
 
@@ -140,10 +148,10 @@ export default function LoginPage({ error }) {
     setPending(true);
     try {
       if (mode === MODES.LOGIN) {
-        const recaptchaToken = await getRecaptchaToken("login");
+        const recaptchaToken = await readRecaptchaToken("login");
         await login({ email, password: form.password, recaptchaToken });
       } else if (mode === MODES.REGISTER) {
-        const recaptchaToken = await getRecaptchaToken("register");
+        const recaptchaToken = await readRecaptchaToken("register");
         await register({
           name: form.name.trim(),
           email,
@@ -151,7 +159,7 @@ export default function LoginPage({ error }) {
           recaptchaToken,
         });
       } else if (mode === MODES.FORGOT) {
-        const recaptchaToken = await getRecaptchaToken("forgot_password");
+        const recaptchaToken = await readRecaptchaToken("forgot_password");
         await forgotPassword({ email, recaptchaToken });
         setSuccess("Si el email existe, recibirás un enlace de recuperación.");
       } else if (mode === MODES.RESET) {

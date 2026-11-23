@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from psycopg.errors import InsufficientPrivilege
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -91,7 +92,7 @@ class SPAStaticFiles(StaticFiles):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    if settings.app_env.lower() != "Test":
+    if settings.app_env.lower() != "test":
         settings.validate_startup()
         try:
             pool = await open_pool()
@@ -169,6 +170,22 @@ def create_app() -> FastAPI:
                 "error": exc.message,
                 "code": exc.code,
                 "details": exc.details,
+            },
+        )
+
+    @app.exception_handler(InsufficientPrivilege)
+    async def insufficient_privilege_handler(request: Request, exc: InsufficientPrivilege):
+        logger.error("Permisos insuficientes en %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "La base de datos rechazó la operación por políticas de seguridad (RLS). "
+                    "Un administrador debe ejecutar database/migrations/020_rls_app_policies.sql "
+                    "como dueño de la base."
+                ),
+                "code": "database_rls_misconfigured",
             },
         )
 

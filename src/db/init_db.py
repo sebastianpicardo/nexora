@@ -26,26 +26,53 @@ def _migration_sort_key(filepath: Path) -> tuple[int, str]:
     return (num, filepath.name)
 
 
+def apply_schema(database_url: str | None = None) -> None:
+    """Aplica el schema base (idempotente) a la base indicada.
+
+    Útil para tests y para inicializar una base vacía con un rol dueño.
+    """
+    url = (database_url or settings.database_url or "").strip()
+    if not url:
+        print("⚠️  DATABASE_URL no configurada. Saltando schema base.")
+        return
+    if not SCHEMA_SQL.exists():
+        print(f"⚠️  No se encontró {SCHEMA_SQL}, saltando schema base.")
+        return
+    sql = SCHEMA_SQL.read_text(encoding="utf-8")
+    with psycopg.connect(url, autocommit=True, connect_timeout=20) as conn:
+        conn.pgconn.exec_(sql.encode("utf-8"))
+
+
 def apply_migrations() -> None:
     """Aplica todas las migraciones pendientes en orden numérico.
 
     Cada archivo SQL usa 'CREATE TABLE IF NOT EXISTS' y 'CREATE INDEX IF NOT EXISTS',
     por lo que son idempotentes y seguras para ejecutar sobre una BD ya inicializada.
     """
-    if not settings.database_url:
+    ddl_url = settings.ddl_database_url
+    if not ddl_url:
         print("⚠️  DATABASE_URL no configurada. Saltando aplicación de migraciones.")
         return
+
+    if ddl_url == settings.database_url and settings.database_url:
+        print(
+            "ℹ️  Aplicando migraciones con DATABASE_URL. Si el rol no es dueño de la base, "
+            "define MIGRATION_DATABASE_URL o DIRECT_DATABASE_URL con un rol privilegiado."
+        )
 
     # Aplicar schema base primero
     if SCHEMA_SQL.exists():
         try:
             sql = SCHEMA_SQL.read_text(encoding="utf-8")
-            with psycopg.connect(settings.database_url, autocommit=True, connect_timeout=20) as conn:
+            with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
                 conn.pgconn.exec_(sql.encode("utf-8"))
             print(f"✅ Schema base aplicado: {SCHEMA_SQL}")
         except Exception as exc:
-            print(f"❌ Error applying schema base: {exc}")
-            raise
+            print(
+                f"⚠️  No se pudo aplicar el schema base ({exc}). "
+                "Se continúa con las migraciones; si el rol no es dueño, ejecuta "
+                "database/schema.sql y database/migrations en el Supabase SQL Editor."
+            )
     else:
         print(f"⚠️  No se encontró {SCHEMA_SQL}, saltando schema base.")
 
@@ -62,7 +89,7 @@ def apply_migrations() -> None:
         migration_name = migration_path.name
         try:
             sql = migration_path.read_text(encoding="utf-8")
-            with psycopg.connect(settings.database_url, autocommit=True, connect_timeout=20) as conn:
+            with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
                 conn.pgconn.exec_(sql.encode("utf-8"))
             applied += 1
             print(f"✅ Migración aplicada: {migration_name}")
@@ -76,7 +103,14 @@ def apply_migrations() -> None:
                 print(f"🔁 Migración ya aplicada (skip): {migration_name}")
             else:
                 failed += 1
-                print(f"❌ Error applying migration {migration_name}: {error_msg}")
+                lower = error_msg.lower()
+                if "must be owner" in lower or "permission denied" in lower or "row-level security" in lower:
+                    print(
+                        f"⚠️  Migración {migration_name} requiere un rol privilegiado: "
+                        f"{error_msg}. Ejecútala como dueño de la base (Supabase SQL Editor)."
+                    )
+                else:
+                    print(f"❌ Error applying migration {migration_name}: {error_msg}")
                 # No levantamos el error para no bloquear el inicio si es no-crítico
 
     print(

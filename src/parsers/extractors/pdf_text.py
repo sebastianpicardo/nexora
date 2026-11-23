@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import unicodedata
 
 import pdfplumber
 
@@ -35,6 +36,128 @@ def _clean_money(text: str) -> float | None:
         return round(float(text), 4)
     except ValueError:
         return None
+
+
+def _parse_number(text: str | None) -> float | None:
+    """Convierte montos/cantidades es-CL (miles con '.' y decimales con ',') a float."""
+    if text is None:
+        return None
+    value = re.sub(r"[^\d.,-]", "", str(text))
+    if not value:
+        return None
+    has_dot = "." in value
+    has_comma = "," in value
+    if has_dot and has_comma:
+        if value.rfind(",") > value.rfind("."):
+            value = value.replace(".", "").replace(",", ".")
+        else:
+            value = value.replace(",", "")
+    elif has_comma:
+        if re.fullmatch(r"\d{1,3}(,\d{3})+", value):
+            value = value.replace(",", "")
+        else:
+            value = value.replace(",", ".")
+    elif has_dot and re.fullmatch(r"\d{1,3}(\.\d{3})+", value):
+        value = value.replace(".", "")
+    try:
+        return round(float(value), 4)
+    except ValueError:
+        return None
+
+
+def _normalize_cell(text: str | None) -> str:
+    raw = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode("ascii")
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", raw.lower()).split())
+
+
+TABLE_COLUMN_SYNONYMS: dict[str, set[str]] = {
+    "sku": {"sku", "codigo", "cod", "codigo producto", "cod producto"},
+    "description": {"descripcion", "producto", "detalle", "nombre", "nombre producto"},
+    "quantity": {"cantidad", "qty", "cant", "unidades"},
+    "unit": {"unidad", "unidad medida", "um", "und"},
+    "unit_price": {
+        "precio unitario",
+        "precio unit",
+        "precio unitivo",
+        "valor unitario",
+        "precio unitario clp",
+        "valor unit",
+        "precio",
+    },
+    "total": {"total", "total clp", "valor total", "subtotal", "subtotal clp"},
+}
+
+
+def _map_table_header(row: list[str | None]) -> dict[str, int]:
+    mapping: dict[str, int] = {}
+    for index, cell in enumerate(row):
+        normalized = _normalize_cell(cell)
+        if not normalized:
+            continue
+        for field, synonyms in TABLE_COLUMN_SYNONYMS.items():
+            if field not in mapping and normalized in synonyms:
+                mapping[field] = index
+                break
+    return mapping
+
+
+def _items_from_table(
+    table: list[list[str | None]],
+    page_number: int,
+    currency: str,
+) -> list[ExtractedItem]:
+    """Extrae ítems de una tabla estructurada detectada por pdfplumber."""
+    if not table:
+        return []
+    header_index = None
+    mapping: dict[str, int] = {}
+    for index, row in enumerate(table[:4]):
+        candidate = _map_table_header(row)
+        if "description" in candidate or "sku" in candidate:
+            header_index = index
+            mapping = candidate
+            break
+    if header_index is None or "description" not in mapping:
+        return []
+
+    def cell(row: list[str | None], field: str) -> str | None:
+        position = mapping.get(field)
+        if position is None or position >= len(row):
+            return None
+        value = row[position]
+        return str(value).strip() if value is not None else None
+
+    items: list[ExtractedItem] = []
+    for row in table[header_index + 1 :]:
+        description = cell(row, "description")
+        if not description:
+            continue
+        unit_price = _parse_number(cell(row, "unit_price"))
+        line_total = _parse_number(cell(row, "total"))
+        quantity = _parse_number(cell(row, "quantity"))
+        if unit_price is None and line_total is None:
+            continue
+        if quantity is None:
+            quantity = 1.0
+        if unit_price is None and line_total is not None and quantity:
+            unit_price = round(line_total / quantity, 4)
+        if line_total is None and unit_price is not None:
+            line_total = round(unit_price * quantity, 4)
+        items.append(
+            ExtractedItem(
+                description=description,
+                sku=cell(row, "sku"),
+                quantity=quantity,
+                unit=(cell(row, "unit") or "unidad").lower(),
+                unit_price=unit_price,
+                line_total=line_total,
+                currency=currency,
+                confidence=0.92,
+                evidence_text=" | ".join(str(value or "").strip() for value in row)[:500],
+                page=page_number,
+            )
+        )
+    return items
 
 
 def _parse_date(text: str) -> str | None:
@@ -150,6 +273,7 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
 
             page_texts = []
             table_sections = []
+            raw_tables: list[tuple[int, list[list[str | None]]]] = []
 
             for index, page in enumerate(pdf.pages):
                 text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
@@ -160,6 +284,7 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
                     formatted = _format_table(table)
                     if formatted:
                         table_sections.append(f"## Tabla {index + 1}.{table_index} (página {index + 1})\n{formatted}")
+                    raw_tables.append((index + 1, table))
 
                 if len(text.strip()) < 40:
                     # Página con poco texto, podría ser escaneada
@@ -182,8 +307,12 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
             elif "EUR" in combined.upper():
                 currency = "EUR"
 
-            # Extraer ítems
-            items = _extract_items(combined, currency)
+            # Extraer ítems: primero tablas estructuradas y luego heurística de líneas.
+            items: list[ExtractedItem] = []
+            for page_number, table in raw_tables:
+                items.extend(_items_from_table(table, page_number, currency))
+            if not items:
+                items = _extract_items(combined, currency)
 
             if not items:
                 return None  # No se pudieron extraer ítems, caer al LLM
@@ -205,11 +334,18 @@ def extract_pdf_text_document(content: bytes, filename: str) -> tuple[ExtractedD
             document_date = None
             if date_matches:
                 day, month, year = date_matches[0]
-                document_date = f"{year:04d}-{month:02d}-{day:02d}"
+                document_date = f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+
+            supplier_name = None
+            supplier_match = re.search(
+                r"proveedor\s*:\s*([^\n]+?)(?:\s+rut|\n|$)", combined, re.IGNORECASE
+            )
+            if supplier_match:
+                supplier_name = supplier_match.group(1).strip(" .-") or None
 
             extraction = ExtractedDocument(
                 doc_type="invoice",
-                supplier_name=None,
+                supplier_name=supplier_name,
                 supplier_tax_id=rut_info[0] if rut_info else None,
                 document_number=None,
                 document_date=document_date,

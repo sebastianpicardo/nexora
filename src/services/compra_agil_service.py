@@ -224,53 +224,37 @@ async def _fetch_from_api(search: str | None, limit: int) -> list[dict]:
                 if opportunity:
                     normalized.append(opportunity)
         return normalized
-    # Fallback: búsqueda en fuentes públicas (ChileCompra/Mercado Público) cuando no hay
-    # configuración de API. Esto permite búsquedas básicas sin requerir credenciales obligatorias.
-    return await _fetch_from_public_search(search, limit)
+    return []
 
 
-async def _fetch_from_public_search(search: str | None, limit: int) -> list[dict]:
-    """Búsqueda en fuentes públicas de ChileCompra cuando la API no está configurada."""
+async def _catalog_matches(user: dict, search: str | None, limit: int) -> list[dict]:
+    """Coincidencias en el catálogo de precios propio del cliente.
+
+    Permite que una búsqueda (p. ej. "tornillo") devuelva resultados útiles aunque
+    no exista una API externa configurada.
+    """
     if not search:
         return []
-
-    query = search.strip().lower()
-    results: list[dict] = []
-
-    # Fuentes públicas comunes de ChileCompra/Mercado Público
-    public_sources = [
-        "https://api.compraspublicas.cl/oportunidades",
-        "https://chilecompra.cl/api/oportunidades",
-    ]
-
-    # Intentar cada fuente pública
-    for base_url in public_sources:
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                params = {"q": query, "limit": str(limit)}
-                response = await client.get(base_url, params=params)
-                if response.status_code >= 400:
-                    continue
-                data = response.json()
-                if isinstance(data, list):
-                    for item in data[:limit]:
-                        normalized = _normalize_api_opportunity(item)
-                        if normalized:
-                            results.append(normalized)
-                elif isinstance(data, dict):
-                    raw_items = data.get("data") or data.get("items") or data.get("oportunidades") or []
-                    for item in raw_items[:limit]:
-                        normalized = _normalize_api_opportunity(item)
-                        if normalized:
-                            results.append(normalized)
-                if results:
-                    break  # Found results, stop trying other sources
-        except Exception:
-            continue
-
-    # Si no hay resultados de fuentes públicas, retornar lista vacía
-    # (el modo manual con CSV configurado seguirá estando disponible)
-    return results
+    currency = (user.get("default_currency") or "CLP").strip().upper()
+    rows = await _fetch_latest(user, 365, currency, search)
+    groups = _group_latest(rows)
+    matches: list[dict] = []
+    for (product_key, base_unit, _currency), group in groups.items():
+        cheapest = min(group, key=lambda row: _f(row["price"]))
+        price_date = cheapest.get("price_date")
+        matches.append(
+            {
+                "sku": cheapest.get("sku"),
+                "product": cheapest.get("description") or product_key,
+                "unit": base_unit,
+                "price": round(_f(cheapest["price"]), 2),
+                "supplier": cheapest.get("supplier_name"),
+                "price_date": price_date.isoformat() if hasattr(price_date, "isoformat") else price_date,
+                "source": "catalog",
+            }
+        )
+    matches.sort(key=lambda match: (match["price"] is None, match["product"] or ""))
+    return matches[:limit]
 
 
 async def _persist_opportunities(user: dict, opportunities: list[dict]) -> int:
@@ -356,16 +340,36 @@ async def list_opportunities(
             or needle in str(row["external_id"]).lower()
         ]
 
+    mode = "api" if configured and not api_error else "manual"
+    catalog_matches: list[dict] = []
+    if search and not rows:
+        try:
+            catalog_matches = await _catalog_matches(user, search, max(1, min(limit, 50)))
+        except Exception:
+            logger.warning("No se pudo buscar en el catálogo de precios", exc_info=True)
+        if catalog_matches:
+            mode = "catalog"
+
+    if api_error:
+        message = api_error
+    elif mode == "api":
+        message = "Radar conectado a la API de Compra Ágil."
+    elif mode == "catalog":
+        message = (
+            f"Sin oportunidades externas para «{search}». "
+            "Mostramos coincidencias de tu catálogo de precios."
+        )
+    else:
+        message = (
+            "Modo manual: carga un CSV de oportunidades o configura COMPRA_AGIL_API_URL y "
+            "COMPRA_AGIL_API_KEY."
+        )
+
     return {
         "configured": configured,
-        "mode": "api" if configured and not api_error else "manual",
-        "message": api_error
-        or (
-            "Radar conectado a la API de Compra Ágil."
-            if configured
-            else "Modo manual: carga un CSV de oportunidades o configura COMPRA_AGIL_API_URL y "
-            "COMPRA_AGIL_API_KEY."
-        ),
+        "mode": mode,
+        "message": message,
+        "catalog_matches": catalog_matches,
         "opportunities": [
             {
                 "external_id": row["external_id"],

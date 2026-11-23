@@ -591,6 +591,12 @@ def test_enterprise_suite_end_to_end(live_database):
         assert demo_radar.status_code == 200, demo_radar.text
         assert len(demo_radar.json()["opportunities"]) >= 2, demo_radar.text
 
+        demo_catalog = client.get("/api/compra-agil/opportunities?q=guantes")
+        assert demo_catalog.status_code == 200, demo_catalog.text
+        catalog_payload = demo_catalog.json()
+        assert catalog_payload["mode"] == "catalog", catalog_payload
+        assert catalog_payload["catalog_matches"], catalog_payload
+
         branding = client.patch(
             "/api/enterprise/branding",
             json={"brand_name": "NEXORA Demo", "brand_primary_color": "#0ea5e9"},

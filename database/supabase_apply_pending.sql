@@ -444,3 +444,53 @@ SELECT
           AND table_name = 'savings_tracking'
           AND column_name = 'evidence'
     ) AS savings_evidence_ok;
+
+-- ── RLS: política de aplicación (nexora_app) ─────────────────────────────────
+-- Garantiza acceso del rol de aplicación a toda tabla pública con RLS activo.
+-- Idempotente; debe ejecutarse como dueño de la base.
+DO $$
+DECLARE
+    table_name TEXT;
+    has_app BOOLEAN;
+BEGIN
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nexora_app') INTO has_app;
+    IF NOT has_app THEN
+        RAISE NOTICE 'Rol nexora_app no existe; nada que hacer.';
+        RETURN;
+    END IF;
+
+    GRANT USAGE ON SCHEMA public TO nexora_app;
+
+    FOR table_name IN
+        SELECT c.relname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relkind = 'r'
+          AND c.relrowsecurity
+        ORDER BY c.relname
+    LOOP
+        EXECUTE format(
+            'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO nexora_app',
+            table_name
+        );
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies p
+            WHERE p.schemaname = 'public'
+              AND p.tablename = table_name
+              AND p.policyname = 'nexora_app_all'
+        ) THEN
+            EXECUTE format(
+                'CREATE POLICY nexora_app_all ON public.%I FOR ALL TO nexora_app '
+                'USING (true) WITH CHECK (true)',
+                table_name
+            );
+        END IF;
+    END LOOP;
+
+    EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexora_app';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public '
+            'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO nexora_app';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public '
+            'GRANT USAGE, SELECT ON SEQUENCES TO nexora_app';
+END $$;
