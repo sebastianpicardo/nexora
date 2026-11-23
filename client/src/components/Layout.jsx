@@ -13,6 +13,7 @@ import {
   HelpIcon,
   LogoutIcon,
   ProfileIcon,
+  RocketIcon,
   SettingsIcon,
   SparkIcon,
   SuppliersIcon,
@@ -26,6 +27,7 @@ const NAV_SECTIONS = [
     label: "Operación",
     items: [
       { id: "dashboard", label: "Inicio", icon: DashboardIcon },
+      { id: "automation", label: "Automatización", icon: RocketIcon },
       { id: "audit-express", label: "Auditoría Express", icon: SparkIcon },
       { id: "purchases", label: "Bandeja de Compras", icon: DocumentsIcon },
       { id: "approvals-hub", label: "Aprobaciones", icon: CheckIcon },

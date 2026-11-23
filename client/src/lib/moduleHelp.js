@@ -1,4 +1,26 @@
 export const MODULE_HELP = {
+  automation: {
+    eyebrow: "Automatización",
+    title: "Pipeline automático de 1 clic",
+    purpose:
+      "Ejecuta en una sola corrida la extracción, la auditoría de fugas, los márgenes, la validación SII/RCV, la negociación y Compra Ágil sobre un documento nuevo o ya cargado.",
+    steps: [
+      "Sube un archivo o elige un documento de la lista: el pipeline parte solo o con un único botón.",
+      "Observa el avance por etapa y su origen: interno (0 tokens de IA) o fallback IA cuando fue necesario.",
+      "Revisa los KPIs en CLP y las pestañas de resultados sin salir de esta pantalla.",
+      "Descarga el reporte o abre el módulo de detalle; la corrida queda guardada para retomarla.",
+    ],
+    tips: [
+      "La IA solo se usa si el documento no puede resolverse con parsers deterministas y la organización lo autoriza.",
+      "Reutilizar un documento ya procesado no vuelve a consumir tokens ni genera duplicados.",
+      "Si una etapa no aplica o falla de forma controlada, queda marcada y el resto continúa.",
+    ],
+    related: [
+      { id: "audit-express", label: "Auditoría Express" },
+      { id: "margin-guardian", label: "Guardián de margen" },
+      { id: "compra-agil", label: "Radar Compra Ágil" },
+    ],
+  },
   dashboard: {
     eyebrow: "Inicio",
     title: "Resumen del día",

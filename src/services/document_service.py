@@ -25,7 +25,7 @@ def _json_safe(value: object) -> object:
     return value
 
 
-async def _process_claimed_document(doc: dict) -> None:
+async def _process_claimed_document(doc: dict, provider: object | None = None) -> None:
     org_id = doc["org_id"]
     document_id = doc["id"]
 
@@ -40,12 +40,12 @@ async def _process_claimed_document(doc: dict) -> None:
 
     try:
         file_bytes = await storage_service.read_document(doc["storage_path"])
-        result = await run_pipeline(
-            content=file_bytes,
-            filename=doc["original_filename"],
-            mime_type=doc["mime_type"],
-            doc_type_hint=doc["doc_type"],
-            org_settings={
+        pipeline_kwargs = {
+            "content": file_bytes,
+            "filename": doc["original_filename"],
+            "mime_type": doc["mime_type"],
+            "doc_type_hint": doc["doc_type"],
+            "org_settings": {
                 "price_spike_threshold_pct": float(org["price_spike_threshold_pct"]),
                 "min_confidence": float(org["min_confidence"]),
                 "default_currency": org["default_currency"],
@@ -53,8 +53,11 @@ async def _process_claimed_document(doc: dict) -> None:
                 "ai_images_enabled": bool(org.get("ai_images_enabled", True)),
                 "ai_text_max_chars": int(org.get("ai_text_max_chars") or 200_000),
             },
-            upload_date=upload_date,
-        )
+            "upload_date": upload_date,
+        }
+        if provider is not None:
+            pipeline_kwargs["provider"] = provider
+        result = await run_pipeline(**pipeline_kwargs)
     except Exception as exc:
         logger.exception("Error procesando documento %s", document_id)
         temporary = isinstance(exc, LLMTemporaryError) or (
@@ -273,13 +276,13 @@ async def _process_claimed_document(doc: dict) -> None:
             )
 
 
-async def process_document(document_id: UUID | str) -> None:
+async def process_document(document_id: UUID | str, provider: object | None = None) -> None:
     async with get_pool().connection() as conn:
         doc = await repositories.claim_document_by_id(conn, document_id)
     if not doc:
         logger.info("Documento %s no está en cola; se omite", document_id)
         return
-    await _process_claimed_document(doc)
+    await _process_claimed_document(doc, provider=provider)
 
 
 async def process_pending_once() -> bool:
@@ -292,23 +295,35 @@ async def process_pending_once() -> bool:
     return True
 
 
-async def reprocess_failed_document(document_id: UUID | str) -> dict:
-    """Reprocesa un documento que falló usando el motor determinista actual.
+async def reprocess_failed_document(
+    document_id: UUID | str,
+    provider: object | None = None,
+) -> dict:
+    """Reprocesa un documento que falló volviendo a encolarlo.
 
     Esta función es útil cuando un documento falló por error de IA (ej. 503 Gemini)
     y se quiere intentar con el extractor determinista pdfplumber + reglas,
     que no consume tokens de IA.
     """
     async with get_pool().connection() as conn:
-        doc = await repositories.claim_document_by_id(conn, document_id)
-    if not doc:
-        return {"success": False, "error": "Documento no encontrado o ya procesado"}
-
-    # Forzar reprocesamiento: resetear status a 'queued' y limpiar error previo
-    await repositories.reset_document_for_reprocess(conn, org_id=doc["org_id"], document_id=document_id)
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT org_id, status FROM documents_log WHERE id = %s",
+                (str(document_id),),
+            )
+            existing = await cur.fetchone()
+        if existing is None:
+            return {"success": False, "error": "Documento no encontrado"}
+        if existing["status"] == "processing":
+            return {"success": False, "error": "El documento ya se está procesando"}
+        await repositories.reset_document_for_reprocess(
+            conn,
+            org_id=existing["org_id"],
+            document_id=document_id,
+        )
 
     # Ejecutar el pipeline - el patrón deterministic-first asegura que si el PDF
     # tiene texto seleccionable, se extraiga sin consumir tokens de IA
-    await _process_claimed_document(doc)
+    await process_document(document_id, provider=provider)
 
     return {"success": True, "message": "Documento reprocesado con motor determinista"}

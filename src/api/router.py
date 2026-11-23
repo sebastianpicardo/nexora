@@ -7,6 +7,7 @@ from src.api.routes import (
     alerts,
     assistant,
     auth,
+    automation,
     backup,
     billing,
     compra_agil,
@@ -30,6 +31,7 @@ from src.api.routes import (
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
+api_router.include_router(automation.router)
 api_router.include_router(profile.router)
 api_router.include_router(organizations.router)
 api_router.include_router(team.router)

@@ -14,6 +14,12 @@ from src.db.repositories.auth_tokens import (
     get_auth_token,
     invalidate_auth_tokens,
 )
+from src.db.repositories.automation import (
+    create_automation_run,
+    get_automation_run,
+    list_automation_runs,
+    update_automation_run,
+)
 from src.db.repositories.billing import (
     apply_subscription_payment,
     cancel_subscription,
@@ -174,6 +180,10 @@ from src.db.repositories.users import (
 from src.db.seeding import ensure_default_plans
 
 __all__ = [
+    "create_automation_run",
+    "get_automation_run",
+    "list_automation_runs",
+    "update_automation_run",
     "analytics_overview",
     "approval_queue",
     "auto_approve_items",

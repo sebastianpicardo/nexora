@@ -18,6 +18,7 @@ import ApprovalsHubPage from "./pages/ApprovalsHubPage";
 import IntelligencePage from "./pages/IntelligencePage";
 import DirectoryPage from "./pages/DirectoryPage";
 import AuditExpressPage from "./pages/AuditExpressPage";
+import AutomationPage from "./pages/AutomationPage";
 
 const DEFAULT_TABS = {
   purchases: "documents",
@@ -170,6 +171,7 @@ export default function App() {
         />
       );
     }
+    if (view === "automation") return <AutomationPage onNavigate={navigate} />;
     if (view === "audit-express") return <AuditExpressPage onNavigate={navigate} />;
     if (view === "enterprise") return <EnterprisePage onNavigate={navigate} />;
     if (view === "integrations") return <NativeIntegrationsPage />;

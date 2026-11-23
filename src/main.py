@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from psycopg.errors import InsufficientPrivilege
+from psycopg.errors import InsufficientPrivilege, UndefinedTable
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -186,6 +186,22 @@ def create_app() -> FastAPI:
                     "como dueño de la base."
                 ),
                 "code": "database_rls_misconfigured",
+            },
+        )
+
+    @app.exception_handler(UndefinedTable)
+    async def undefined_table_handler(request: Request, exc: UndefinedTable):
+        logger.error("Tabla faltante en %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "La base de datos no tiene el esquema más reciente. "
+                    "Un administrador debe aplicar las migraciones pendientes "
+                    "(database/migrations, incluida 021_automation_runs.sql)."
+                ),
+                "code": "database_schema_outdated",
             },
         )
 
