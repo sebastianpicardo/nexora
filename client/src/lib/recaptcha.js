@@ -74,8 +74,14 @@ function loadScript(siteKey) {
 }
 
 export async function getRecaptchaToken(action) {
+  var _a, _b;
   const { enabled, siteKey } = await resolveRecaptchaConfig();
+  
+  // Si reCAPTCHA no está habilitado en el servidor, retornar null inmediatamente
+  // sin intentar cargar el script (degradación graceful).
   if (!enabled) return null;
+  
+  // Si hay site key build-time, usarlo; si no, lanzar error configuracional
   if (!siteKey) throw new Error(SITE_KEY_ERROR);
 
   await loadScript(siteKey);
