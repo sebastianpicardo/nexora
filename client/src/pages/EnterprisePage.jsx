@@ -17,13 +17,13 @@ import {
 const CURRENCIES = ["CLP", "USD", "EUR", "PEN", "COP", "MXN", "BRL", "ARS"];
 
 const TABS = [
-  { id: "roi", label: "ROI ejecutivo", icon: SparkIcon },
-  { id: "scorecards", label: "Proveedores", icon: CheckIcon },
+  { id: "roi", label: "Impacto ejecutivo", icon: SparkIcon },
+  { id: "scorecards", label: "Scorecard proveedores", icon: CheckIcon },
   { id: "alerts", label: "Alertas", icon: BellIcon },
-  { id: "integrations", label: "Integraciones", icon: ArrowRightIcon },
   { id: "security", label: "Seguridad y push", icon: ShieldIcon },
   { id: "branding", label: "White-label", icon: SparkIcon },
   { id: "onboarding", label: "Onboarding", icon: CheckIcon },
+  { id: "integrations", label: "Avanzado", icon: ArrowRightIcon },
 ];
 
 const STEP_TARGETS = {
@@ -67,7 +67,7 @@ function useCurrency(defaultCurrency) {
   return [currency, setCurrency];
 }
 
-function RoiTab() {
+function RoiTab({ onNavigate }) {
   const { organization } = useAuth();
   const [currency, setCurrency] = useCurrency(organization?.default_currency);
   const [roi, setRoi] = useState(null);
@@ -114,6 +114,9 @@ function RoiTab() {
           title="Reporte ejecutivo de ROI"
           description="Ahorro capturado, exposición pendiente y eficiencia operativa de los últimos 6 meses."
         >
+          <button type="button" className="button ghost small" onClick={() => onNavigate?.("analytics")}>
+            Ver analítica completa
+          </button>
           <label className="page-size">
             <span>Moneda</span>
             <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
@@ -193,7 +196,7 @@ function RoiTab() {
   );
 }
 
-function ScorecardsTab() {
+function ScorecardsTab({ onNavigate }) {
   const { organization } = useAuth();
   const [currency, setCurrency] = useCurrency(organization?.default_currency);
   const [items, setItems] = useState([]);
@@ -227,6 +230,9 @@ function ScorecardsTab() {
         title="Scorecard de proveedores"
         description="Ranking por confianza, incidencias y ahorro capturado."
       >
+        <button type="button" className="button ghost small" onClick={() => onNavigate?.("suppliers")}>
+          Gestionar proveedores en Directorio
+        </button>
         <label className="page-size">
           <span>Moneda</span>
           <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
@@ -729,7 +735,16 @@ function IntegrationsTab() {
       {success ? <div className="alert success">{success}</div> : null}
 
       <section className="card">
-        <SectionHead title="Integraciones" description="ERP, SII, ChileCompra y conectores genéricos." />
+        <SectionHead
+          title="Configuración técnica avanzada"
+          description="Conectores ERP/SII, API keys, webhooks y correo entrante. Todo es opcional: NEXORA ya funciona sin esta configuración."
+        />
+        <div className="result-note">
+          <p>
+            No necesitas configurar nada aquí para usar NEXORA. Este apartado existe solo para
+            equipos que quieren integrar NEXORA con sistemas externos mediante API u otros canales.
+          </p>
+        </div>
         <form className="enterprise-inline-form" onSubmit={createIntegration}>
           <label className="form-field">
             <span>Proveedor</span>
@@ -1185,35 +1200,44 @@ function SecurityTab() {
               />
               <span>Autorizar envío de documentos a proveedores de IA</span>
             </label>
-            <label className="form-field checkbox-field">
-              <input
-                type="checkbox"
-                checked={form.ai_images_enabled}
-                onChange={(event) => setForm((current) => ({ ...current, ai_images_enabled: event.target.checked }))}
-              />
-              <span>Enviar imágenes de páginas a la IA</span>
-            </label>
-            <label className="form-field">
-              <span>Máximo de texto enviado a IA (caracteres)</span>
-              <input
-                type="number"
-                min="1000"
-                max="200000"
-                value={form.ai_text_max_chars}
-                onChange={(event) => setForm((current) => ({ ...current, ai_text_max_chars: event.target.value }))}
-              />
-            </label>
-            <label className="form-field">
-              <span>Retención de datos IA (días)</span>
-              <input
-                type="number"
-                min="1"
-                max="3650"
-                value={form.ai_data_retention_days}
-                onChange={(event) => setForm((current) => ({ ...current, ai_data_retention_days: event.target.value }))}
-              />
-            </label>
           </div>
+          <details className="advanced-options">
+            <summary>Opciones avanzadas de IA (opcional)</summary>
+            <p className="muted small">
+              NEXORA procesa XML DTE, Excel, CSV y RCV de forma determinística sin IA. Ajusta estos
+              parámetros solo si usas extracción con IA en PDF no estructurados o imágenes.
+            </p>
+            <div className="form-grid">
+              <label className="form-field checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={form.ai_images_enabled}
+                  onChange={(event) => setForm((current) => ({ ...current, ai_images_enabled: event.target.checked }))}
+                />
+                <span>Enviar imágenes de páginas a la IA</span>
+              </label>
+              <label className="form-field">
+                <span>Máximo de texto enviado a IA (caracteres)</span>
+                <input
+                  type="number"
+                  min="1000"
+                  max="200000"
+                  value={form.ai_text_max_chars}
+                  onChange={(event) => setForm((current) => ({ ...current, ai_text_max_chars: event.target.value }))}
+                />
+              </label>
+              <label className="form-field">
+                <span>Retención de datos IA (días)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="3650"
+                  value={form.ai_data_retention_days}
+                  onChange={(event) => setForm((current) => ({ ...current, ai_data_retention_days: event.target.value }))}
+                />
+              </label>
+            </div>
+          </details>
           <div className="form-actions">
             <button type="button" className="button ghost" onClick={purgeAudit} disabled={pending}>
               Depurar auditoría antigua
@@ -1561,7 +1585,11 @@ export default function EnterprisePage({ onNavigate }) {
         <div>
           <div className="eyebrow"><SparkIcon /> Suite Enterprise</div>
           <h2>Inteligencia y control</h2>
-          <p>ROI, proveedores, alertas, integraciones, seguridad y white-label en un solo lugar.</p>
+          <p>
+            NEXORA funciona sin configuración técnica: la IA se aplica de forma automática solo
+            cuando hace falta. API keys, webhooks y parámetros avanzados están en la sección
+            «Avanzado», lejos del flujo diario.
+          </p>
         </div>
       </section>
 
@@ -1580,8 +1608,8 @@ export default function EnterprisePage({ onNavigate }) {
           ))}
         </nav>
         <div className="settings-content">
-          {tab === "roi" ? <RoiTab /> : null}
-          {tab === "scorecards" ? <ScorecardsTab /> : null}
+          {tab === "roi" ? <RoiTab onNavigate={onNavigate} /> : null}
+          {tab === "scorecards" ? <ScorecardsTab onNavigate={onNavigate} /> : null}
           {tab === "alerts" ? <AlertsTab /> : null}
           {tab === "integrations" ? <IntegrationsTab /> : null}
           {tab === "security" ? <SecurityTab /> : null}

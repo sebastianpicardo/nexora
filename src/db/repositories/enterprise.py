@@ -239,6 +239,7 @@ async def list_supplier_scorecards(
                 LEFT JOIN item_stats st ON st.supplier_id = s.id
                 LEFT JOIN exception_stats ex ON ex.supplier_id = s.id
                 WHERE s.org_id = %s
+                  AND s.name NOT ILIKE 'nexora%%'
             )
             SELECT
                 id, name, documents, items, spend, avg_confidence,

@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api, downloadFile } from "../lib/api";
+import { formatMoney } from "../lib/format";
 import {
   ArrowRightIcon,
-  BellIcon,
   CheckIcon,
-  ClockIcon,
   DocumentsIcon,
   HistoryIcon,
-  LockIcon,
   SearchIcon,
   SuppliersIcon,
   XIcon,
-  TrashIcon,
 } from "../components/Icons";
 
 const PROVIDERS = [
   {
     id: "chilecompra",
-    name: "Compra Ágil (ChileCompra)",
+    name: "Compra Ágil · ChileCompra",
     icon: SearchIcon,
-    description: "Radar de oportunidades públicas de hasta 100 UTM. Usa la API configurada o carga un CSV; nunca mostramos datos inventados.",
+    description:
+      "Revisa oportunidades públicas reales de hasta 100 UTM, cargadas desde la API o importadas por CSV. Nunca mostramos datos inventados.",
     color: "#10b981",
     maturity: "operativo",
     actions: [
@@ -29,63 +27,28 @@ const PROVIDERS = [
   },
   {
     id: "sii",
-    name: "SII",
+    name: "SII · Validación de RUT",
     icon: CheckIcon,
-    description: "Valida el dígito verificador del RUT de tus proveedores. No consulta datos tributarios reales.",
+    description:
+      "Valida el dígito verificador de cualquier RUT chileno y consulta el historial real de ese proveedor en tu organización.",
     color: "#059669",
     maturity: "operativo",
     actions: [
       { id: "validate_rut", label: "Validar RUT", primary: true, icon: CheckIcon },
-      { id: "fetch_invoices", label: "Facturas electrónicas", icon: DocumentsIcon },
-      { id: "reconcile", label: "Conciliar documentos", icon: CheckIcon },
     ],
   },
   {
     id: "erp",
     name: "ERP / Contabilidad",
     icon: ArrowRightIcon,
-    description: "Exporta proveedores, órdenes de compra y facturas a CSV real, listo para importar a tu sistema.",
+    description:
+      "Exporta proveedores, órdenes de compra y facturas a CSV real, listo para importar a tu sistema.",
     color: "#0f766e",
     maturity: "operativo",
     actions: [
       { id: "sync_suppliers", label: "Exportar proveedores", primary: true, icon: SuppliersIcon },
       { id: "send_approval", label: "Exportar órdenes", icon: ArrowRightIcon },
       { id: "import_invoices", label: "Exportar facturas", icon: DocumentsIcon },
-    ],
-  },
-  {
-    id: "slack",
-    name: "Slack / Notificaciones",
-    icon: BellIcon,
-    description: "Prepara avisos de compras pendientes y aprobaciones para compartir con tu equipo.",
-    color: "#3b82f6",
-    maturity: "proximamente",
-    actions: [
-      { id: "notify", label: "Notificar al equipo", primary: true, icon: BellIcon },
-      { id: "approve_from_slack", label: "Aprobar compra", icon: CheckIcon },
-    ],
-  },
-  {
-    id: "webhook",
-    name: "Webhooks",
-    icon: ArrowRightIcon,
-    description: "Genera payloads para conectar NEXORA con otros sistemas de tu empresa.",
-    color: "#6366f1",
-    maturity: "a_medida",
-    actions: [
-      { id: "send_event", label: "Enviar evento", primary: true, icon: ArrowRightIcon },
-    ],
-  },
-  {
-    id: "google_workspace",
-    name: "Google Workspace",
-    icon: LockIcon,
-    description: "Guarda documentos y accede con tu cuenta de Google de la empresa.",
-    color: "#7c3aed",
-    maturity: "proximamente",
-    actions: [
-      { id: "save_drive", label: "Guardar en Drive", primary: true, icon: DocumentsIcon },
-      { id: "sso_login", label: "Iniciar sesión con Google", icon: LockIcon },
     ],
   },
 ];
@@ -98,7 +61,6 @@ const MATURITY_LABELS = {
 
 const HISTORY_STORAGE_PREFIX = "nexora.search_history";
 const HISTORY_LIMIT = 20;
-const RUT_RE = /^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$/;
 
 function historyConfig(entry) {
   const data = entry?.result_data || {};
@@ -176,8 +138,9 @@ function RutValidator({ running, disabled, onValidate }) {
       setError("Ingresa el RUT que quieres validar.");
       return;
     }
-    if (!RUT_RE.test(value)) {
-      setError("Formato esperado: 12.345.678-9.");
+    const clean = value.replace(/[^0-9kK]/g, "").toUpperCase();
+    if (clean.length < 2 || clean.length > 9) {
+      setError("Ingresa un RUT válido. Acepta puntos, guion y K mayúscula o minúscula.");
       return;
     }
     setError("");
@@ -194,7 +157,7 @@ function RutValidator({ running, disabled, onValidate }) {
             inputMode="text"
             value={rut}
             onChange={(event) => setRut(event.target.value)}
-            placeholder="Ej: 76.123.456-7"
+            placeholder="Ej: 76.123.456-7 o 76123456K"
             aria-label="RUT del proveedor"
           />
           <button type="submit" className="button primary" disabled={running || disabled}>
@@ -202,7 +165,9 @@ function RutValidator({ running, disabled, onValidate }) {
             {running ? "Validando..." : "Validar RUT"}
           </button>
         </div>
-        <p className="muted small">Valida el dígito verificador y el formato chileno.</p>
+        <p className="muted small">
+          Acepta cualquier formato: 12.345.678-9, 12345678-9, 123456789 o 12345678K.
+        </p>
       </label>
       {error ? <div className="integration-error">{error}</div> : null}
     </form>
@@ -352,21 +317,6 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
   const isItems = action.id === "search_items";
   const isSuppliers = action.id === "search_suppliers";
 
-  // Precargar de la búsqueda más reciente si existe
-  useEffect(() => {
-    const latest = recentSearches[0];
-    if (latest && isItems && !query) {
-      const config = historyConfig(latest);
-      setQuery(config.query || "");
-      setMode(config.mode || "all");
-    }
-    if (latest && isSuppliers && !supplierName) {
-      const config = historyConfig(latest);
-      setSupplierName(config.name || "");
-      setOrderBy(config.order_by || "ranking");
-    }
-  }, [recentSearches, isItems, isSuppliers, query, supplierName]);
-
   return (
     <div className="integration-modal-overlay" onClick={onClose}>
       <div className="integration-modal" onClick={(e) => e.stopPropagation()}>
@@ -467,7 +417,122 @@ function IntegrationConfigModal({ provider, action, recentSearches, onClose, onR
   );
 }
 
-function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory }) {
+function SiiResult({ result }) {
+  const supplier = result.supplier;
+  const stats = result.stats || {};
+  const currency = result.currency || "CLP";
+  const recent = result.recent_documents || [];
+  const rcv = result.rcv_documents || [];
+  const valid = Boolean(result.valido);
+
+  return (
+    <div className="stack">
+      <div className="result-summary">
+        <span className={`badge ${valid ? "status-approved" : "status-rejected"}`}>
+          {result.estado || (valid ? "RUT válido" : "RUT inválido")}
+        </span>{" "}
+        <strong className="mono">{result.rut_formatted || result.rut || "—"}</strong>
+      </div>
+
+      {supplier ? (
+        <div className="enterprise-metrics">
+          <div className="enterprise-metric">
+            <span>Proveedor</span>
+            <strong>{supplier.name || "—"}</strong>
+            <small>{supplier.email || "Sin email registrado"}</small>
+          </div>
+          <div className="enterprise-metric">
+            <span>RUT registrado</span>
+            <strong className="mono">{supplier.tax_id || "—"}</strong>
+            <small>{supplier.created_at ? `Registrado el ${String(supplier.created_at).slice(0, 10)}` : ""}</small>
+          </div>
+        </div>
+      ) : (
+        <div className="result-note">
+          <p>
+            Este RUT no está registrado como proveedor en tu organización. Puedes agregarlo desde el
+            módulo Directorio o subir un documento que lo incluya.
+          </p>
+        </div>
+      )}
+
+      <div className="enterprise-metrics">
+        <div className="enterprise-metric">
+          <span>Documentos</span>
+          <strong>{stats.documents ?? 0}</strong>
+        </div>
+        <div className="enterprise-metric">
+          <span>Ítems</span>
+          <strong>{stats.items ?? 0}</strong>
+        </div>
+        <div className="enterprise-metric">
+          <span>Gasto acumulado</span>
+          <strong>{formatMoney(stats.spend || 0, currency)}</strong>
+        </div>
+        <div className="enterprise-metric">
+          <span>Última compra</span>
+          <strong>{stats.last_purchase || "—"}</strong>
+        </div>
+      </div>
+
+      {recent.length > 0 ? (
+        <div className="result-table-wrap">
+          <h4>Documentos recientes</h4>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Folio / Archivo</th>
+                <th>Tipo</th>
+                <th>Fecha</th>
+                <th className="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map((d, i) => (
+                <tr key={i}>
+                  <td className="mono">{d.folio || d.original_filename || "—"}</td>
+                  <td>{d.doc_type || "—"}</td>
+                  <td>{d.document_date || "—"}</td>
+                  <td className="right mono">{d.total ? d.total : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {rcv.length > 0 ? (
+        <div className="result-table-wrap">
+          <h4>RCV de compras</h4>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Tipo</th>
+                <th>Período</th>
+                <th className="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rcv.map((r, i) => (
+                <tr key={i}>
+                  <td className="mono">{r.folio || "—"}</td>
+                  <td>{r.tipo_doc || "—"}</td>
+                  <td>{r.period || "—"}</td>
+                  <td className="right mono">{formatMoney(r.total_amount || 0, r.currency || currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      <p className="muted small">{result.note}</p>
+    </div>
+  );
+}
+
+function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory, onNavigate }) {
   const resultados = result.results || [];
   const invoices = result.invoices || [];
 
@@ -504,174 +569,106 @@ function IntegrationResultModal({ result, onClose, onViewHistory, onSaveHistory 
           </button>
         </div>
         <div className="modal-body">
-          <div className="result-summary">
-            <strong>Acción:</strong> {result.action}
-            {result.query ? " · Filtro: \"" + result.query + "\"" : ""}
-            {result.mode ? " · Modo: " + (result.mode === "cheapest" ? "Mejores precios" : "Todos") : ""}
-            {result.order_by ? " · Orden: " + result.order_by : ""}
-            {result.total !== undefined && <strong> · Total: {result.total}</strong>}
-          </div>
+          {result.action === "validate_rut" ? (
+            <SiiResult result={result} />
+          ) : (
+            <>
+              <div className="result-summary">
+                <strong>Acción:</strong> {result.action}
+                {result.query ? " · Filtro: \"" + result.query + "\"" : ""}
+                {result.mode ? " · Modo: " + (result.mode === "cheapest" ? "Mejores precios" : "Todos") : ""}
+                {result.order_by ? " · Orden: " + result.order_by : ""}
+                {result.total !== undefined ? " · Total: " + result.total : ""}
+              </div>
 
-          {resultados.length > 0 ? (
-            <div className="result-table-wrap">
-              {resultados[0].external_id ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Oportunidad</th>
-                      <th>Comprador</th>
-                      <th>Cierre</th>
-                      <th>Ítems</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((r, i) => (
-                      <tr key={i}>
-                        <td className="mono">{r.external_id || "—"}</td>
-                        <td>{r.title || "—"}</td>
-                        <td>{r.buyer || "—"}</td>
-                        <td>{r.closes_at || "—"}</td>
-                        <td>{r.item_count ?? "—"}</td>
+              {resultados.length > 0 ? (
+                <div className="result-table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Oportunidad</th>
+                        <th>Comprador</th>
+                        <th>Cierre</th>
+                        <th>Ítems</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : resultados[0].rut ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Proveedor</th>
-                      <th>RUT</th>
-                      <th>Región</th>
-                      <th>Confianza</th>
-                      <th>Ranking</th>
-                      <th>Precio promedio</th>
-                      <th>Quejas</th>
-                      <th>Contacto</th>
-                      <th>Teléfono</th>
-                      <th>Email</th>
-                      <th>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((r, i) => (
-                      <tr key={i}>
-                        <td>{r.name || "—"}</td>
-                        <td className="mono">{r.rut || "—"}</td>
-                        <td>{r.region || "—"}</td>
-                        <td>{r.confianza ?? "—"}</td>
-                        <td>{r.ranking ?? "—"}</td>
-                        <td className="mono">${Number(r.precio_promedio ?? 0).toLocaleString("es-CL")}</td>
-                        <td>{r.quejas ?? "—"}</td>
-                        <td>{r.contacto || "—"}</td>
-                        <td className="mono">{r.telefono || "—"}</td>
-                        <td>{r.email || "—"}</td>
-                        <td>{r.estado || "—"}</td>
+                    </thead>
+                    <tbody>
+                      {resultados.map((r, i) => (
+                        <tr key={i}>
+                          <td className="mono">{r.external_id || "—"}</td>
+                          <td>{r.title || "—"}</td>
+                          <td>{r.buyer || "—"}</td>
+                          <td>{r.closes_at || "—"}</td>
+                          <td>{r.item_count ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="muted small">{result.note || `${resultados.length} oportunidad(es) reales de Compra Ágil.`}</p>
+                </div>
+              ) : invoices.length > 0 ? (
+                <div className="result-table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Monto</th>
+                        <th>Estado</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {invoices.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.folio || r.id || "—"}</td>
+                          <td>{r.fecha || "—"}</td>
+                          <td className="mono">{r.monto || "—"}</td>
+                          <td>{r.estado || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Ítem</th>
-                      <th>Categoría</th>
-                      <th>Unidad</th>
-                      <th>Precio ref.</th>
-                      <th>Proveedor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((r, i) => (
-                      <tr key={i}>
-                        <td>{r.item || "—"}</td>
-                        <td>{r.categoria || "—"}</td>
-                        <td>{r.unit || "—"}</td>
-                        <td className="mono">${Number(r.precio ?? 0).toLocaleString("es-CL")}</td>
-                        <td>{r.proveedor || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              <p className="muted small">
-                {result.note || "Datos de demostración. No son cotizaciones oficiales de ChileCompra."}
-              </p>
-            </div>
-          ) : invoices.length > 0 ? (
-            <div className="result-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Folio</th>
-                    <th>Fecha</th>
-                    <th>Monto</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.folio || r.id || "—"}</td>
-                      <td>{r.fecha || "—"}</td>
-                      <td className="mono">{r.monto || "—"}</td>
-                      <td>{r.estado || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {(result.file || result.archivo || result.download_url) && (
-            <div className="result-file">
-              <strong>Archivo listo:</strong> {result.filename || result.file || result.archivo}
-              <p className="muted small">{result.note || ""}</p>
-              {result.download_url && (
-                <button
-                  type="button"
-                  className="button primary"
-                  onClick={() =>
-                    downloadFile(
-                      result.download_url,
-                      result.filename || "exportacion_nexora.csv",
-                    )
-                  }
-                >
-                  Descargar CSV
-                </button>
-              )}
-            </div>
-          )}
-
-          {!result.file && !result.download_url && !resultados.length && !invoices.length && (
-            <div className="result-note">
-              <p>{result.note || result.mensaje || "Ejecutado correctamente."}</p>
-              {result.payload && (
-                <div className="result-payload">
-                  <strong>Payload:</strong>
-                  <pre>{JSON.stringify(result.payload, null, 2)}</pre>
+                <div className="result-note">
+                  <p>{result.note || result.mensaje || "Sin resultados para esta búsqueda."}</p>
+                  {result.action === "search_items" && onNavigate ? (
+                    <button
+                      type="button"
+                      className="button ghost"
+                      onClick={() => {
+                        onClose();
+                        onNavigate("compra-agil");
+                      }}
+                    >
+                      <SearchIcon /> Abrir Radar Compra Ágil para importar oportunidades
+                    </button>
+                  ) : null}
                 </div>
               )}
-              {!result.payload && (
-                <div className="result-details">
-                  {Object.entries(result).map(([key, value]) => {
-                    const skip = ["provider", "action", "note", "mensaje", "payload", "results", "invoices", "file", "archivo", "filename", "download_url", "rows", "query", "mode", "order_by", "name", "total"];
-                    if (skip.includes(key) || value === undefined || value === null) return null;
-                    const label = key
-                      .replace(/([A-Z])/g, " $1")
-                      .replace(/^./, (str) => str.toUpperCase());
-                    return (
-                      <div key={key} className="result-detail-row">
-                        <strong>{label}:</strong> {String(value)}
-                      </div>
-                    );
-                  })}
+
+              {(result.file || result.archivo || result.download_url) && (
+                <div className="result-file">
+                  <strong>Archivo listo:</strong> {result.filename || result.file || result.archivo}
+                  <p className="muted small">{result.note || ""}</p>
+                  {result.download_url && (
+                    <button
+                      type="button"
+                      className="button primary"
+                      onClick={() =>
+                        downloadFile(
+                          result.download_url,
+                          result.filename || "exportacion_nexora.csv",
+                        )
+                      }
+                    >
+                      Descargar CSV
+                    </button>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
         {saveError ? <div className="integration-error">{saveError}</div> : null}
@@ -912,7 +909,7 @@ function SearchHistoryModal({ history, onClose, onLoadHistory }) {
   );
 }
 
-export default function NativeIntegrationsPage() {
+export default function NativeIntegrationsPage({ onNavigate }) {
   const { user } = useAuth();
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1009,19 +1006,13 @@ export default function NativeIntegrationsPage() {
           <div className="eyebrow">Integraciones nativas</div>
           <h2>Conecta tus herramientas</h2>
           <p>
-            Usa hoy las integraciones operativas y planifica las que requieren configuración a
-            medida. Las marcadas como Próximamente no ejecutan acciones todavía.
+            Valida RUT, revisa oportunidades reales de Compra Ágil y exporta datos a tu ERP.
+            Todo funciona desde el primer día, sin configuración técnica obligatoria.
           </p>
         </div>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
-
-      <div className="integration-legend">
-        <span><i className="badge maturity-operativo">Operativo</i> Lista para usar hoy.</span>
-        <span><i className="badge maturity-a_medida">A medida</i> Requiere configuración o exportación manual.</span>
-        <span><i className="badge maturity-proximamente">Próximamente</i> Visible para planificación.</span>
-      </div>
 
       {loading ? (
         <div className="empty-state">Cargando integraciones…</div>
@@ -1097,6 +1088,7 @@ export default function NativeIntegrationsPage() {
         <IntegrationResultModal
           result={openResult}
           onClose={() => setOpenResult(null)}
+          onNavigate={onNavigate}
           onViewHistory={() =>
             setOpenHistory(
               searchHistory.filter(

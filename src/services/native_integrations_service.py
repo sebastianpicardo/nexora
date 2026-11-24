@@ -77,8 +77,6 @@ def _default_actions(provider: str) -> list[dict]:
         ],
         "sii": [
             {"id": "validate_rut", "label": "Validar formato de RUT", "icon": "CheckIcon", "primary": True},
-            {"id": "fetch_invoices", "label": "Obtener facturas electrónicas", "icon": "DocumentsIcon"},
-            {"id": "reconcile", "label": "Conciliar documentos", "icon": "CheckIcon"},
         ],
         "erp": [
             {"id": "sync_suppliers", "label": "Exportar proveedores (CSV)", "icon": "SuppliersIcon", "primary": True},
@@ -99,7 +97,6 @@ def _default_actions(provider: str) -> list[dict]:
     }.get(provider, [])
     disabled_actions = {
         "chilecompra": {"search_suppliers", "import_order"},
-        "sii": {"fetch_invoices", "reconcile"},
         "slack": {"notify", "approve_from_slack"},
         "webhook": {"send_event"},
         "google_workspace": {"save_drive", "sso_login"},
@@ -109,9 +106,29 @@ def _default_actions(provider: str) -> list[dict]:
     return base
 
 
+def _rut_clean(rut: str) -> str:
+    """Normaliza cualquier formato de RUT chileno a cuerpo+DV en mayúsculas, sin separadores."""
+    return re.sub(r"[^0-9kK]", "", str(rut or "")).upper()
+
+
+def _format_rut_chileno(rut: str) -> str:
+    """Formatea un RUT en estilo chileno: 12.345.678-9."""
+    clean = _rut_clean(rut)
+    if len(clean) < 2:
+        return str(rut or "").strip()
+    cuerpo, dv = clean[:-1], clean[-1]
+    cuerpo = cuerpo.lstrip("0") or "0"
+    groups: list[str] = []
+    while len(cuerpo) > 3:
+        groups.insert(0, cuerpo[-3:])
+        cuerpo = cuerpo[:-3]
+    groups.insert(0, cuerpo)
+    return f"{'.'.join(groups)}-{dv}"
+
+
 def _validar_rut_chileno(rut: str) -> bool:
     """Valida un RUT chileno con su dígito verificador real (módulo 11)."""
-    clean = re.sub(r"[^0-9kK]", "", str(rut or "")).upper()
+    clean = _rut_clean(rut)
     if len(clean) < 2 or len(clean) > 9:
         return False
     cuerpo, dv = clean[:-1], clean[-1]
@@ -207,21 +224,135 @@ async def chilecompra_import_order(user: dict, payload: dict) -> dict[str, Any]:
 # ---- Acciones SII (sin credenciales, validación de formato y referencia) ----
 
 async def sii_validate_rut(user: dict, payload: dict) -> dict[str, Any]:
-    rut = payload.get("rut") or ""
+    rut = str(payload.get("rut") or "").strip()
+    normalized = _rut_clean(rut)
     es_valido = _validar_rut_chileno(rut) if rut else False
-    async with get_pool().connection() as conn:
-        await _audit(conn, user, "integration.sii.validate_rut", "integration", "sii", {"rut": rut})
+    rut_formatted = _format_rut_chileno(rut) if normalized else ""
+    if not rut:
+        estado = "Sin RUT"
+    elif es_valido:
+        estado = "Formato válido"
+    else:
+        estado = "Formato inválido"
+
+    supplier: dict[str, Any] | None = None
+    stats: dict[str, Any] = {"documents": 0, "items": 0, "spend": 0.0, "last_purchase": None}
+    recent_documents: list[dict[str, Any]] = []
+    rcv_documents: list[dict[str, Any]] = []
+
+    if normalized:
+        async with get_pool().connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT id, name, email, tax_id, created_at
+                    FROM suppliers
+                    WHERE org_id = %s
+                      AND regexp_replace(upper(coalesce(tax_id, '')), '[^0-9K]', '', 'g') = %s
+                    LIMIT 1
+                    """,
+                    (user["org_id"], normalized),
+                )
+                supplier = await cur.fetchone()
+                if supplier:
+                    await cur.execute(
+                        """
+                        SELECT count(DISTINCT i.document_id) AS documents,
+                               count(*) AS items,
+                               coalesce(sum(
+                                   coalesce(i.normalized_unit_price, 0) * coalesce(i.quantity, 0)
+                               ), 0) AS spend,
+                               max(i.price_date) AS last_purchase
+                        FROM items_history i
+                        WHERE i.org_id = %s AND i.supplier_id = %s
+                          AND i.review_status <> 'rejected'
+                        """,
+                        (user["org_id"], supplier["id"]),
+                    )
+                    row = await cur.fetchone() or {}
+                    stats = {
+                        "documents": int(row.get("documents") or 0),
+                        "items": int(row.get("items") or 0),
+                        "spend": float(row.get("spend") or 0),
+                        "last_purchase": (
+                            str(row["last_purchase"]) if row.get("last_purchase") else None
+                        ),
+                    }
+                    await cur.execute(
+                        """
+                        SELECT d.original_filename,
+                               d.doc_type,
+                               d.status,
+                               coalesce(d.metadata->>'document_number', '') AS folio,
+                               coalesce(
+                                   d.metadata->>'document_date',
+                                   to_char(d.created_at, 'YYYY-MM-DD')
+                               ) AS document_date,
+                               coalesce(d.metadata->>'total', '') AS total,
+                               d.created_at
+                        FROM documents_log d
+                        WHERE d.org_id = %s AND d.supplier_id = %s
+                        ORDER BY d.created_at DESC
+                        LIMIT 5
+                        """,
+                        (user["org_id"], supplier["id"]),
+                    )
+                    recent_documents = [dict(r) for r in await cur.fetchall()]
+
+                await cur.execute(
+                    """
+                    SELECT folio, tipo_doc, supplier_name, period,
+                           total_amount, currency
+                    FROM rcv_documents
+                    WHERE org_id = %s
+                      AND regexp_replace(upper(coalesce(rut_emisor, '')), '[^0-9K]', '', 'g') = %s
+                    ORDER BY period DESC, folio DESC
+                    LIMIT 5
+                    """,
+                    (user["org_id"], normalized),
+                )
+                rcv_documents = [
+                    {
+                        "folio": r["folio"],
+                        "tipo_doc": r["tipo_doc"],
+                        "supplier_name": r["supplier_name"],
+                        "period": str(r["period"]) if r["period"] else None,
+                        "total_amount": float(r["total_amount"]) if r["total_amount"] else 0.0,
+                        "currency": r["currency"],
+                    }
+                    for r in await cur.fetchall()
+                ]
+
+            await _audit(conn, user, "integration.sii.validate_rut", "integration", "sii", {"rut": rut})
+
     return {
         "provider": "sii",
         "action": "validate_rut",
         "rut": rut,
+        "rut_formatted": rut_formatted,
         "valido": es_valido,
-        "estado": "Formato válido" if es_valido else "Formato inválido",
+        "estado": estado,
+        "supplier": (
+            {
+                "name": supplier["name"],
+                "email": supplier["email"],
+                "tax_id": supplier["tax_id"],
+                "created_at": str(supplier["created_at"]) if supplier.get("created_at") else None,
+            }
+            if supplier
+            else None
+        ),
+        "stats": stats,
+        "recent_documents": recent_documents,
+        "rcv_documents": rcv_documents,
         "giro": None,
         "direccion": None,
         "simulated": False,
-        "source": "Validación local del dígito verificador",
-        "note": "Solo valida el formato del RUT. No consulta datos tributarios reales del SII.",
+        "source": "Validación local del dígito verificador + historial de tu organización",
+        "note": (
+            "Validamos el dígito verificador y mostramos el historial real registrado en tu "
+            "organización para ese RUT. No consultamos datos tributarios en línea del SII."
+        ),
     }
 
 

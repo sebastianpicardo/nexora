@@ -10217,3 +10217,37 @@ body.modal-open {
   letter-spacing: 0.04em;
   vertical-align: middle;
 }
+
+/* --- Integraciones: modal opaco y legible --- */
+.integration-modal-overlay {
+  background: rgba(5, 8, 14, 0.72);
+}
+
+.integration-modal {
+  background: #0f172a;
+  border-color: var(--line-strong);
+}
+
+/* --- Marca: evita texto pegado NEXORACompras auditadas --- */
+.brand-preview > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* --- Opciones avanzadas (Enterprise) --- */
+.advanced-options {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+.advanced-options > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+.advanced-options[open] > summary {
+  margin-bottom: 8px;
+}
