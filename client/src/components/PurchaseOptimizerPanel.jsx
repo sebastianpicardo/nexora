@@ -40,6 +40,14 @@ export default function PurchaseOptimizerPanel() {
     return Array.from(names).sort();
   }, [cart, items]);
 
+  const supplierIsDemo = useMemo(() => {
+    const map = {};
+    for (const name of suppliers) {
+      map[name] = name.toLowerCase().includes("demo");
+    }
+    return map;
+  }, [suppliers]);
+
   function addProduct() {
     const match = items.find((item) => (item.sku || item.product) === selected);
     if (!match || cart.some((line) => line.key === (match.sku || match.product))) return;
@@ -53,7 +61,7 @@ export default function PurchaseOptimizerPanel() {
         quantity: 1,
       },
     ]);
-    setSelected("");
+    setSelected(match.sku || match.product);
     setResult(null);
   }
 
@@ -203,9 +211,9 @@ export default function PurchaseOptimizerPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {suppliers.map((supplier) => (
+{suppliers.map((supplier) => (
                     <tr key={supplier}>
-                      <td>{supplier}</td>
+                      <td>{supplier}{supplierIsDemo[supplier] && <span className="badge badge-demo">DEMO</span>}</td>
                       <td className="right">
                         <input
                           className="quantity-input"
@@ -213,15 +221,16 @@ export default function PurchaseOptimizerPanel() {
                           min="0"
                           value={settings[supplier]?.freight ?? ""}
                           onChange={(event) => updateSetting(supplier, "freight", event.target.value)}
+                          disabled={supplierIsDemo[supplier]}
                         />
                       </td>
                       <td className="right">
                         <input
                           className="quantity-input"
                           type="number"
-                          min="0"
                           value={settings[supplier]?.min_order ?? ""}
                           onChange={(event) => updateSetting(supplier, "min_order", event.target.value)}
+                          disabled={supplierIsDemo[supplier]}
                         />
                       </td>
                     </tr>

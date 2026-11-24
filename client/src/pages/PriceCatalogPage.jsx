@@ -325,7 +325,7 @@ export default function PriceCatalogPage({ embedded = false, onUpload }) {
                         {formatNumber(item.margin_pct, 1)}%
                       </span>
                     </td>
-                    <td>{item.supplier_name || "—"}</td>
+                    <td>{item.supplier_name || "—"}{item.supplier_name && item.supplier_name.toLowerCase().includes("demo") && <span className="badge badge-demo">DEMO</span>}</td>
                     <td>
                       <span className={`badge ${item.active ? "status-active" : "status-inactive"}`}>
                         {item.active ? "Activo" : "Inactivo"}

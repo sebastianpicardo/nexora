@@ -22,6 +22,7 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
   const [savingsSummary, setSavingsSummary] = useState({});
   const [trackingKey, setTrackingKey] = useState("");
   const [savingsError, setSavingsError] = useState("");
+  const [demoNotice, setDemoNotice] = useState("");
 
   useEffect(() => {
     if (organization?.default_currency) setCurrency(organization.default_currency);
@@ -47,6 +48,13 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  const handleDemoLoaded = useCallback(async () => {
+    await load();
+    setDemoNotice(
+      "Datos de ejemplo cargados: 90 días de compras demo con sobrecostos y ahorro recuperable ya disponibles.",
+    );
   }, [load]);
 
   const loadSavings = useCallback(async () => {
@@ -155,6 +163,14 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
         </div>
       ) : null}
       {savingsError ? <div className="alert error">{savingsError}</div> : null}
+      {demoNotice ? (
+        <div className="alert success">
+          <span>{demoNotice}</span>
+          <button type="button" className="button ghost small" onClick={() => setDemoNotice("")}>
+            Cerrar
+          </button>
+        </div>
+      ) : null}
 
       {!loading && !hasData ? (
         <ActionEmptyState
@@ -162,7 +178,7 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
           title="Descubre tu primer ahorro con datos reales"
           description="Sube una factura para comparar precios entre proveedores y ver cuánto puedes ahorrar. También puedes explorar la vista con datos de demostración."
           onUpload={onUpload}
-          onLoaded={load}
+          onLoaded={handleDemoLoaded}
         />
       ) : null}
 
@@ -171,7 +187,7 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
           compact
           title="Aún hay pocos ítems para comparar"
           description="Con más compras registradas podremos detectar mejores oportunidades. También puedes cargar datos demo para explorar la vista completa."
-          onLoaded={load}
+          onLoaded={handleDemoLoaded}
         />
       ) : null}
 
@@ -260,7 +276,7 @@ export default function OpportunitiesPage({ embedded = false, onUpload }) {
             title="No se detectaron sobreprecios"
             description="Sube más documentos o ajusta la ventana y el umbral para encontrar oportunidades. También puedes cargar datos de demostración."
             onUpload={onUpload}
-            onLoaded={load}
+            onLoaded={handleDemoLoaded}
           />
         ) : (
           <div className="table-wrapper">

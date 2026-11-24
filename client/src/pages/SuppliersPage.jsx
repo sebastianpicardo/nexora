@@ -21,8 +21,13 @@ export default function SuppliersPage({ embedded = false, onUpload }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
-      const data = await api(`/api/suppliers?search=${encodeURIComponent(search)}`);
+      const params = new URLSearchParams();
+      if (search && search.trim().length >= 2) {
+        params.set("search", search);
+      }
+      const data = await api(`/api/suppliers${params.toString()}`);
       setSuppliers(data.items || []);
     } catch (err) {
       setError(err.message || "No se pudieron cargar los proveedores.");
@@ -161,6 +166,17 @@ export default function SuppliersPage({ embedded = false, onUpload }) {
 
         {loading ? (
           <div className="empty-state">Cargando proveedores…</div>
+        ) : suppliers.length === 0 && search.trim().length >= 2 ? (
+          <div className="empty-state-card">
+            <div className="empty-state-icon">
+              <SearchIcon />
+            </div>
+            <h3>No encontramos proveedores para “{search}”</h3>
+            <p>Prueba con otro nombre o RUT, o limpia la búsqueda para ver todos.</p>
+            <button type="button" className="button ghost" onClick={() => setSearch("")}>
+              Limpiar búsqueda
+            </button>
+          </div>
         ) : suppliers.length === 0 ? (
           <ActionEmptyState
             icon={<SuppliersIcon />}
@@ -185,7 +201,7 @@ export default function SuppliersPage({ embedded = false, onUpload }) {
               <tbody>
                 {suppliers.map((s) => (
                   <tr key={s.id}>
-                    <td>{s.name}</td>
+                    <td>{s.name}{s.name.toLowerCase().includes("demo") && <span className="badge badge-demo">DEMO</span>}</td>
                     <td className="mono">{s.tax_id || "—"}</td>
                     <td>{s.email || "—"}</td>
                     <td>{formatDate(s.created_at)}</td>

@@ -17,6 +17,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
   const [verified, setVerified] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [demoNotice, setDemoNotice] = useState("");
 
   useEffect(() => {
     if (organization?.default_currency) setCurrency(organization.default_currency);
@@ -43,6 +44,13 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  const handleDemoLoaded = useCallback(async () => {
+    await load();
+    setDemoNotice(
+      "Datos de ejemplo cargados: 90 días de compras demo con proveedores, precios y márgenes ya disponibles en las métricas.",
+    );
   }, [load]);
 
   const analytics = data?.analytics;
@@ -105,6 +113,15 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
         </div>
       ) : null}
 
+      {demoNotice ? (
+        <div className="alert success">
+          <span>{demoNotice}</span>
+          <button type="button" className="button ghost small" onClick={() => setDemoNotice("")}>
+            Cerrar
+          </button>
+        </div>
+      ) : null}
+
       {data?.warnings?.length ? (
         <div className="alert warning">
           <span>{data.warnings.join(" ")}</span>
@@ -124,7 +141,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
               : "Sube una factura para ver gasto, precios y ahorro potencial sin planillas. También puedes explorar la vista completa con datos de demostración."
           }
           onUpload={onUpload}
-          onLoaded={load}
+          onLoaded={handleDemoLoaded}
         />
       ) : null}
 
@@ -149,7 +166,7 @@ export default function AnalyticsPage({ onNavigate, embedded = false, onUpload }
                   ? "Aún sin sobrecostos: requiere compras repetidas del mismo producto en distintos documentos. También puedes cargar el ejemplo de 90 días."
                   : "Requiere al menos 3 meses de historial del mismo producto para proyectar. También puedes cargar el ejemplo de 90 días."
           }
-          onLoaded={load}
+          onLoaded={handleDemoLoaded}
         />
       ) : null}
 

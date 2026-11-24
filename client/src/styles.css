@@ -10152,3 +10152,68 @@ body.modal-open {
   overflow-wrap: normal;
   white-space: nowrap;
 }
+
+/* --- Buscador de Proveedores / Catálogo (modo oscuro coherente) --- */
+.search-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(7, 11, 18, 0.62);
+  color: var(--ink);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.search-input:focus-within {
+  border-color: rgba(16, 185, 129, 0.6);
+  background: rgba(7, 11, 18, 0.78);
+}
+
+.search-input svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.search-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.85rem;
+  padding: 0;
+  text-overflow: ellipsis;
+}
+
+.search-input input::placeholder {
+  color: rgba(148, 163, 184, 0.65);
+}
+
+.search-input input[type="search"]::-webkit-search-cancel-button {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+/* --- Etiqueta de datos de demostración --- */
+.badge-demo {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
