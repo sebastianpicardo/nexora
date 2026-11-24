@@ -17,11 +17,31 @@ import LeakAuditCard from "../components/LeakAuditCard";
 import SavingsSpotlight from "../components/SavingsSpotlight";
 import { DocumentsIcon, ExceptionsIcon, PricesIcon, SparkIcon, SuppliersIcon, CheckIcon } from "../components/Icons";
 
-const DASHBOARD_STEPS = [
-  { id: 1, label: "Sube tus cotizaciones" },
-  { id: 2, label: "Revisa alertas de sobreprecio" },
-  { id: 3, label: "Aprueba la compra" },
-];
+const getDashboardSteps = (summary, totalSavings, savingsRate) => {
+  const hasExceptions =
+    summary?.exceptions_pending > 0 || summary?.price_alerts_pending > 0;
+  const hasSavings = totalSavings > 0;
+
+  return [
+    {
+      id: 1,
+      label: hasSavings
+        ? `Revisar KPIs y ahorro ${savingsRate > 0 ? `(${savingsRate}% ahorro)` : ''}`
+        : "Revisar KPIs y ahorro por recuperar",
+    },
+    {
+      id: 2,
+      label:
+        hasExceptions
+          ? "Revisar alertas de Requiere tu revisión (pendientes)"
+          : "Revisar alertas de Requiere tu revisión",
+    },
+    {
+      id: 3,
+      label: "Monitorear completitud SII",
+    },
+  ];
+};
 
 export default function DashboardPage({ onNavigate, onUpload }) {
   const { organization, billing, canOperate } = useAuth();
@@ -123,7 +143,10 @@ export default function DashboardPage({ onNavigate, onUpload }) {
   return (
     <div className="page-stack">
       <AppBanner onNavigate={onNavigate} onUpload={canOperate ? onUpload : undefined} />
-      <QuickGuide steps={DASHBOARD_STEPS} activeStep={1} />
+      <QuickGuide
+      steps={getDashboardSteps(summary?.total_savings ?? 0, detectedSavings ?? 0, savingsRate ?? 0)}
+      activeStep={1}
+/>
       <SavingsSpotlight
         summary={summary}
         currency={activeCurrency}

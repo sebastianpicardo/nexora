@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 
 from psycopg.rows import dict_row
@@ -23,7 +22,49 @@ async def open_pool() -> AsyncConnectionPool:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL no configurada.")
 
-    if sys.platform == "win32" and isinstance(asyncio.get_running_loop(), asyncio.ProactorEventLoop):
+    if settings.APP_ENV == "test" and settings.database_url.startswith("sqlite://"):
+        # Modo prueba con SQLite: crear un pool ligero que usa sqlite3 por hilo.
+        import sqlite3  # stdlib, ya disponible
+
+        class _SqliteConnection:
+            def __init__(self, db_path: str):
+                self._conn = sqlite3.connect(db_path)
+                self._conn.row_factory = sqlite3.Row
+
+            async def fetchone(self, query: str, *args):
+                loop = asyncio.get_running_loop()  # noqa
+                return await loop.run_in_executor(None, self._conn.execute, query, *args).fetchone()
+
+            async def execute(self, query: str, *args):
+                loop = asyncio.get_running_loop()  # noqa
+                return await loop.run_in_executor(None, self._conn.execute, query, *args)
+
+            async def fetchall(self, query: str, *args):
+                loop = asyncio.get_running_loop()  # noqa
+                return await loop.run_in_executor(None, self._conn.execute, query, *args).fetchall()
+
+            async def close(self):
+                self._conn.close()
+
+        class _SqlitePool:
+            def __init__(self, url: str):
+                self._url = url
+                # extraer ruta del archivo
+                self._db_path = url.replace("sqlite:///", "").replace("//", "") or ":memory:"
+                self._conn = _SqliteConnection(self._db_path)
+
+            async def connection(self):
+                # devuelve un context manager async que yields the connection object
+                return self._conn
+
+            async def close(self):
+                await self._conn.close()
+
+        _pool = _SqlitePool(settings.database_url)
+        logger.info("Pool SQLite inicializado en modo test")
+        return _pool
+
+    if sys.platform == "win32" and isinstance(asyncio.get_running_loop(), asyncio.ProactorEventLoop):  # noqa
         raise RuntimeError(
             "psycopg async no soporta ProactorEventLoop en Windows. "
             "Usa 'python scripts/dev_server.py' para la API o 'python -m src.worker' para el worker."
@@ -37,7 +78,6 @@ async def open_pool() -> AsyncConnectionPool:
         timeout=15,
         kwargs={
             "row_factory": dict_row,
-            # Necesario con el pooler de Supabase (PgBouncer en modo transaction).
             "prepare_threshold": None,
             "application_name": "nexora-api",
         },

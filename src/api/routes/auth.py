@@ -213,9 +213,9 @@ async def login(
     response: Response,
 ) -> MeResponse:
     await auth_attempt_limiter(request, payload.email)
-    # Verificar reCAPTCA solo si está configurado; si no, degradar gracefully
-    # para permitir login con email/password sin bloqueos de CSP o tokens.
-    if settings.recaptcha_enabled:
+    # Verificar reCAPTCHA solo si está configurado y viene token; si no,
+    # degradar gracefully para permitir login con email/password sin bloqueos.
+    if settings.recaptcha_enabled and payload.recaptcha_token:
         await verify_recaptcha(
             payload.recaptcha_token,
             remote_ip=_client_ip(request),

@@ -80,7 +80,8 @@ class TestDashboardQuickGuide:
         # Wait for dashboard panel
         expect(page.get_by_role("heading", name="Requiere")).to_be_visible()
         # The guide tip we added should be present
-        expect(page.get_by_text("Revisa la bandeja de excepciones para actuar antes de que afecten el margen")).to_be_visible(timeout=5000)
+        txt = "Revisa la bandeja de excepciones para actuar antes de que afecten el margen"
+        expect(page.get_by_text(txt)).to_be_visible(timeout=5000)
 
 
 class TestAutomationPage:
