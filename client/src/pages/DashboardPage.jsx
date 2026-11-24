@@ -342,9 +342,7 @@ export default function DashboardPage({ onNavigate, onUpload }) {
               </div>
 <ExceptionsTable
                   exceptions={summary?.pending_exceptions || []}
-                  onResolve={canOperate && selected?.id
-                    ? () => onNavigate("exceptions")
-                    : undefined}
+                  onResolve={canOperate ? () => onNavigate("exceptions") : undefined}
                   compact
                 />
             </section>
