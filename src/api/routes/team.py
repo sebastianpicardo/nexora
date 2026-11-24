@@ -15,6 +15,7 @@ from src.schemas.team import (
     MemberUpdateRequest,
     TeamMemberOut,
     TeamResponse,
+    TeamUsage,
 )
 from src.services import email_service
 
@@ -39,13 +40,40 @@ def _invitation_out(row: dict) -> InvitationOut:
     )
 
 
+async def _team_usage(conn, org_id, members: list[dict], invitations: list[dict]) -> TeamUsage:
+    """Calcula el uso de asientos del plan: miembros activos + invitaciones pendientes."""
+    active = sum(1 for member in members if member.get("active"))
+    pending = len(invitations)
+    subscription = await repositories.get_subscription(conn, org_id)
+    if subscription is None:
+        await repositories.ensure_subscription(conn, org_id)
+        subscription = await repositories.get_subscription(conn, org_id)
+    user_limit = subscription.get("user_limit") if subscription else None
+    plan_name = subscription.get("plan_name") if subscription else None
+    unlimited = user_limit is None
+    used = active + pending
+    remaining = None if unlimited else max(int(user_limit) - used, 0)
+    at_limit = (not unlimited) and used >= int(user_limit)
+    return TeamUsage(
+        members_active=active,
+        invitations_pending=pending,
+        user_limit=user_limit,
+        remaining=remaining,
+        unlimited=unlimited,
+        at_limit=at_limit,
+        plan_name=plan_name,
+    )
+
+
 async def _team_response(conn, user: dict) -> TeamResponse:
     members = await repositories.list_users(conn, user["org_id"])
     invitations = await repositories.list_invitations(conn, user["org_id"]) if is_org_admin(user) else []
+    usage = await _team_usage(conn, user["org_id"], members, invitations)
     return TeamResponse(
         members=[TeamMemberOut.model_validate(row) for row in members],
         invitations=[_invitation_out(row) for row in invitations],
         permissions={"can_manage": is_org_admin(user)},
+        usage=usage,
     )
 
 
@@ -73,6 +101,19 @@ async def invite_member(
         pending = await repositories.get_pending_by_email(conn, user["org_id"], payload.email)
         if pending is not None:
             raise HTTPException(status_code=409, detail="Ya existe una invitación pendiente para ese email")
+
+        members = await repositories.list_users(conn, user["org_id"])
+        invitations = await repositories.list_invitations(conn, user["org_id"])
+        usage = await _team_usage(conn, user["org_id"], members, invitations)
+        if not usage.unlimited and usage.at_limit:
+            plan_label = f" {usage.plan_name}" if usage.plan_name else ""
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Alcanzaste el límite de {usage.user_limit} usuario(s) del plan{plan_label}. "
+                    "Actualiza tu plan en «Planes y precios» para invitar a más personas."
+                ),
+            )
 
         row = await repositories.create_invitation(
             conn,

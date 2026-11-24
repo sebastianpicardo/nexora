@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import date
 from uuid import UUID
 
@@ -81,6 +82,7 @@ def _plan_out(row: dict) -> PlanOut:
         price_monthly=float(row["price_monthly"]),
         currency=row["currency"],
         document_limit=row["document_limit"],
+        user_limit=row.get("user_limit"),
         features=list(row["features"] or []),
         sort_order=row["sort_order"],
     )
@@ -116,6 +118,17 @@ async def list_plans():
     async with get_pool().connection() as conn:
         rows = await repositories.list_plans(conn)
         return [_plan_out(row) for row in rows]
+
+
+@router.get("/config")
+async def billing_config():
+    """Indica el proveedor de pagos y si está en modo test o producción."""
+    provider = (settings.payment_provider or "mock").strip().lower()
+    return {
+        "provider": provider,
+        "test_mode": provider == "mock",
+        "production": settings.is_production,
+    }
 
 
 @router.get("/summary", response_model=BillingSummary)
@@ -154,6 +167,67 @@ async def checkout(
             metadata={"provider": session["provider"], "session_id": session["session_id"]},
         )
     return CheckoutOut(**session)
+
+
+@router.post("/checkout/confirm", response_model=BillingSummary)
+async def confirm_checkout(
+    payload: CheckoutRequest,
+    user: dict = Depends(require_roles("owner", "admin")),
+):
+    """Confirma el pago en modo test y activa el plan de inmediato.
+
+    En producción con pasarela real (Stripe / MercadoPago / Flow) la activación
+    ocurre únicamente mediante el webhook firmado del proveedor; aquí se rechaza
+    para no permitir activaciones sin pago confirmado.
+    """
+    provider = (settings.payment_provider or "mock").strip().lower()
+    if settings.is_production and provider != "mock":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "La activación del plan se confirma automáticamente al completar el pago "
+                "en la pasarela."
+            ),
+        )
+    async with get_pool().connection() as conn:
+        plan = await repositories.get_plan(conn, payload.plan_id)
+        if plan is None:
+            raise HTTPException(status_code=404, detail="Plan no encontrado")
+        await repositories.apply_subscription_payment(
+            conn,
+            org_id=str(user["org_id"]),
+            plan_id=payload.plan_id,
+            status="active",
+            provider=provider,
+            customer_id=None,
+            external_subscription_id=None,
+            period_end=None,
+        )
+        await repositories.create_invoice(
+            conn,
+            org_id=user["org_id"],
+            provider=provider,
+            provider_invoice_id=str(uuid.uuid4()),
+            amount=float(plan["price_monthly"]),
+            currency=plan["currency"],
+            status="paid",
+            period_start=None,
+            period_end=None,
+            metadata={
+                "mode": "test" if provider == "mock" else "live",
+                "plan_id": payload.plan_id,
+            },
+        )
+        await repositories.record_audit_event(
+            conn,
+            org_id=user["org_id"],
+            user_id=user["id"],
+            action="billing.checkout_confirm",
+            entity_type="plan",
+            entity_id=payload.plan_id,
+            metadata={"provider": provider, "mode": "test" if provider == "mock" else "live"},
+        )
+        return await _load(conn, user["org_id"])
 
 
 @router.post("/webhook/{provider}", response_model=WebhookAck)

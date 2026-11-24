@@ -3,7 +3,7 @@ from __future__ import annotations
 from psycopg import AsyncConnection
 
 PLANS_SEED_SQL = """
-    INSERT INTO plans (id, name, description, price_monthly, currency, document_limit, features, sort_order)
+    INSERT INTO plans (id, name, description, price_monthly, currency, document_limit, user_limit, features, sort_order)
     VALUES
         (
             'free',
@@ -12,6 +12,7 @@ PLANS_SEED_SQL = """
             0,
             'CLP',
             25,
+            1,
             jsonb_build_array(
                 '25 documentos al mes',
                 'Auditoría de precios',
@@ -28,6 +29,7 @@ PLANS_SEED_SQL = """
             39990,
             'CLP',
             500,
+            5,
             jsonb_build_array(
                 '500 documentos al mes',
                 'Hasta 5 usuarios con roles',
@@ -45,6 +47,7 @@ PLANS_SEED_SQL = """
             149990,
             'CLP',
             NULL,
+            NULL,
             jsonb_build_array(
                 'Documentos ilimitados',
                 'Usuarios y sucursales ilimitadas',
@@ -61,6 +64,7 @@ PLANS_SEED_SQL = """
         price_monthly = EXCLUDED.price_monthly,
         currency = EXCLUDED.currency,
         document_limit = EXCLUDED.document_limit,
+        user_limit = EXCLUDED.user_limit,
         features = EXCLUDED.features,
         sort_order = EXCLUDED.sort_order,
         active = TRUE

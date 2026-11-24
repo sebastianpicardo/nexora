@@ -10251,3 +10251,31 @@ body.modal-open {
 .advanced-options[open] > summary {
   margin-bottom: 8px;
 }
+
+/* --- Pricing: precio y límites de plan --- */
+.pricing-price .price-amount {
+  font-size: 34px;
+  font-weight: 700;
+}
+.pricing-price .price-period {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+.pricing-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+.pricing-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pricing-limit svg {
+  width: 15px;
+  height: 15px;
+}

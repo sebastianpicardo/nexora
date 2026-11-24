@@ -43,6 +43,47 @@ def apply_schema(database_url: str | None = None) -> None:
         conn.pgconn.exec_(sql.encode("utf-8"))
 
 
+def ensure_auth_columns() -> None:
+    """Repara columnas críticas de autenticación en bases con migraciones parciales.
+
+    Cada sentencia es idempotente (``ADD COLUMN IF NOT EXISTS``) y se ejecuta de
+    forma aislada para que un error en una no impida aplicar las demás. Así el
+    login deja de fallar aunque una migración previa se haya cortado a medias.
+    """
+    ddl_url = settings.ddl_database_url
+    if not ddl_url:
+        return
+
+    statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'America/Santiago'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_quota BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_weekly BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE plans ADD COLUMN IF NOT EXISTS user_limit INTEGER",
+        "UPDATE plans SET user_limit = 1 WHERE id = 'free' AND (user_limit IS NULL OR user_limit <> 1)",
+        "UPDATE plans SET user_limit = 5 WHERE id = 'pro' AND (user_limit IS NULL OR user_limit <> 5)",
+        "UPDATE plans SET user_limit = NULL WHERE id = 'enterprise'",
+    ]
+    applied = 0
+    for statement in statements:
+        try:
+            with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
+                conn.pgconn.exec_((statement + ";").encode("utf-8"))
+            applied += 1
+        except Exception as exc:  # noqa: BLE001 - best-effort self-heal
+            lower = str(exc).lower()
+            if "must be owner" in lower or "permission denied" in lower:
+                print(
+                    "⚠️  No se pudo reparar columnas de auth por permisos. "
+                    "Ejecuta database/migrations como dueño de la base."
+                )
+                return
+    if applied:
+        print(f"✅ Columnas de autenticación verificadas ({applied} sentencias).")
+
+
 def apply_migrations() -> None:
     """Aplica todas las migraciones pendientes en orden numérico.
 
@@ -116,6 +157,12 @@ def apply_migrations() -> None:
     print(
         f"\n📊 Resumen de migraciones: aplicadas={applied}, ya existían={skipped}, fallidas={failed}"
     )
+
+    # Auto-reparación de columnas críticas de autenticación.
+    try:
+        ensure_auth_columns()
+    except Exception as exc:  # noqa: BLE001 - nunca bloquear el arranque
+        print(f"⚠️  No se pudo verificar columnas de auth: {exc}")
 
 
 if __name__ == "__main__":

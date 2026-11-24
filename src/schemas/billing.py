@@ -13,6 +13,7 @@ class PlanOut(BaseModel):
     price_monthly: float
     currency: str
     document_limit: int | None = None
+    user_limit: int | None = None
     features: list[str] = []
     sort_order: int = 0
 

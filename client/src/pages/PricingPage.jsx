@@ -1,129 +1,97 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import {
-  CheckIcon,
-  DollarIcon,
-  SparkIcon,
-  ShieldIcon,
-  UsersIcon,
-  RocketIcon,
-  CrownIcon,
-  ArrowRightIcon,
-} from "../components/Icons";
+import { formatMoney } from "../lib/format";
+import { CheckIcon, DollarIcon, ShieldIcon, UsersIcon } from "../components/Icons";
 
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    priceLabel: "Gratis",
-    description: "Para comenzar a auditar tus compras",
-    popular: false,
-    features: [
-      { label: "Hasta 50 documentos por mes", available: true },
-      { label: "Auditoría automática de precios", available: true },
-      { label: "Detección de excepciones", available: true },
-      { label: "Aprobaciones de compra", available: true },
-      { label: "Proveedores ilimitados", available: true },
-      { label: "Exportación a Excel/PDF", available: false },
-      { label: "Integración con ChileCompra / SII", available: false },
-      { label: "Alertas proactivas (email/Slack)", available: false },
-      { label: "API pública y webhooks", available: false },
-      { label: "SSO con Google Workspace", available: false },
-      { label: "White-label (marca blanca)", available: false },
-      { label: "Soporte prioritario", available: false },
-    ],
-    cta: "Empezar gratis",
-    color: "#10b981",
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: 49,
-    priceLabel: "USD/mes",
-    description: "Para equipos en crecimiento",
-    popular: true,
-    features: [
-      { label: "Hasta 500 documentos por mes", available: true },
-      { label: "Auditoría automática de precios", available: true },
-      { label: "Detección de excepciones", available: true },
-      { label: "Aprobaciones de compra", available: true },
-      { label: "Proveedores ilimitados", available: true },
-      { label: "Exportación a Excel/PDF", available: true },
-      { label: "Integración con ChileCompra / SII", available: true },
-      { label: "Alertas proactivas (email/Slack)", available: true },
-      { label: "API pública y webhooks", available: true },
-      { label: "SSO con Google Workspace", available: false },
-      { label: "White-label (marca blanca)", available: false },
-      { label: "Soporte prioritario", available: false },
-    ],
-    cta: "Empezar Pro",
-    color: "#2563eb",
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 149,
-    priceLabel: "USD/mes",
-    description: "Para distribuidores y cadenas",
-    popular: false,
-    features: [
-      { label: "Documentos ilimitados", available: true },
-      { label: "Auditoría automática de precios", available: true },
-      { label: "Detección de excepciones", available: true },
-      { label: "Aprobaciones de compra", available: true },
-      { label: "Proveedores ilimitados", available: true },
-      { label: "Exportación a Excel/PDF", available: true },
-      { label: "Integración con ChileCompra / SII", available: true },
-      { label: "Alertas proactivas (email/Slack)", available: true },
-      { label: "API pública y webhooks", available: true },
-      { label: "SSO con Google Workspace", available: true },
-      { label: "White-label (marca blanca)", available: true },
-      { label: "Soporte prioritario", available: true },
-      { label: "Múltiples sucursales", available: true },
-      { label: "Backup automático de BD", available: true },
-    ],
-    cta: "Contactar ventas",
-    color: "#7c3aed",
-  },
-];
+function priceFor(plan) {
+  if (Number(plan.price_monthly) <= 0) {
+    return { amount: "Gratis", period: "" };
+  }
+  return { amount: formatMoney(plan.price_monthly, plan.currency), period: " / mes" };
+}
+
+function usersFor(plan) {
+  if (plan.user_limit === null || plan.user_limit === undefined) return "Usuarios ilimitados";
+  const n = Number(plan.user_limit);
+  return `${n} usuario${n === 1 ? "" : "s"} incluido${n === 1 ? "" : "s"}`;
+}
+
+function docsFor(plan) {
+  if (plan.document_limit === null || plan.document_limit === undefined) return "Documentos ilimitados";
+  return `${plan.document_limit} documentos / mes`;
+}
 
 export default function PricingPage() {
-  const { user, organization, billing, canManage } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState("pro");
+  const { canManage, billing, refreshBilling } = useAuth();
+  const [plans, setPlans] = useState([]);
+  const [currentPlanId, setCurrentPlanId] = useState("");
+  const [mode, setMode] = useState({ provider: "mock", test_mode: true, production: false });
   const [loading, setLoading] = useState(true);
+  const [busyPlan, setBusyPlan] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await api("/api/billing/summary");
-        if (!cancelled) {
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) setLoading(false);
-      }
+  const load = useCallback(async () => {
+    try {
+      const [summary, config] = await Promise.all([
+        api("/api/billing/summary"),
+        api("/api/billing/config").catch(() => ({ provider: "mock", test_mode: true, production: false })),
+      ]);
+      setPlans((summary.plans || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+      setCurrentPlanId(summary.subscription?.plan_id || "free");
+      setMode(config);
+      setError("");
+    } catch (err) {
+      setError(err.message || "No se pudieron cargar los planes.");
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  const currentPlan = billing?.subscription?.plan_name || "free";
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const handleSelect = (planId) => {
-    setSelectedPlan(planId);
-  };
-
-  const handleUpgrade = (planId) => {
+  async function activate(plan) {
     if (!canManage) return;
-    // Redirigir a la página de facturación o crear sesión de pago
-    window.open(`/billing?plan=${planId}`, "_blank");
-  };
+    setBusyPlan(plan.id);
+    setError("");
+    setSuccess("");
+    try {
+      const isFree = Number(plan.price_monthly) <= 0;
+      if (isFree) {
+        await api("/api/billing/change-plan", {
+          method: "POST",
+          body: JSON.stringify({ plan_id: plan.id }),
+        });
+        setSuccess("Plan Free activado.");
+      } else {
+        const session = await api("/api/billing/checkout", {
+          method: "POST",
+          body: JSON.stringify({ plan_id: plan.id }),
+        });
+        if (session.provider === "mock") {
+          await api("/api/billing/checkout/confirm", {
+            method: "POST",
+            body: JSON.stringify({ plan_id: plan.id }),
+          });
+          setSuccess("Pago de prueba confirmado. Tu plan ya está activo.");
+        } else if (session.checkout_url) {
+          window.location.href = session.checkout_url;
+          return;
+        }
+      }
+      await refreshBilling?.();
+      await load();
+    } catch (err) {
+      setError(err.message || "No se pudo completar la compra.");
+    } finally {
+      setBusyPlan("");
+    }
+  }
+
+  const activePlanName = billing?.subscription?.plan_name || plans.find((p) => p.id === currentPlanId)?.name || "Free";
 
   return (
     <div className="page-stack">
@@ -136,53 +104,81 @@ export default function PricingPage() {
             auditoría de precios automatizada. Puedes cambiar de plan en cualquier momento.
           </p>
         </div>
+        <span className="counter-chip">Plan actual: {activePlanName}</span>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+      {success ? <div className="alert success">{success}</div> : null}
+
+      {mode.test_mode ? (
+        <div className="alert warning">
+          <ShieldIcon />
+          <span>
+            Modo test: los pagos se simulan y el plan se activa al confirmar, sin cobro real. Para
+            cobrar de verdad, configura STRIPE/MERCADOPAGO/FLOW y PAYMENT_PROVIDER en el servidor.
+          </span>
+        </div>
+      ) : (
+        <div className="alert success">
+          <ShieldIcon />
+          <span>
+            Pagos reales vía {mode.provider}. Serás redirigido a la pasarela y el plan se activa
+            automáticamente cuando el pago se confirme.
+          </span>
+        </div>
+      )}
+
+      {!canManage ? (
+        <div className="alert warning">
+          <span>Solo el propietario o un administrador pueden cambiar el plan.</span>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="empty-state">Cargando planes…</div>
       ) : (
         <section className="pricing-section">
-          <div className="pricing-header">
-            <h2>Planes de precios</h2>
-            <p>Elige el plan que mejor se adapte al tamaño de tu negocio.</p>
-          </div>
-
           <div className="pricing-grid">
-            {PLANS.map((plan) => {
-              const isCurrent = currentPlan === plan.id;
-              const isSelected = selectedPlan === plan.id;
+            {plans.map((plan) => {
+              const isCurrent = currentPlanId === plan.id;
+              const popular = plan.id === "pro";
+              const price = priceFor(plan);
               return (
                 <div
                   key={plan.id}
-                  className={`pricing-card ${plan.popular ? "popular" : ""} ${isCurrent ? "current" : ""} ${isSelected ? "selected" : ""}`}
+                  className={`pricing-card ${popular ? "popular" : ""} ${isCurrent ? "current" : ""}`}
                 >
                   <div className="pricing-header-card">
                     <h3>{plan.name}</h3>
-                    {plan.popular && (
-                      <span className="popular-badge">Más popular</span>
-                    )}
-                    {isCurrent && (
-                      <span className="current-badge">Tu plan actual</span>
-                    )}
+                    {popular ? <span className="popular-badge">Más popular</span> : null}
+                    {isCurrent ? <span className="current-badge">Tu plan actual</span> : null}
                   </div>
                   <div className="pricing-price">
-                    <span className="price-currency">{plan.priceLabel}</span>
-                    <span className="price-amount">${plan.price}</span>
-                    <span className="price-period">/mes</span>
+                    <span className="price-amount">{price.amount}</span>
+                    {price.period ? <span className="price-period">{price.period}</span> : null}
                   </div>
                   <p className="pricing-description">{plan.description}</p>
+
+                  <div className="pricing-limits">
+                    <span className="pricing-limit">
+                      <UsersIcon /> {usersFor(plan)}
+                    </span>
+                    <span className="pricing-limit">
+                      <DollarIcon /> {docsFor(plan)}
+                    </span>
+                  </div>
+
                   <ul className="pricing-features">
-                    {plan.features.map((feature) => (
-                      <li key={feature.label} className={`feature-item ${feature.available ? "available" : "unavailable"}`}>
-                        <span className={`feature-check ${feature.available ? "yes" : "no"}`}>
-                          {feature.available ? <CheckIcon /> : <span>✕</span>}
+                    {(plan.features || []).map((feature) => (
+                      <li key={feature} className="feature-item available">
+                        <span className="feature-check yes">
+                          <CheckIcon />
                         </span>
-                        {feature.label}
+                        {feature}
                       </li>
                     ))}
                   </ul>
+
                   <div className="pricing-cta">
                     {isCurrent ? (
                       <button type="button" className="button ghost" disabled>
@@ -191,10 +187,15 @@ export default function PricingPage() {
                     ) : (
                       <button
                         type="button"
-                        className={`button ${plan.popular ? "primary" : "ghost"}`}
-                        onClick={() => handleUpgrade(plan.id)}
+                        className={`button ${popular ? "primary" : "ghost"}`}
+                        onClick={() => activate(plan)}
+                        disabled={!canManage || busyPlan === plan.id}
                       >
-                        {plan.cta}
+                        {busyPlan === plan.id
+                          ? "Procesando…"
+                          : Number(plan.price_monthly) <= 0
+                            ? "Cambiar a Free"
+                            : `Contratar ${plan.name}`}
                       </button>
                     )}
                   </div>
@@ -207,19 +208,31 @@ export default function PricingPage() {
             <h3>Preguntas frecuentes</h3>
             <div className="faq-item">
               <h4>¿Puedo cambiar de plan en cualquier momento?</h4>
-              <p>Sí. Puedes actualizar o reducir tu plan desde la sección de Facturación. Los cambios se aplican de inmediato.</p>
+              <p>
+                Sí. Los planes pagados se activan al confirmar el pago y puedes volver al plan Free
+                cuando quieras.
+              </p>
             </div>
             <div className="faq-item">
-              <h4>¿Qué pasa si supero mi límite de documentos?</h4>
-              <p>Recibirás una notificación y podrás actualizar tu plan o esperar al próximo ciclo de facturación.</p>
+              <h4>¿Qué pasa si supero mi límite de usuarios o documentos?</h4>
+              <p>
+                El límite de usuarios incluye miembros activos e invitaciones pendientes. Si llegas
+                al cupo, actualiza tu plan para invitar a más personas o procesar más documentos.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>¿Cómo se confirma mi pago?</h4>
+              <p>
+                En producción la pasarela confirma el pago automáticamente mediante webhook firmado.
+                En modo test el pago se simula para que puedas validar el flujo completo.
+              </p>
             </div>
             <div className="faq-item">
               <h4>¿Incluye soporte?</h4>
-              <p>Todos los planes incluyen soporte por email. Los planes Pro y Enterprise incluyen soporte prioritario con tiempo de respuesta más rápido.</p>
-            </div>
-            <div className="faq-item">
-              <h4>¿Puedo probar el plan Pro antes de pagar?</h4>
-              <p>Sí, tienes una prueba gratuita de 14 días. No se requiere tarjeta de crédito para comenzar.</p>
+              <p>
+                Todos los planes incluyen soporte por email. Los planes Pro y Enterprise incluyen
+                soporte prioritario con tiempos de respuesta más rápidos.
+              </p>
             </div>
           </div>
         </section>

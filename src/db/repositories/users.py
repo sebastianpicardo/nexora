@@ -10,23 +10,7 @@ from psycopg.types.json import Jsonb
 
 USER_SELECT = """
     SELECT
-        u.id,
-        u.org_id,
-        u.email,
-        u.google_id,
-        u.name,
-        u.avatar_url,
-        u.role,
-        u.job_title,
-        u.phone,
-        u.timezone,
-        u.notify_quota,
-        u.notify_weekly,
-        u.email_verified,
-        u.active,
-        u.last_login_at,
-        u.created_at,
-        u.updated_at,
+        u.*,
         o.name AS org_name,
         o.slug AS org_slug,
         o.price_spike_threshold_pct,
@@ -35,6 +19,24 @@ USER_SELECT = """
     FROM users u
     JOIN organizations o ON o.id = u.org_id
 """
+
+# Columnas del usuario que nunca deben salir del repositorio.
+_SECRET_USER_FIELDS = ("password_hash",)
+
+
+def _user_row(row):
+    """Normaliza una fila de usuario a dict, sin exponer campos sensibles.
+
+    Se usa ``u.*`` para tolerar bases con migraciones parciales: las columnas
+    opcionales que falten simplemente no aparecen y los consumidores usan
+    ``.get(...)`` con valores por defecto.
+    """
+    if row is None:
+        return None
+    data = dict(row)
+    for field in _SECRET_USER_FIELDS:
+        data.pop(field, None)
+    return data
 
 
 def _slugify(value: str) -> str:
@@ -64,13 +66,13 @@ async def get_user_with_org(
                 """,
                 (str(user_id), str(session_id)),
             )
-        return await cur.fetchone()
+        return _user_row(await cur.fetchone())
 
 
 async def get_user_by_email(conn: AsyncConnection, email: str) -> dict | None:
     async with conn.cursor() as cur:
         await cur.execute(f"{USER_SELECT} WHERE lower(u.email) = lower(%s)", (email.strip(),))
-        return await cur.fetchone()
+        return _user_row(await cur.fetchone())
 
 
 async def get_user_auth_by_email(conn: AsyncConnection, email: str) -> dict | None:
@@ -90,7 +92,7 @@ async def get_user_auth_by_email(conn: AsyncConnection, email: str) -> dict | No
 async def get_user_by_google_id(conn: AsyncConnection, google_id: str) -> dict | None:
     async with conn.cursor() as cur:
         await cur.execute(f"{USER_SELECT} WHERE u.google_id = %s", (google_id,))
-        return await cur.fetchone()
+        return _user_row(await cur.fetchone())
 
 
 async def _pending_invitation(conn: AsyncConnection, email: str) -> dict | None:
@@ -365,7 +367,7 @@ async def list_all_users(conn: AsyncConnection) -> list[dict]:
             ORDER BY u.created_at DESC
             """
         )
-        return list(await cur.fetchall())
+        return [_user_row(row) for row in await cur.fetchall()]
 
 
 async def update_user_global(

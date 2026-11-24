@@ -33,10 +33,21 @@ class InvitationOut(BaseModel):
     invite_url: str | None = None
 
 
+class TeamUsage(BaseModel):
+    members_active: int = 0
+    invitations_pending: int = 0
+    user_limit: int | None = None
+    remaining: int | None = None
+    unlimited: bool = False
+    at_limit: bool = False
+    plan_name: str | None = None
+
+
 class TeamResponse(BaseModel):
     members: list[TeamMemberOut]
     invitations: list[InvitationOut]
     permissions: dict = {}
+    usage: TeamUsage | None = None
 
 
 class InviteRequest(BaseModel):

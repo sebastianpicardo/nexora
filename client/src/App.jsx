@@ -175,7 +175,7 @@ export default function App() {
     if (view === "audit-express") return <AuditExpressPage onNavigate={navigate} />;
     if (view === "enterprise") return <EnterprisePage onNavigate={navigate} />;
     if (view === "integrations") return <NativeIntegrationsPage onNavigate={navigate} />;
-    if (view === "team") return <TeamPage />;
+    if (view === "team") return <TeamPage onNavigate={navigate} />;
     if (view === "billing") return <PricingPage />;
     if (view === "settings") return <SettingsPage />;
     if (view === "profile") return <ProfilePage />;

@@ -5,14 +5,20 @@ import { formatDateTime, initials, labelize } from "../lib/format";
 import { CheckIcon, CopyIcon, TeamIcon } from "../components/Icons";
 
 const ROLE_OPTIONS = [
-  { value: "admin", label: "Administrador" },
-  { value: "user", label: "Usuario" },
-  { value: "auditor", label: "Auditor" },
+  { value: "admin", label: "Administrador", hint: "Equipo, facturación, configuración y toda la operación." },
+  { value: "analyst", label: "Analista", hint: "Analiza precios, oportunidades y reportes." },
+  { value: "user", label: "Usuario", hint: "Carga documentos, revisa excepciones y exporta reportes." },
+  { value: "auditor", label: "Auditor", hint: "Solo lectura de precios, excepciones y exportaciones." },
+  { value: "viewer", label: "Visor", hint: "Acceso de solo lectura al dashboard." },
 ];
 
-export default function TeamPage() {
+function membersLabel(count) {
+  return `${count} miembro${count === 1 ? "" : "s"}`;
+}
+
+export default function TeamPage({ onNavigate }) {
   const { user, canManage } = useAuth();
-  const [team, setTeam] = useState({ members: [], invitations: [], permissions: {} });
+  const [team, setTeam] = useState({ members: [], invitations: [], permissions: {}, usage: null });
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
@@ -20,6 +26,12 @@ export default function TeamPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [lastInvite, setLastInvite] = useState(null);
+
+  const usage = team.usage || {};
+  const atLimit = Boolean(usage.at_limit) && !usage.unlimited;
+  const usedSeats = (usage.members_active || 0) + (usage.invitations_pending || 0);
+  const userLimit = usage.user_limit;
+  const roleHint = ROLE_OPTIONS.find((option) => option.value === role)?.hint || "";
 
   const load = useCallback(async () => {
     try {
@@ -101,11 +113,46 @@ export default function TeamPage() {
           <h2>Equipo y accesos</h2>
           <p>Invita a tu equipo y define quién administra, opera o audita la información de compras.</p>
         </div>
-        <span className="counter-chip">{team.members.length} miembros</span>
+        <span className="counter-chip">
+          {membersLabel(usage.members_active ?? team.members.length)}
+          {usage.unlimited ? " · usuarios ilimitados" : userLimit != null ? ` · cupo ${userLimit}` : ""}
+        </span>
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
       {success ? <div className="alert success">{success}</div> : null}
+
+      {canManage && (usage.unlimited || usage.user_limit != null) ? (
+        <section className="card">
+          <div className="card-head">
+            <div>
+              <h2>Uso del plan</h2>
+              <p>
+                {usage.plan_name ? `Plan ${usage.plan_name} · ` : ""}
+                {usage.members_active || 0} activo(s) + {usage.invitations_pending || 0} invitación(es) pendiente(s)
+              </p>
+            </div>
+            <button type="button" className="button ghost small" onClick={() => onNavigate?.("billing")}>
+              {atLimit ? "Mejorar plan" : "Ver planes"}
+            </button>
+          </div>
+          {usage.unlimited ? (
+            <p className="muted small">Tu plan permite usuarios ilimitados.</p>
+          ) : (
+            <>
+              <div className="quota-track">
+                <span
+                  className={`quota-fill ${atLimit ? "danger" : usedSeats >= Math.max(1, (userLimit || 1) - 1) ? "warning" : "ok"}`}
+                  style={{ width: `${Math.min(100, userLimit ? (usedSeats / userLimit) * 100 : 0)}%` }}
+                />
+              </div>
+              <p className="muted small">
+                {usedSeats} de {userLimit} usuarios en uso (incluye invitaciones pendientes).
+              </p>
+            </>
+          )}
+        </section>
+      ) : null}
 
       {canManage ? (
         <section className="card invite-card">
@@ -115,6 +162,18 @@ export default function TeamPage() {
               <p>La persona recibe acceso con su cuenta de Google y el rol asignado.</p>
             </div>
           </div>
+          {atLimit ? (
+            <div className="alert warning">
+              <span>
+                Alcanzaste el límite de {userLimit} usuario(s) de tu plan
+                {usage.plan_name ? ` ${usage.plan_name}` : ""}. Actualiza tu plan para invitar a más
+                personas.
+              </span>
+              <button type="button" className="button primary small" onClick={() => onNavigate?.("billing")}>
+                Ir a Planes y precios
+              </button>
+            </div>
+          ) : null}
           <form className="invite-form" onSubmit={invite}>
             <label className="field">
               <span>Email corporativo</span>
@@ -135,8 +194,9 @@ export default function TeamPage() {
                   </option>
                 ))}
               </select>
+              {roleHint ? <p className="muted small">{roleHint}</p> : null}
             </label>
-            <button type="submit" className="button primary" disabled={submitting}>
+            <button type="submit" className="button primary" disabled={submitting || atLimit}>
               {submitting ? "Invitando…" : "Generar invitación"}
             </button>
           </form>

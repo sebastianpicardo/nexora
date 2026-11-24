@@ -255,6 +255,7 @@ CREATE TABLE IF NOT EXISTS plans (
     price_monthly NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (price_monthly >= 0),
     currency TEXT NOT NULL DEFAULT 'USD',
     document_limit INTEGER CHECK (document_limit IS NULL OR document_limit >= 0),
+    user_limit INTEGER CHECK (user_limit IS NULL OR user_limit >= 0),
     features JSONB NOT NULL DEFAULT '[]'::jsonb,
     sort_order INTEGER NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -262,7 +263,7 @@ CREATE TABLE IF NOT EXISTS plans (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO plans (id, name, description, price_monthly, currency, document_limit, features, sort_order)
+INSERT INTO plans (id, name, description, price_monthly, currency, document_limit, user_limit, features, sort_order)
 VALUES
     (
         'free',
@@ -271,7 +272,8 @@ VALUES
         0,
         'USD',
         25,
-        '["25 documentos al mes", "Auditoría de precios", "Dashboard mensual", "Exportaciones básicas"]'::jsonb,
+        1,
+        '["25 documentos al mes", "Auditoría de precios", "Dashboard mensual", "Exportaciones básicas", "1 usuario"]'::jsonb,
         10
     ),
     (
@@ -281,7 +283,8 @@ VALUES
         49,
         'USD',
         500,
-        '["500 documentos al mes", "Equipo con roles", "Alertas de cuota", "Exportaciones PDF y Excel", "Historial de 6 meses"]'::jsonb,
+        5,
+        '["500 documentos al mes", "Hasta 5 usuarios con roles", "Alertas de cuota", "Exportaciones PDF y Excel", "Historial de 6 meses"]'::jsonb,
         20
     ),
     (
@@ -291,7 +294,8 @@ VALUES
         150000,
         'CLP',
         NULL,
-        '["Documentos ilimitados", "Panel multi-tenant", "Auditoría avanzada", "Exportaciones masivas", "Gestión centralizada"]'::jsonb,
+        NULL,
+        '["Documentos ilimitados", "Usuarios y sucursales ilimitadas", "Panel multi-tenant", "Auditoría avanzada", "Exportaciones masivas", "Gestión centralizada"]'::jsonb,
         30
     )
 ON CONFLICT (id) DO UPDATE SET
@@ -300,6 +304,7 @@ ON CONFLICT (id) DO UPDATE SET
     price_monthly = EXCLUDED.price_monthly,
     currency = EXCLUDED.currency,
     document_limit = EXCLUDED.document_limit,
+    user_limit = EXCLUDED.user_limit,
     features = EXCLUDED.features,
     sort_order = EXCLUDED.sort_order,
     active = TRUE;

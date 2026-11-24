@@ -10,7 +10,7 @@ from psycopg import AsyncConnection
 from src.db.seeding import ensure_default_plans
 
 PLAN_SELECT = """
-    SELECT id, name, description, price_monthly, currency, document_limit, features, sort_order
+    SELECT id, name, description, price_monthly, currency, document_limit, user_limit, features, sort_order
     FROM plans
 """
 
@@ -25,6 +25,7 @@ SUBSCRIPTION_SELECT = """
         s.trial_ends_at,
         p.name AS plan_name,
         p.document_limit,
+        p.user_limit,
         p.price_monthly,
         p.currency AS plan_currency,
         p.features

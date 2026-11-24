@@ -21,7 +21,7 @@ export default function PricingTable({
     let active = true;
     api("/api/billing/plans")
       .then((data) => {
-        if (active) setPlans(data || []);
+        if (active) setPlans(Array.isArray(data) ? data : []);
       })
       .catch((err) => {
         if (active) setError(err.message || "No se pudieron cargar los planes.");
@@ -47,7 +47,7 @@ export default function PricingTable({
 
       <div className="pricing-grid">
         {loading ? <div className="empty-state">Cargando planes…</div> : null}
-        {plans.map((plan) => {
+        {(Array.isArray(plans) ? plans : []).map((plan) => {
           const current = plan.id === currentPlanId;
           const highlighted = plan.id === HIGHLIGHTED_PLAN;
           const busy = busyPlanId === plan.id;
@@ -64,15 +64,29 @@ export default function PricingTable({
               </header>
 
               <div className="pricing-price">
-                {formatMoney(plan.price_monthly, plan.currency)}
-                <small>/ mes</small>
+                {Number(plan.price_monthly) <= 0 ? (
+                  "Gratis"
+                ) : (
+                  <>
+                    {formatMoney(plan.price_monthly, plan.currency)}
+                    <small> / mes</small>
+                  </>
+                )}
               </div>
 
               <div className="pricing-limit">
-                {plan.document_limit === null
+                {plan.document_limit == null
                   ? "Documentos ilimitados"
                   : `${plan.document_limit} documentos al mes`}
               </div>
+
+              {plan.user_limit !== undefined ? (
+                <div className="pricing-limit">
+                  {plan.user_limit == null
+                    ? "Usuarios ilimitados"
+                    : `${plan.user_limit} usuario${Number(plan.user_limit) === 1 ? "" : "s"}`}
+                </div>
+              ) : null}
 
               <ul className="pricing-features">
                 {(plan.features || []).map((feature) => (
