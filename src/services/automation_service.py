@@ -103,6 +103,28 @@ def _initial_stages() -> list[dict]:
     ]
 
 
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"
+
+
+def _agile_stage_detail(
+    opportunities: list[dict], catalog_matches: list[dict], mode: str | None
+) -> str:
+    """Redacta el resultado de Compra Ágil en español natural (singular/plural)."""
+    opp = len(opportunities)
+    matches = len(catalog_matches)
+    if not opp and not matches:
+        return "Sin oportunidades ni coincidencias para los ítems del documento."
+    parts: list[str] = []
+    if opp:
+        parts.append(_plural(opp, "oportunidad", "oportunidades"))
+    if matches:
+        parts.append(_plural(matches, "coincidencia de catálogo", "coincidencias de catálogo"))
+    body = " y ".join(parts)
+    suffix = f" ({mode})" if mode else ""
+    return f"{body}{suffix}."
+
+
 def _set_stage(stages: list[dict], stage_id: str, **fields: Any) -> dict:
     for stage in stages:
         if stage.get("id") == stage_id:
@@ -915,12 +937,7 @@ async def execute_run(
             "compra_agil",
             status=STATUS_COMPLETED if has_data else STATUS_NO_DATA,
             source=SOURCE_INTERNAL,
-            detail=(
-                f"{len(opportunities)} oportunidades y {len(catalog_matches)} coincidencias "
-                f"de catálogo ({radar.get('mode')})."
-                if has_data
-                else "Sin oportunidades ni coincidencias para los ítems del documento."
-            ),
+            detail=_agile_stage_detail(opportunities, catalog_matches, radar.get("mode")),
             duration_ms=int((time.perf_counter() - stage_started) * 1000),
             metrics={
                 "opportunities": len(opportunities),

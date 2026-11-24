@@ -806,23 +806,7 @@ export default function AutomationPage({ onNavigate }) {
                   </div>
                   <div className="automation-summary-grid">
                     <div>
-                      <span className="muted small">Este documento</span>
-                      <strong>
-                        {formatMoney(
-                          documentImpact.spend ?? documentInfo.total,
-                          documentImpact.currency || currency,
-                        )}
-                      </strong>
-                      <p>
-                        {documentInfo.item_count ?? itemsPreview.length} ítems · sobrecosto{" "}
-                        {formatMoney(
-                          documentImpact.potential_savings,
-                          documentImpact.currency || currency,
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="muted small">Historial · 90 días</span>
+                      <span className="muted small">Contexto · historial 90 días</span>
                       <strong>{formatMoney(summary.potential_savings, currency)}</strong>
                       <p>
                         {summary.findings || 0} hallazgos en {summary.historical_documents || 0}{" "}
@@ -830,20 +814,21 @@ export default function AutomationPage({ onNavigate }) {
                       </p>
                     </div>
                     <div>
-                      <span className="muted small">Catálogo de precios</span>
+                      <span className="muted small">Contexto · catálogo de precios</span>
                       <strong>{marginSummary.at_risk ?? 0} en riesgo</strong>
                       <p>{marginSummary.below_cost ?? 0} bajo costo</p>
                     </div>
                     <div>
-                      <span className="muted small">Ahorro verificado</span>
+                      <span className="muted small">Contexto · ahorro verificado</span>
                       <strong>{formatMoney(savings.total_amount, currency)}</strong>
                       <p>{savings.count ?? 0} evidencias registradas</p>
                     </div>
                   </div>
                   <p className="muted small">
-                    El sobrecosto de este documento se calcula solo contra compras anteriores de los
-                    mismos productos. Los valores de historial y catálogo son contexto del negocio y
-                    no se suman a este documento.
+                    El detalle de <strong>este documento</strong> está en la tarjeta superior
+                    (gasto, sobrecosto y productos con referencia). El sobrecosto se calcula solo
+                    contra compras anteriores de los mismos productos; el historial y el catálogo
+                    son contexto del negocio y no se suman a este documento.
                   </p>
                   <div className="automation-action-plan">
                     <strong>Plan de acción</strong>

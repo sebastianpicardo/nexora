@@ -104,7 +104,7 @@ export default function AuditExpressPage({ onNavigate }) {
     setDemoNotice("");
     try {
       await api("/api/enterprise/onboarding/demo?months=3", { method: "POST", body: "{}" });
-      setDemoNotice("Ejemplo de ferretería cargado: 90 días de compras, precios y márgenes.");
+      setDemoNotice("Datos de ejemplo cargados: 90 días de compras demo con proveedores, precios y márgenes (seed.sql).");
       await loadAll();
     } catch (err) {
       setError(err.message || "No se pudo cargar el ejemplo de ferretería.");
@@ -119,7 +119,7 @@ export default function AuditExpressPage({ onNavigate }) {
     setDemoNotice("");
     try {
       await api("/api/enterprise/onboarding/demo", { method: "DELETE" });
-      setDemoNotice("Datos de ejemplo eliminados. Puedes cargar tus propios documentos.");
+      setDemoNotice("Datos de ejemplo eliminados: se borran documentos, catálogo, proveedores y configuración de seed. Puedes cargar tus propios documentos.");
       await loadAll();
     } catch (err) {
       setError(err.message || "No se pudieron limpiar los datos de ejemplo.");
@@ -813,8 +813,9 @@ export default function AuditExpressPage({ onNavigate }) {
                 <span>{rcvFile ? rcvFile.name : "Seleccionar archivo RCV"}</span>
               </label>
               <p className="muted small">
-                Columnas esperadas: producto o descripción, unidad, cantidad, precio unitario o
-                total. Máximo 25 MB.
+                Acepta dos formatos: <strong>RCV de documentos</strong> (folio, tipo DTE, RUT,
+                razón social, fecha, neto, IVA, total) o <strong>RCV de ítems</strong> (producto,
+                unidad, cantidad, precio unitario o total). Máximo 25 MB.
               </p>
               {canImport ? (
                 <label className="audit-checkbox">
@@ -823,7 +824,7 @@ export default function AuditExpressPage({ onNavigate }) {
                     checked={rcvApply}
                     onChange={(event) => setRcvApply(event.target.checked)}
                   />
-                  Actualizar costos del catálogo al importar
+                  Actualizar costos del catálogo al importar (solo RCV de ítems)
                 </label>
               ) : (
                 <p className="muted small">
@@ -843,7 +844,7 @@ export default function AuditExpressPage({ onNavigate }) {
                 <button
                   type="button"
                   className="button primary"
-                  disabled={rcvBusy || !canImport || !rcvApply}
+                  disabled={rcvBusy || !canImport || !rcvApply || rcvResult?.rcv_type === "document"}
                   onClick={() => runRcv(true)}
                 >
                   {rcvBusy ? "Procesando…" : "Importar y actualizar"}
@@ -853,54 +854,110 @@ export default function AuditExpressPage({ onNavigate }) {
 
             {rcvResult ? (
               <div className="audit-rcv-result">
-                <div className="audit-rcv-counts">
-                  <span className="badge">Nuevos: {rcvResult.counts?.nuevos || 0}</span>
-                  <span className="badge">Actualizados: {rcvResult.counts?.actualizados || 0}</span>
-                  <span className="badge">Sin cambio: {rcvResult.counts?.sin_cambio || 0}</span>
-                  <span className="badge severity-medium">
-                    Discrepancias: {rcvResult.counts?.discrepancias || 0}
-                  </span>
-                  <span className="badge">Sin precio: {rcvResult.counts?.sin_precio || 0}</span>
-                </div>
-                {rcvResult.truncated ? (
-                  <div className="alert warning">
-                    El archivo superó el límite y se procesó parcialmente.
-                  </div>
-                ) : null}
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>SKU</th>
-                        <th className="right">Precio RCV</th>
-                        <th className="right">Costo catálogo</th>
-                        <th className="right">Diferencia</th>
-                        <th>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(rcvResult.rows || []).map((row) => (
-                        <tr key={`${row.line}-${row.product}`}>
-                          <td>{row.product}</td>
-                          <td className="mono">{row.sku || "—"}</td>
-                          <td className="right mono">{money(row.rcv_price, rcvResult.currency)}</td>
-                          <td className="right mono">
-                            {money(row.catalog_cost, rcvResult.currency)}
-                          </td>
-                          <td className="right">
-                            {row.difference_pct === null ? "—" : `${row.difference_pct}%`}
-                          </td>
-                          <td>
-                            <span className={`badge ${row.status === "discrepancia" ? "severity-medium" : ""}`}>
-                              {labelize(row.status)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {rcvResult.rcv_type === "document" ? (
+                  <>
+                    <div className="audit-rcv-counts">
+                      <span className="badge">
+                        Documentos: {rcvResult.rows?.length || 0}
+                      </span>
+                      <span className="badge">
+                        Total:{" "}
+                        {money(
+                          (rcvResult.rows || []).reduce(
+                            (sum, row) => sum + (Number(row.total) || 0),
+                            0,
+                          ),
+                          rcvResult.currency,
+                        )}
+                      </span>
+                    </div>
+                    <p className="muted small">
+                      RCV de documentos detectado (resumen por folio). Esta vista no modifica tu
+                      catálogo; úsala para completitud y conciliación.
+                    </p>
+                    <div className="table-wrap">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Folio</th>
+                            <th>Tipo DTE</th>
+                            <th>RUT</th>
+                            <th>Razón social</th>
+                            <th>Fecha</th>
+                            <th className="right">Neto</th>
+                            <th className="right">IVA</th>
+                            <th className="right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rcvResult.rows || []).map((row) => (
+                            <tr key={`${row.line}-${row.folio}`}>
+                              <td className="mono">{row.folio}</td>
+                              <td>{row.tipo_doc || "—"}</td>
+                              <td className="mono">{row.rut_emisor || "—"}</td>
+                              <td>{row.razon_social || "—"}</td>
+                              <td>{row.fecha_documento ? formatDate(row.fecha_documento) : "—"}</td>
+                              <td className="right mono">{money(row.neto, rcvResult.currency)}</td>
+                              <td className="right mono">{money(row.iva, rcvResult.currency)}</td>
+                              <td className="right mono">{money(row.total, rcvResult.currency)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="audit-rcv-counts">
+                      <span className="badge">Nuevos: {rcvResult.counts?.nuevos || 0}</span>
+                      <span className="badge">Actualizados: {rcvResult.counts?.actualizados || 0}</span>
+                      <span className="badge">Sin cambio: {rcvResult.counts?.sin_cambio || 0}</span>
+                      <span className="badge severity-medium">
+                        Discrepancias: {rcvResult.counts?.discrepancias || 0}
+                      </span>
+                      <span className="badge">Sin precio: {rcvResult.counts?.sin_precio || 0}</span>
+                    </div>
+                    {rcvResult.truncated ? (
+                      <div className="alert warning">
+                        El archivo superó el límite y se procesó parcialmente.
+                      </div>
+                    ) : null}
+                    <div className="table-wrap">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Producto</th>
+                            <th>SKU</th>
+                            <th className="right">Precio RCV</th>
+                            <th className="right">Costo catálogo</th>
+                            <th className="right">Diferencia</th>
+                            <th>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rcvResult.rows || []).map((row) => (
+                            <tr key={`${row.line}-${row.product}`}>
+                              <td>{row.product}</td>
+                              <td className="mono">{row.sku || "—"}</td>
+                              <td className="right mono">{money(row.rcv_price, rcvResult.currency)}</td>
+                              <td className="right mono">
+                                {money(row.catalog_cost, rcvResult.currency)}
+                              </td>
+                              <td className="right">
+                                {row.difference_pct === null ? "—" : `${row.difference_pct}%`}
+                              </td>
+                              <td>
+                                <span className={`badge ${row.status === "discrepancia" ? "severity-medium" : ""}`}>
+                                  {labelize(row.status)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
           </section>
@@ -913,9 +970,10 @@ export default function AuditExpressPage({ onNavigate }) {
                 </div>
               </div>
               <ul className="audit-guidelist">
+                <li>Reconoce RCV de documentos (folio, tipo DTE, RUT, total) y de ítems (producto, precio).</li>
                 <li>Lee la tabla sin enviar tus datos a un modelo de IA.</li>
-                <li>Compara el costo del RCV contra tu catálogo actual.</li>
-                <li>Si lo autorizas, actualiza solo el costo; no toca tu precio de venta.</li>
+                <li>En RCV de ítems compara el costo contra tu catálogo y, si lo autorizas, actualiza solo el costo.</li>
+                <li>En RCV de documentos solo previsualiza folios y montos para completitud y conciliación.</li>
                 <li>Los productos nuevos entran con un margen inicial de 25%.</li>
               </ul>
               {canManage ? (

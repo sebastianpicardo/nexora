@@ -4,6 +4,11 @@ import QuickGuide from "../components/QuickGuide";
 import SmartApprovalsPage from "./SmartApprovalsPage";
 import ApprovalsPage from "./ApprovalsPage";
 
+const TABS = [
+  { id: "smart", label: "Aprobación inteligente", icon: CheckIcon },
+  { id: "manual", label: "Bandeja manual", icon: ClockIcon },
+];
+
 const APPROVALS_HUB_STEPS = [
   { id: 1, label: "Revisa solicitudes pendientes" },
   { id: 2, label: "Aprobar o rechazar" },
@@ -27,7 +32,7 @@ export default function ApprovalsHubPage({ tab, onTabChange, onUpload }) {
       </section>
 
       <PageTabs tabs={TABS} active={active} onChange={onTabChange} label="Aprobaciones" />
-      <QuickGuide steps={APPROVALS_HUB_STEPS} activeStep={3} />
+      <QuickGuide steps={APPROVALS_HUB_STEPS} activeStep={active === "smart" ? 1 : 2} />
 
       {active === "smart" ? (
         <SmartApprovalsPage embedded onUpload={onUpload} />

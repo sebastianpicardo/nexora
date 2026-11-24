@@ -10128,3 +10128,27 @@ body.modal-open {
     transition: none !important;
   }
 }
+
+
+/* ── Auditoría Express: evitar recorte de montos y solapamiento de banner ── */
+.card-head > .badge,
+.card-head .audit-supplier-total,
+.audit-supplier-total strong {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.audit-toolbar {
+  position: relative;
+  z-index: 2;
+}
+
+.audit-hero,
+.audit-hero-rich {
+  overflow: visible;
+}
+
+.audit-money-card > strong {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}

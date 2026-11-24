@@ -8,9 +8,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from src.db import repositories
 from src.db.pool import get_pool
-from src.parsers.extractors.tabular import extract_tabular_document
+from src.parsers.extractors.tabular import _normalize_header, extract_tabular_document
 
 MIN_SPREAD_PCT = 3.0
 MIN_MARGIN_PCT = 8.0
@@ -666,15 +665,15 @@ async def build_negotiation(user: dict, limit: int = 25) -> dict:
     for item in ordered:
         item["items"].sort(key=lambda line: line["estimated_savings"], reverse=True)
         item["items"] = item["items"][:limit]
-        item["current_total"] = _round(item["current_total"])
-        item["target_total"] = _round(item["target_total"])
-        item["estimated_savings"] = _round(item["estimated_savings"])
+        item["current_total"] = _round(item["current_total"], 2)
+        item["target_total"] = _round(item["target_total"], 2)
+        item["estimated_savings"] = _round(item["estimated_savings"], 2)
 
     return {
         "currency": currency,
         "window_days": 90,
         "generated_at": datetime.now(UTC).isoformat(),
-        "total_estimated_savings": _round(total),
+        "total_estimated_savings": _round(total, 2),
         "suppliers": ordered[:limit],
         "note": (
             "Precio objetivo = mejor precio vigente + 2%. Los montos usan el volumen de la "
@@ -761,182 +760,201 @@ async def rcv_import(
     parsed = await asyncio.to_thread(extract_tabular_document, content, filename)
     if parsed is None:
         raise ValueError(
-            "No se reconoció una tabla de RCV. El archivo debe tener columnas de producto y precio."
+            "No se reconoció una tabla de RCV. El archivo debe tener columnas de producto y precio "
+            "(RCV de ítems) o folio, tipo DTE, RUT, razón social, fecha, neto, iva, total "
+            "(RCV de documentos)."
         )
     document, metadata = parsed
+    rcv_type = metadata.get("rcv_type")
     currency = (document.currency or user.get("default_currency") or "CLP").strip().upper()
     org_id = user["org_id"]
 
-    async with get_pool().connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id, sku, name, cost_price, sale_price
-                FROM price_catalog
-                WHERE org_id = %s
-                """,
-                (org_id,),
-            )
-            catalog = await cur.fetchall()
-        by_sku = {str(row["sku"]).strip().lower(): row for row in catalog}
-        by_name = {str(row["name"]).strip().lower(): row for row in catalog}
+    # --- RCV de ítems/productos (comparador de precios) ---
+    if rcv_type == "item":
+        async with get_pool().connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT id, sku, name, cost_price, sale_price FROM price_catalog WHERE org_id = %s",
+                    (org_id,),
+                )
+                catalog = await cur.fetchall()
+            by_sku = {str(row["sku"]).strip().lower(): row for row in catalog}
+            by_name = {str(row["name"]).strip().lower(): row for row in catalog}
 
-        rows: list[dict] = []
-        counts = {"nuevos": 0, "actualizados": 0, "sin_cambio": 0, "discrepancias": 0, "sin_precio": 0}
+            rows: list[dict] = []
+            counts = {"nuevos": 0, "actualizados": 0, "sin_cambio": 0, "discrepancias": 0, "sin_precio": 0}
 
-        async with conn.transaction():
-            for index, item in enumerate(document.items[:5000], start=1):
-                price = float(item.unit_price) if item.unit_price is not None else None
-                description = item.description
-                if price is None:
-                    counts["sin_precio"] += 1
-                    rows.append(
-                        {
-                            "line": index,
-                            "sku": item.sku,
-                            "product": description,
-                            "unit": item.unit,
-                            "rcv_price": None,
-                            "catalog_cost": None,
-                            "difference_pct": None,
-                            "status": "sin_precio",
-                        }
-                    )
-                    continue
+            async with conn.transaction():
+                for index, item in enumerate(document.items[:5000], start=1):
+                    price = float(item.unit_price) if item.unit_price is not None else None
+                    description = item.description
+                    if price is None:
+                        counts["sin_precio"] += 1
+                        rows.append(
+                            {
+                                "line": index,
+                                "sku": item.sku,
+                                "product": description,
+                                "unit": item.unit,
+                                "rcv_price": None,
+                                "catalog_cost": None,
+                                "difference_pct": None,
+                                "status": "sin_precio",
+                            }
+                        )
+                        continue
 
-                sku = str(item.sku or "").strip()
-                match = by_sku.get(sku.lower()) if sku else None
-                if match is None:
-                    match = by_name.get(description.strip().lower())
+                    sku = str(item.sku or "").strip()
+                    match = by_sku.get(sku.lower()) if sku else None
+                    if match is None:
+                        match = by_name.get(description.strip().lower())
 
-                if match is None:
-                    status = "nuevo"
-                    counts["nuevos"] += 1
-                    if apply:
-                        new_sku = sku or _slug_sku(description)
-                        cost = Decimal(str(round(price, 4)))
-                        sale = (cost * Decimal("1.25")).quantize(Decimal("0.01"))
-                        await cur.execute(
-                            """
-                            INSERT INTO price_catalog (
-                                org_id, sku, name, unit, cost_price, sale_price, supplier_name
+                    if match is None:
+                        status = "nuevo"
+                        counts["nuevos"] += 1
+                        if apply:
+                            new_sku = sku or _slug_sku(description)
+                            cost = Decimal(str(round(price, 4)))
+                            sale = (cost * Decimal("1.25")).quantize(Decimal("0.01"))
+                            await cur.execute(
+                                """INSERT INTO price_catalog
+                                    (org_id, sku, name, unit, cost_price, sale_price, supplier_name)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (org_id, sku) DO UPDATE SET
+                                    name = EXCLUDED.name,
+                                    cost_price = EXCLUDED.cost_price,
+                                    supplier_name = coalesce(
+                                        EXCLUDED.supplier_name, price_catalog.supplier_name
+                                    ),
+                                    updated_at = now()""",
+                                (
+                                    org_id,
+                                    new_sku,
+                                    description,
+                                    item.unit or "unidad",
+                                    cost,
+                                    sale,
+                                    document.supplier_name,
+                                ),
                             )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (org_id, sku) DO UPDATE SET
-                                name = EXCLUDED.name,
-                                cost_price = EXCLUDED.cost_price,
-                                supplier_name = coalesce(EXCLUDED.supplier_name, price_catalog.supplier_name),
-                                updated_at = now()
-                            """,
+                        rows.append(
+                            {
+                                "line": index,
+                                "sku": item.sku or "",
+                                "product": description,
+                                "unit": item.unit or "unidad",
+                                "rcv_price": price,
+                                "catalog_cost": None,
+                                "difference_pct": None,
+                                "status": "nuevo",
+                            }
+                        )
+                        continue
+
+                    status = "actualizado" if apply else "sin_cambio"
+                    if apply and match.get("cost_price") is not None:
+                        new_cost = Decimal(str(round(price, 4)))
+                        await cur.execute(
+                            """UPDATE price_catalog
+                            SET cost_price = %s, sale_price = %s, supplier_name = %s, updated_at = now()
+                            WHERE org_id = %s AND sku = %s""",
                             (
-                                org_id,
-                                new_sku,
-                                description,
-                                item.unit or "unidad",
-                                cost,
-                                sale,
+                                new_cost,
+                                new_cost * Decimal("1.25"),
                                 document.supplier_name,
+                                org_id,
+                                sku,
                             ),
                         )
-                        by_sku[new_sku.lower()] = {
-                            "sku": new_sku,
-                            "name": description,
-                            "cost_price": cost,
-                            "sale_price": sale,
-                        }
+                    price_val = float(match.get("sale_price") or match.get("cost_price") or 0)
+                    diff_pct = round((price - price_val) / price_val * 100, 2) if price_val else None
+                    counts[status] += 1
                     rows.append(
                         {
                             "line": index,
-                            "sku": sku or None,
+                            "sku": item.sku or str(match.get("sku", "")),
                             "product": description,
-                            "unit": item.unit,
-                            "rcv_price": _round(price, 2),
-                            "catalog_cost": None,
-                            "difference_pct": None,
+                            "unit": item.unit or match.get("unit", "unidad"),
+                            "rcv_price": price,
+                            "catalog_cost": float(match.get("cost_price") or 0),
+                            "difference_pct": diff_pct,
                             "status": status,
                         }
                     )
-                    continue
+        return {
+            "counts": counts,
+            "currency": currency,
+            "rows": rows,
+            "truncated": metadata.get("truncated", False),
+            "rcv_type": "item",
+        }
 
-                catalog_cost = _f(match["cost_price"])
-                difference = (
-                    (price - catalog_cost) / catalog_cost * 100 if catalog_cost > 0 else None
-                )
-                if difference is None:
-                    status = "nuevo"
-                elif abs(difference) <= 1.0:
-                    status = "sin_cambio"
-                else:
-                    status = "discrepancia"
-                    counts["discrepancias"] += 1
-                if status == "sin_cambio":
-                    counts["sin_cambio"] += 1
+    # --- RCV de documentos (folios/DTE) - previsualización y registro ---
+    if rcv_type == "document":
+        # Las filas del RCV de documentos vienen parseadas en metadata["document_rows"].
+        document_rows = metadata.get("document_rows") or []
+        rows: list[dict] = []
+        counts = {"nuevos": 0, "actualizados": 0, "sin_cambio": 0, "discrepancias": 0}
 
-                if apply and difference is not None and abs(difference) > 1.0:
-                    await cur.execute(
-                        """
-                        UPDATE price_catalog
-                        SET cost_price = %s,
-                            supplier_name = coalesce(%s, supplier_name),
-                            updated_at = now()
-                        WHERE id = %s AND org_id = %s
-                        """,
-                        (Decimal(str(round(price, 4))), document.supplier_name, match["id"], org_id),
-                    )
-                    status = "actualizado"
-                    counts["actualizados"] += 1
-                elif apply and difference is None:
-                    await cur.execute(
-                        """
-                        UPDATE price_catalog
-                        SET cost_price = %s, updated_at = now()
-                        WHERE id = %s AND org_id = %s
-                        """,
-                        (Decimal(str(round(price, 4))), match["id"], org_id),
-                    )
-                    status = "actualizado"
-                    counts["actualizados"] += 1
+        for index, row_data in enumerate(document_rows[:5000], start=1):
+            folio = row_data.get("folio", "")
+            tipo_doc = row_data.get("tipo_doc", "")
+            rut_emisor = row_data.get("rut_emisor", "")
+            razon_social = row_data.get("razon_social", "")
+            fecha_documento = row_data.get("fecha_documento", "")
+            neto = row_data.get("neto", 0) or 0
+            iva = row_data.get("iva", 0) or 0
+            total = row_data.get("total", 0) or 0
 
-                rows.append(
-                    {
-                        "line": index,
-                        "sku": match["sku"],
-                        "product": description,
-                        "unit": item.unit,
-                        "rcv_price": _round(price, 2),
-                        "catalog_cost": _round(catalog_cost, 2),
-                        "difference_pct": _round(difference, 1) if difference is not None else None,
-                        "status": status,
-                    }
-                )
+            # Skip rows without folio
+            if not folio or _normalize_header(folio) == "folio":
+                counts["sin_cambio"] += 1
+                continue
 
-            if apply:
-                await repositories.record_audit_event(
-                    conn,
-                    org_id=org_id,
-                    user_id=user["id"],
-                    action="leaks.rcv.import",
-                    entity_type="price_catalog",
-                    entity_id=document.supplier_name or filename,
-                    metadata={"rows": len(rows), "counts": counts, "filename": filename},
-                )
+            rows.append(
+                {
+                    "line": index,
+                    "folio": folio,
+                    "tipo_doc": tipo_doc,
+                    "rut_emisor": rut_emisor,
+                    "razon_social": razon_social,
+                    "fecha_documento": fecha_documento,
+                    "neto": neto,
+                    "iva": iva,
+                    "total": total,
+                    "status": "ok",
+                }
+            )
 
-    return {
-        "filename": filename,
-        "supplier": document.supplier_name,
-        "currency": currency,
-        "applied": apply,
-        "total_rows": len(rows),
-        "counts": counts,
-        "truncated": bool(metadata.get("truncated")),
-        "warnings": metadata.get("warnings") or [],
-        "rows": rows[:500],
-    }
+        return {
+            "counts": counts,
+            "currency": currency,
+            "rows": rows,
+            "truncated": metadata.get("truncated", False),
+            "rcv_type": "document",
+        }
+
+    # Fallback
+    raise ValueError("Tipo de RCV no identificado.")
+
+
+def _money_pdf(value: object, currency: str = "CLP") -> str:
+    """Formatea montos para PDF con CLP consistente (punto de miles, sin decimales)."""
+    if value is None or value == "":
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if (currency or "CLP").upper() == "CLP":
+        return f"${round(number):,}".replace(",", ".")
+    return f"{currency} {number:,.2f}"
 
 
 def audit_to_pdf(audit: dict, org_name: str = "") -> bytes:
     from src.services.export_service import build_pdf
 
+    currency = audit.get("currency", "CLP")
     headers = [
         "Severidad",
         "Categoría",
@@ -954,15 +972,16 @@ def audit_to_pdf(audit: dict, org_name: str = "") -> bytes:
                 finding["category_label"],
                 finding["title"],
                 finding.get("supplier") or "—",
-                finding.get("current_price") if finding.get("current_price") is not None else "—",
-                finding.get("reference_price") if finding.get("reference_price") is not None else "—",
-                finding["savings"],
+                _money_pdf(finding.get("current_price"), finding.get("currency") or currency),
+                _money_pdf(finding.get("reference_price"), finding.get("currency") or currency),
+                _money_pdf(finding["savings"], finding.get("currency") or currency),
             ]
         )
     summary = audit["summary"]
     subtitle = (
         f"{org_name + ' · ' if org_name else ''}Ventana {audit['window_days']} días · "
-        f"Moneda {audit['currency']} · Ahorro potencial {summary['potential_savings']:,.0f} "
+        f"Moneda {audit['currency']} · Ahorro potencial "
+        f"{_money_pdf(summary['potential_savings'], audit.get('currency'))} "
         f"· {summary['findings_total']} hallazgos"
     )
     return build_pdf("Auditoría Express de Fugas y Sobrecostos", subtitle, headers, rows)

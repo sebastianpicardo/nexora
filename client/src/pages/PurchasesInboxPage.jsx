@@ -21,6 +21,8 @@ const PURCHASES_INBOX_STEPS = [
 export default function PurchasesInboxPage({ tab, onTabChange, onUpload }) {
   const { canOperate } = useAuth();
   const active = TABS.some((item) => item.id === tab) ? tab : "documents";
+  const STEP_BY_TAB = { documents: 1, items: 2, exceptions: 3 };
+  const activeStep = STEP_BY_TAB[active] || 1;
 
   return (
     <div className="page-stack group-page">
@@ -41,7 +43,7 @@ export default function PurchasesInboxPage({ tab, onTabChange, onUpload }) {
       </section>
 
       <PageTabs tabs={TABS} active={active} onChange={onTabChange} label="Bandeja de compras" />
-      <QuickGuide steps={PURCHASES_INBOX_STEPS} activeStep={step} />
+      <QuickGuide steps={PURCHASES_INBOX_STEPS} activeStep={activeStep} />
 
       {active === "documents" ? (
         <DocumentsPage embedded onUpload={onUpload} />
