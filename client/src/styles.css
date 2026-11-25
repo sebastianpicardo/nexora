@@ -10279,3 +10279,18 @@ body.modal-open {
   width: 15px;
   height: 15px;
 }
+
+.login-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.login-back svg {
+  width: 14px;
+  height: 14px;
+}

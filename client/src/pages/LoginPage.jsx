@@ -61,9 +61,9 @@ const MODES = {
   VERIFY: "verify",
 };
 
-export default function LoginPage({ error }) {
+export default function LoginPage({ error, initialMode = MODES.LOGIN, onBack }) {
   const { login, register, loginWithGoogle, forgotPassword, resetPassword, verifyEmail, resendVerification } = useAuth();
-  const [mode, setMode] = useState(MODES.LOGIN);
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({ name: "", email: "", password: "", token: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
@@ -87,6 +87,10 @@ export default function LoginPage({ error }) {
   // Auto-switch mode based on URL tokens
   const checks = useMemo(() => passwordChecks(form.password), [form.password]);
   const strength = checks.filter(Boolean).length;
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   useEffect(() => {
     if (verifyToken && mode === MODES.LOGIN) {
@@ -253,6 +257,11 @@ export default function LoginPage({ error }) {
 
       <section className="login-panel">
         <div className="login-card">
+          {onBack ? (
+            <button type="button" className="link-button login-back" onClick={onBack}>
+              <ArrowLeftIcon /> Volver al inicio
+            </button>
+          ) : null}
           <div className="auth-tabs" role="tablist" aria-label="Acceso">
             <button
               type="button"

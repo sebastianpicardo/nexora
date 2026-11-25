@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import { api } from "./lib/api";
 import HelpChat from "./components/HelpChat";
 import Layout from "./components/Layout";
 import UploadModal from "./components/UploadModal";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import TeamPage from "./pages/TeamPage";
@@ -57,6 +58,18 @@ const HELP_TOPICS = {
   directory: { suppliers: "suppliers", catalog: "price-catalog" },
 };
 
+function getInitialAuthMode() {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("reset_token")) return "reset";
+  if (params.get("verify_token")) return "verify";
+  if (params.get("invite")) return "login";
+  const auth = params.get("auth");
+  if (auth === "register") return "register";
+  if (auth === "login" || auth === "error" || auth === "ok") return "login";
+  return null;
+}
+
 function Splash() {
   return (
     <div className="splash">
@@ -75,6 +88,16 @@ export default function App() {
   const [tabs, setTabs] = useState(DEFAULT_TABS);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
+  const [authMode, setAuthMode] = useState(getInitialAuthMode);
+  const hadUser = useRef(false);
+
+  useEffect(() => {
+    if (user) {
+      hadUser.current = true;
+    } else if (hadUser.current) {
+      setAuthMode(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -123,7 +146,23 @@ export default function App() {
   const helpView = HELP_TOPICS[view]?.[tabs[view]] || view;
 
   if (loading) return <Splash />;
-  if (!user) return <LoginPage error={error} />;
+  if (!user) {
+    if (authMode) {
+      return (
+        <LoginPage
+          error={error}
+          initialMode={authMode}
+          onBack={() => setAuthMode(null)}
+        />
+      );
+    }
+    return (
+      <LandingPage
+        onLogin={() => setAuthMode("login")}
+        onRegister={() => setAuthMode("register")}
+      />
+    );
+  }
 
   function renderView() {
     if (view === "dashboard") {

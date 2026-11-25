@@ -86,6 +86,18 @@ test.beforeEach(async ({ page }) => {
   await mockUnauthenticated(page);
 });
 
+test("la landing muestra la propuesta de valor y lleva al registro", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.locator(".landing")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/margen/i);
+
+  await page.locator(".landing-nav").getByRole("button", { name: /Probar gratis/i }).click();
+
+  await expect(page.getByLabel("Nombre completo")).toBeVisible();
+  await expect(page.getByLabel("Contrase\u00f1a")).toBeVisible();
+});
+
 test("la página de acceso carga sin errores de conexión", async ({ page }) => {
   const connectionErrors: string[] = [];
   page.on("console", (message) => {
@@ -97,6 +109,7 @@ test("la página de acceso carga sin errores de conexión", async ({ page }) => 
   });
 
   await page.goto("/");
+  await page.locator(".landing-nav").getByRole("button", { name: "Ingresar" }).click();
 
   await expect(page.getByRole("tab", { name: /Iniciar sesi/i })).toBeVisible();
   await expect(page.getByLabel("Email corporativo")).toBeVisible();
@@ -107,6 +120,7 @@ test("la página de acceso carga sin errores de conexión", async ({ page }) => 
 
 test("permite alternar a la pestaña Crear cuenta", async ({ page }) => {
   await page.goto("/");
+  await page.locator(".landing-nav").getByRole("button", { name: "Ingresar" }).click();
 
   await page.getByRole("tab", { name: /Crear cuenta/i }).click();
 
