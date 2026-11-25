@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import psycopg
+import psycopg_pool
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -19,7 +22,7 @@ from src.core.config import PROJECT_ROOT, settings
 from src.core.errors import NexoraError
 from src.core.logging import get_logger, setup_logging
 from src.db import repositories
-from src.db.init_db import apply_migrations
+from src.db.init_db import apply_migrations, diagnose_schema
 from src.db.pool import close_pool, open_pool
 
 try:  # Sentry es opcional en desarrollo/test.
@@ -124,6 +127,20 @@ async def lifespan(app: FastAPI):
         
         # Aplicar migraciones pendientes
         apply_migrations()
+
+        # Diagnóstico de esquema: loguea exactamente qué tablas/columnas faltan.
+        try:
+            missing = diagnose_schema()
+            if missing:
+                logger.error("Esquema incompleto. Faltan: %s", missing)
+            else:
+                logger.info("Diagnóstico de esquema: tablas y columnas requeridas presentes.")
+        except Exception as exc:  # noqa: BLE001 - nunca bloquear el arranque
+            logger.error(
+                "No se pudo ejecutar el diagnóstico de esquema (%s): %s",
+                type(exc).__name__,
+                exc,
+            )
     else:
         logger.info("Modo test: pool de base de datos no inicializado")
     try:
@@ -218,15 +235,91 @@ def create_app() -> FastAPI:
                     "database/migrations (o database/schema.sql)."
                 ),
                 "code": "database_schema_outdated",
+                "detail": str(exc)[:300],
+            },
+        )
+
+    @app.exception_handler(psycopg_pool.PoolTimeout)
+    async def pool_timeout_handler(request: Request, exc: psycopg_pool.PoolTimeout):
+        logger.error(
+            "Timeout de conexión a PostgreSQL en %s %s: %s",
+            request.method,
+            request.url.path,
+            exc,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "No se pudo conectar a la base de datos (tiempo de espera agotado). "
+                    "Revisa DATABASE_URL/MIGRATION_DATABASE_URL y que el servidor acepte conexiones."
+                ),
+                "code": "database_unavailable",
+            },
+        )
+
+    @app.exception_handler(psycopg.errors.DatabaseError)
+    async def database_error_handler(request: Request, exc: psycopg.errors.DatabaseError):
+        # Fallback para cualquier error de PostgreSQL no cubierto arriba
+        # (operacional, de programación, integridad, etc.). Nunca un 500 mudo.
+        logger.error(
+            "Error de base de datos en %s %s [sqlstate=%s]: %s",
+            request.method,
+            request.url.path,
+            getattr(exc, "sqlstate", None),
+            exc,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "La base de datos rechazó la operación. Revisa los logs del servidor y "
+                    "aplica las migraciones pendientes si el esquema está desactualizado."
+                ),
+                "code": "database_error",
+                "sqlstate": getattr(exc, "sqlstate", None),
+                "detail": str(exc)[:300],
+            },
+        )
+
+    @app.exception_handler(sqlite3.Error)
+    async def sqlite_error_handler(request: Request, exc: sqlite3.Error):
+        logger.error(
+            "Error de SQLite en %s %s: %s", request.method, request.url.path, exc
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "Error en la base de datos SQLite. Verifica el esquema local y los logs."
+                ),
+                "code": "database_error",
+                "detail": str(exc)[:300],
             },
         )
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+        # Loguea traza completa y devuelve un detalle corto y diagnóstico
+        # (nunca un "internal_error" mudo sin información para depurar).
+        logger.exception(
+            "Error no controlado en %s %s (%s)",
+            request.method,
+            request.url.path,
+            type(exc).__name__,
+        )
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": "Error interno del servidor", "code": "internal_error"},
+            content={
+                "success": False,
+                "error": "Error interno del servidor",
+                "code": "internal_error",
+                "exception": type(exc).__name__,
+                "detail": str(exc)[:300],
+            },
         )
 
     app.include_router(health.router)

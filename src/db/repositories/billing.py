@@ -10,7 +10,7 @@ from psycopg import AsyncConnection
 from src.db.seeding import ensure_default_plans
 
 PLAN_SELECT = """
-    SELECT id, name, description, price_monthly, currency, document_limit, user_limit, features, sort_order
+    SELECT *
     FROM plans
 """
 
@@ -25,7 +25,6 @@ SUBSCRIPTION_SELECT = """
         s.trial_ends_at,
         p.name AS plan_name,
         p.document_limit,
-        p.user_limit,
         p.price_monthly,
         p.currency AS plan_currency,
         p.features
@@ -62,7 +61,15 @@ async def ensure_subscription(conn: AsyncConnection, org_id: UUID | str) -> None
 async def get_subscription(conn: AsyncConnection, org_id: UUID | str) -> dict | None:
     async with conn.cursor() as cur:
         await cur.execute(f"{SUBSCRIPTION_SELECT} WHERE s.org_id = %s", (str(org_id),))
-        return await cur.fetchone()
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    subscription = dict(row)
+    # ``plans.user_limit`` se lee aparte para tolerar esquemas sin esa columna.
+    if subscription.get("user_limit") is None:
+        plan = await get_plan(conn, subscription["plan_id"])
+        subscription["user_limit"] = plan.get("user_limit") if plan else None
+    return subscription
 
 
 async def get_billing(conn: AsyncConnection, org_id: UUID | str) -> dict:

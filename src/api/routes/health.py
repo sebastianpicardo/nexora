@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.core.config import settings
+from src.db.init_db import diagnose_schema
 from src.db.pool import check_db
 
 router = APIRouter(tags=["health"])
@@ -75,3 +76,34 @@ async def health_ready():
 async def api_health_ready():
     payload, status_code = await _readiness_payload()
     return JSONResponse(content=payload, status_code=status_code)
+
+
+@router.get("/health/schema")
+async def health_schema():
+    """Diagnóstico en vivo: conectividad y tablas/columnas faltantes.
+
+    Útil para depurar ``internal_error`` en producción sin acceso a logs.
+    """
+    missing: dict | None = None
+    connected = True
+    error = None
+    try:
+        missing = await asyncio.to_thread(diagnose_schema)
+    except Exception as exc:  # noqa: BLE001 - se reporta como diagnóstico
+        connected = False
+        error = type(exc).__name__
+    schema_ok = connected and not missing
+    payload = {
+        **_base_payload(),
+        "database": "connected" if connected else "disconnected",
+        "schema_ok": schema_ok,
+        "missing": missing,
+    }
+    if error:
+        payload["error"] = error
+    return JSONResponse(content=payload, status_code=200 if schema_ok else 503)
+
+
+@router.get("/api/health/schema")
+async def api_health_schema():
+    return await health_schema()

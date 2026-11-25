@@ -10,6 +10,58 @@ from src.core.config import PROJECT_ROOT, settings
 MIGRATIONS_DIR = PROJECT_ROOT / "database" / "migrations"
 SCHEMA_SQL = PROJECT_ROOT / "database" / "schema.sql"
 
+# Tablas/columnas mínimas para autenticación, sesiones, suscripción y planes.
+REQUIRED_SCHEMA: dict[str, list[str]] = {
+    "organizations": [
+        "id",
+        "name",
+        "slug",
+        "price_spike_threshold_pct",
+        "min_confidence",
+        "default_currency",
+    ],
+    "users": [
+        "id",
+        "org_id",
+        "email",
+        "name",
+        "avatar_url",
+        "role",
+        "active",
+        "created_at",
+        "updated_at",
+        "google_id",
+        "password_hash",
+        "last_login_at",
+        "job_title",
+        "phone",
+        "timezone",
+        "notify_quota",
+        "notify_weekly",
+        "email_verified",
+    ],
+    "user_sessions": ["id", "org_id", "user_id"],
+    "plans": [
+        "id",
+        "name",
+        "price_monthly",
+        "currency",
+        "document_limit",
+        "user_limit",
+        "features",
+        "sort_order",
+        "active",
+    ],
+    "subscriptions": [
+        "id",
+        "org_id",
+        "plan_id",
+        "status",
+        "current_period_start",
+        "current_period_end",
+    ],
+}
+
 
 def _extract_migration_number(filename: str) -> int | None:
     """Extrae el número de orden de un archivo de migración (ej. '012_savings_tracking.sql' -> 12)."""
@@ -84,11 +136,109 @@ def ensure_auth_columns() -> None:
         print(f"✅ Columnas de autenticación verificadas ({applied} sentencias).")
 
 
-def apply_migrations() -> None:
-    """Aplica todas las migraciones pendientes en orden numérico.
+def _split_sql(sql: str) -> list[str]:
+    """Divide un script SQL en sentencias respetando ``'`` y bloques ``$$ ... $$``."""
+    statements: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(sql)
+    while i < n:
+        ch = sql[i]
+        if ch == "-" and i + 1 < n and sql[i + 1] == "-":
+            end = sql.find("\n", i)
+            if end == -1:
+                buf.append(sql[i:])
+                break
+            buf.append(sql[i : end + 1])
+            i = end + 1
+            continue
+        if ch == "/" and i + 1 < n and sql[i + 1] == "*":
+            end = sql.find("*/", i + 2)
+            if end == -1:
+                buf.append(sql[i:])
+                break
+            buf.append(sql[i : end + 2])
+            i = end + 2
+            continue
+        if ch == "'":
+            buf.append(ch)
+            i += 1
+            while i < n:
+                c = sql[i]
+                buf.append(c)
+                if c == "'":
+                    if i + 1 < n and sql[i + 1] == "'":
+                        buf.append(sql[i + 1])
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+        if ch == "$":
+            match = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
+            if match:
+                tag = match.group(0)
+                end = sql.find(tag, i + len(tag))
+                if end == -1:
+                    buf.append(sql[i:])
+                    break
+                buf.append(sql[i : end + len(tag)])
+                i = end + len(tag)
+                continue
+        if ch == ";":
+            statement = "".join(buf).strip()
+            if statement:
+                statements.append(statement)
+            buf = []
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+    return statements
 
-    Cada archivo SQL usa 'CREATE TABLE IF NOT EXISTS' y 'CREATE INDEX IF NOT EXISTS',
-    por lo que son idempotentes y seguras para ejecutar sobre una BD ya inicializada.
+
+def _apply_sql_script(ddl_url: str, sql: str) -> tuple[int, int, list[str]]:
+    """Ejecuta un script sentencia por sentencia tolerando errores idempotentes.
+
+    Devuelve ``(aplicadas, omitidas, errores)``. Con autocommit, un fallo en una
+    sentencia no aborta las siguientes: así un esquema parcial se completa aunque
+    alguna migración haya quedado a medias.
+    """
+    applied = 0
+    skipped = 0
+    errors: list[str] = []
+    statements = _split_sql(sql)
+    with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
+        for statement in statements:
+            try:
+                conn.pgconn.exec_((statement + ";").encode("utf-8"))
+                applied += 1
+            except Exception as exc:  # noqa: BLE001 - tolerante por diseño
+                message = str(exc)
+                low = message.lower()
+                if (
+                    "already exists" in low
+                    or "duplicate key" in low
+                    or "must be owner" in low
+                    or "permission denied" in low
+                    or "row-level security" in low
+                ):
+                    skipped += 1
+                else:
+                    errors.append(message.splitlines()[0][:200])
+    return applied, skipped, errors
+
+
+def apply_migrations() -> None:
+    """Aplica schema y migraciones pendientes de forma tolerante.
+
+    Se ejecuta sentencia por sentencia para tolerar esquemas parciales: una
+    sentencia que falla no impide que el resto (incluidas las columnas que
+    faltaban) se aplique.
     """
     ddl_url = settings.ddl_database_url
     if not ddl_url:
@@ -101,68 +251,93 @@ def apply_migrations() -> None:
             "define MIGRATION_DATABASE_URL o DIRECT_DATABASE_URL con un rol privilegiado."
         )
 
-    # Aplicar schema base primero
     if SCHEMA_SQL.exists():
         try:
             sql = SCHEMA_SQL.read_text(encoding="utf-8")
-            with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
-                conn.pgconn.exec_(sql.encode("utf-8"))
-            print(f"✅ Schema base aplicado: {SCHEMA_SQL}")
-        except Exception as exc:
+            ok, skipped, errors = _apply_sql_script(ddl_url, sql)
+            print(
+                f"✅ Schema base: aplicadas={ok}, omitidas={skipped}, errores={len(errors)}"
+            )
+            for err in errors[:5]:
+                print(f"❌ Schema: {err}")
+        except Exception as exc:  # noqa: BLE001
             print(
                 f"⚠️  No se pudo aplicar el schema base ({exc}). "
-                "Se continúa con las migraciones; si el rol no es dueño, ejecuta "
-                "database/schema.sql y database/migrations en el Supabase SQL Editor."
+                "Si el rol no es dueño, ejecuta database/schema.sql como dueño de la base."
             )
     else:
         print(f"⚠️  No se encontró {SCHEMA_SQL}, saltando schema base.")
 
-    # Aplicar migraciones en orden numérico
-    migration_files = sorted(
-        MIGRATIONS_DIR.glob("*.sql"), key=_migration_sort_key
-    )
+    migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"), key=_migration_sort_key)
 
-    applied = 0
-    skipped = 0
-    failed = 0
-
+    total_applied = 0
+    total_skipped = 0
+    total_failed = 0
     for migration_path in migration_files:
-        migration_name = migration_path.name
         try:
             sql = migration_path.read_text(encoding="utf-8")
-            with psycopg.connect(ddl_url, autocommit=True, connect_timeout=20) as conn:
-                conn.pgconn.exec_(sql.encode("utf-8"))
-            applied += 1
-            print(f"✅ Migración aplicada: {migration_name}")
-        except Exception as exc:
-            # Algunas migraciones pueden 'fallar' si ya estaban aplicadas anteriormente
-            # (por ejemplo, si una tabla ya existe). Las etiquetamos como 'skipped'
-            # pero las volvemos a intentar para asegurar el estado correcto.
-            error_msg = str(exc)
-            if "already exists" in error_msg.lower() or "duplicate key" in error_msg.lower():
-                skipped += 1
-                print(f"🔁 Migración ya aplicada (skip): {migration_name}")
-            else:
-                failed += 1
-                lower = error_msg.lower()
-                if "must be owner" in lower or "permission denied" in lower or "row-level security" in lower:
-                    print(
-                        f"⚠️  Migración {migration_name} requiere un rol privilegiado: "
-                        f"{error_msg}. Ejecútala como dueño de la base (Supabase SQL Editor)."
-                    )
-                else:
-                    print(f"❌ Error applying migration {migration_name}: {error_msg}")
-                # No levantamos el error para no bloquear el inicio si es no-crítico
+            ok, skipped, errors = _apply_sql_script(ddl_url, sql)
+            total_applied += ok
+            total_skipped += skipped
+            total_failed += len(errors)
+            status = "✅" if not errors else "⚠️"
+            print(
+                f"{status} {migration_path.name}: aplicadas={ok}, omitidas={skipped}, "
+                f"errores={len(errors)}"
+            )
+            for err in errors[:3]:
+                print(f"   ❌ {err}")
+        except Exception as exc:  # noqa: BLE001
+            total_failed += 1
+            print(f"❌ No se pudo aplicar {migration_path.name}: {exc}")
 
     print(
-        f"\n📊 Resumen de migraciones: aplicadas={applied}, ya existían={skipped}, fallidas={failed}"
+        f"\n📊 Resumen: sentencias aplicadas={total_applied}, omitidas={total_skipped}, "
+        f"fallidas={total_failed}"
     )
 
-    # Auto-reparación de columnas críticas de autenticación.
+    # Auto-reparación de columnas críticas de autenticación/planes.
     try:
         ensure_auth_columns()
     except Exception as exc:  # noqa: BLE001 - nunca bloquear el arranque
         print(f"⚠️  No se pudo verificar columnas de auth: {exc}")
+
+
+def diagnose_schema(database_url: str | None = None) -> dict[str, list[str]]:
+    """Devuelve las tablas/columnas requeridas que faltan en la base.
+
+    Se usa al arrancar y desde ``/health/schema`` para diagnosticar en vivo un
+    esquema parcial. Solo aplica a PostgreSQL (en SQLite devuelve ``{}``).
+    """
+    url = (database_url or settings.ddl_database_url or "").strip()
+    if not url or url.startswith("sqlite"):
+        return {}
+
+    existing: dict[str, set[str]] = {}
+    with psycopg.connect(url, connect_timeout=20) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ANY(%s)
+                """,
+                (list(REQUIRED_SCHEMA.keys()),),
+            )
+            for table_name, column_name in cur.fetchall():
+                existing.setdefault(table_name, set()).add(column_name)
+
+    missing: dict[str, list[str]] = {}
+    for table, columns in REQUIRED_SCHEMA.items():
+        present = existing.get(table)
+        if not present:
+            missing[table] = ["<tabla ausente>"]
+            continue
+        absent = [column for column in columns if column not in present]
+        if absent:
+            missing[table] = absent
+    return missing
 
 
 if __name__ == "__main__":
