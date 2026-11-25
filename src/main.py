@@ -23,7 +23,7 @@ from src.core.errors import NexoraError
 from src.core.logging import get_logger, setup_logging
 from src.db import repositories
 from src.db.init_db import apply_migrations, diagnose_schema
-from src.db.pool import close_pool, open_pool
+from src.db.pool import PoolNotInitializedError, close_pool, ensure_pool, open_pool
 
 try:  # Sentry es opcional en desarrollo/test.
     import sentry_sdk
@@ -99,13 +99,24 @@ async def lifespan(app: FastAPI):
         settings.validate_startup()
         try:
             pool = await open_pool()
-            async with pool.connection() as conn:
-                await repositories.ensure_default_plans(conn)
-                purged = await repositories.purge_expired_ai_usage(conn)
-                if purged:
-                    logger.info("Retención IA aplicada: %s registros depurados", purged)
-        except Exception:
-            logger.exception("No se pudo inicializar el pool de Postgres; el servicio seguirá disponible")
+        except Exception as exc:  # noqa: BLE001 - no bloqueamos el arranque
+            logger.exception(
+                "No se pudo inicializar el pool de Postgres al arrancar (%s: %s). "
+                "Se reintentará de forma perezosa en la primera petición que use la base.",
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            try:
+                async with pool.connection() as conn:
+                    await repositories.ensure_default_plans(conn)
+                    purged = await repositories.purge_expired_ai_usage(conn)
+                    if purged:
+                        logger.info("Retención IA aplicada: %s registros depurados", purged)
+            except Exception:  # noqa: BLE001 - datos iniciales no bloquean el arranque
+                logger.exception(
+                    "El pool existe pero no se pudieron preparar los datos iniciales (planes/limpieza)."
+                )
         logger.info(
             "%s %s iniciado en %s (storage=%s, llm=%s)",
             settings.app_name,
@@ -177,6 +188,24 @@ def create_app() -> FastAPI:
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(OriginGuardMiddleware)
+
+    @app.middleware("http")
+    async def ensure_database_pool(request: Request, call_next):
+        """Inicialización perezosa del pool.
+
+        Si el ``lifespan`` no se ejecutó (o falló), la primera petición que usa
+        la base crea el pool con un lock. Nunca lanza: si falla, el handler de
+        ``PoolNotInitializedError`` responde 503 con el diagnóstico real.
+        """
+        path = request.url.path
+        if settings.app_env.lower() != "test" and (
+            path.startswith("/api") or path.startswith("/health/ready")
+        ):
+            try:
+                await ensure_pool()
+            except Exception:  # noqa: BLE001 - se maneja en el handler de rutas
+                pass
+        return await call_next(request)
 
     @app.exception_handler(NexoraError)
     async def nexora_error_handler(_request: Request, exc: NexoraError):
@@ -298,6 +327,30 @@ def create_app() -> FastAPI:
                 ),
                 "code": "database_error",
                 "detail": str(exc)[:300],
+            },
+        )
+
+    @app.exception_handler(PoolNotInitializedError)
+    async def pool_not_initialized_handler(request: Request, exc: PoolNotInitializedError):
+        cause = exc.cause
+        logger.error(
+            "Pool de base de datos no inicializado en %s %s (%s): %s",
+            request.method,
+            request.url.path,
+            type(cause).__name__ if cause else "sin causa registrada",
+            cause or exc,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": (
+                    "La base de datos no está disponible en este momento. "
+                    "Revisa DATABASE_URL y los logs del servidor."
+                ),
+                "code": "database_unavailable",
+                "exception": type(cause).__name__ if cause else "PoolNotInitializedError",
+                "detail": (str(cause) if cause else str(exc))[:300],
             },
         )
 

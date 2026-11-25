@@ -140,3 +140,25 @@ test("la tabla de precios muestra precios legibles y límite de usuarios", async
   await expect(page.getByText("$0/mes")).toHaveCount(0);
 });
 
+test("la sección de precios usa planes de referencia si la API falla", async ({ page }) => {
+  await page.route("**/api/billing/plans", (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ success: false, detail: "internal_error" }),
+    }),
+  );
+
+  await page.goto("/");
+
+  const pricing = page.locator(".pricing-section");
+  await expect(pricing.getByRole("heading", { name: "Free", exact: true })).toBeVisible();
+  await expect(pricing.getByRole("heading", { name: "Pro", exact: true })).toBeVisible();
+  await expect(pricing.getByRole("heading", { name: "Enterprise", exact: true })).toBeVisible();
+  await expect(pricing.getByText("Gratis", { exact: true })).toBeVisible();
+  await expect(pricing.getByText(/\$39\.990/)).toBeVisible();
+  await expect(pricing.getByText(/planes de referencia/i)).toBeVisible();
+  // Nunca debe mostrarse un error rojo en la landing pública.
+  await expect(pricing.locator(".alert.error")).toHaveCount(0);
+});
+
